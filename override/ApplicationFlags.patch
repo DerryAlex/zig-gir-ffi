@@ -1,0 +1,9 @@
+--- ApplicationFlags.pre
++++ ApplicationFlags.post
+@@ -1,6 +1,5 @@
+ pub const ApplicationFlags = enum(u32) {
+     FlagsNone = 0x0,
+-    DefaultFlags = 0x0,
+     IsService = 0x1,
+     IsLauncher = 0x2,
+     HandlesOpen = 0x4,
