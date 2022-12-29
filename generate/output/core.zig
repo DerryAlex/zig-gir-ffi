@@ -28,17 +28,23 @@ pub fn maybeUnused(arg: anytype) void {
 
 pub const Unsupported = @compileError("Unsupported");
 
-pub const Boolean = c_int;
-pub const True: Boolean = 1;
-pub const False: Boolean = 0;
+pub const Boolean = packed struct {
+    value: c_int,
 
-pub inline fn intToBool(value: Boolean) bool {
-    return if (value == 0) false else true;
-}
+    pub fn new(value: bool) Boolean {
+        return .{ .value = @boolToInt(value) };
+    }
 
-pub inline fn boolToInt(value: bool) Boolean {
-    return @boolToInt(value);
-}
+    pub fn get(self: Boolean) bool {
+        return self.value != 0;
+    }
+
+    pub fn format(self: Boolean, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt;
+        _ = options;
+        try writer.writeAll(if (self.value == 0) "false" else "true");
+    }
+};
 
 pub const GType = usize;
 
@@ -67,7 +73,7 @@ pub fn downCast(comptime T: type, object: anytype) ?T {
     comptime assert(isA(GObject.Object)(T) and isA(GObject.Object)(U));
     comptime assert(isA(U)(T));
     const TypeInstance = *GObject.TypeInstanceImpl;
-    if (!GObject.typeCheckInstanceIsA(.{ .instance = @ptrCast(TypeInstance, @alignCast(@alignOf(TypeInstance), object.instance)) }, T.gType())) return null;
+    if (!GObject.typeCheckInstanceIsA(.{ .instance = @ptrCast(TypeInstance, @alignCast(@alignOf(TypeInstance), object.instance)) }, T.gType()).get()) return null;
     return T{ .instance = @ptrCast(*T.cType(), @alignCast(@alignOf(*T.cType()), object.instance)) };
 }
 
@@ -75,7 +81,7 @@ pub fn dynamicCast(comptime T: type, object: anytype) ?T {
     const U = @TypeOf(object);
     comptime assert(isA(GObject.Object)(T) and isA(GObject.Object)(U));
     const TypeInstance = *GObject.TypeInstanceImpl;
-    if (!GObject.typeCheckInstanceIsA(.{ .instance = @ptrCast(TypeInstance, @alignCast(@alignOf(TypeInstance), object.instance)) }, T.gType())) return null;
+    if (!GObject.typeCheckInstanceIsA(.{ .instance = @ptrCast(TypeInstance, @alignCast(@alignOf(TypeInstance), object.instance)) }, T.gType()).get()) return null;
     return T{ .instance = @ptrCast(*T.cType(), @alignCast(@alignOf(*T.cType()), object.instance)) };
 }
 

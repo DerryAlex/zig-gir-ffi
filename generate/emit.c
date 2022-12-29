@@ -119,11 +119,12 @@ void emit_callback(GIBaseInfo *info, const char *name, int is_deprecated, int ty
 void emit_struct(GIBaseInfo *info, const char *name, int is_deprecated)
 {
 	if (is_deprecated && !config_enable_deprecated) return;
-	unsigned long size = g_struct_info_get_size(info);
-	unsigned long align = g_struct_info_get_alignment(info);
+	// unsigned long size = g_struct_info_get_size(info);
+	// unsigned long align = g_struct_info_get_alignment(info);
 	if (is_deprecated) printf("/// (deprecated)\n");
-	if (size == 0) printf("pub const %sImpl = opaque {};\n", name);
-	else printf("pub const %sImpl = [%ld]u%ld;\n", name, size / align, 8 * align);
+	// if (size == 0) printf("pub const %sImpl = opaque {};\n", name);
+	// else printf("pub const %sImpl = [%ld]u%ld;\n", name, size / align, 8 * align);
+	printf("pub const %sImpl = opaque {};\n", name);
 	emit_nullable(name);
 	if (is_deprecated) printf("/// (deprecated)\n");
 	printf("pub const %s = packed struct {\n", name);
@@ -329,6 +330,7 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 		const char *method_name = g_base_info_get_name(method);
 		char *ziggy_name = snake_to_camel(method_name);
 		if (strcmp(ziggy_name, "break") == 0 || strcmp(ziggy_name, "continue") == 0 || strcmp(ziggy_name, "error") == 0 || strcmp(ziggy_name, "export") == 0 || strcmp(ziggy_name, "union") == 0) printf("        if (std.mem.eql(method, \"%s\")) return core.fnReturnType(@This().@\"%s\");", ziggy_name, ziggy_name);
+		else if (strcmp(ziggy_name, "self") == 0) printf("        if (std.mem.eql(u8, method, \"self\")) return core.FnReturnType(@TypeOf(@This.getSelf));\n");
 		else printf("        if (std.mem.eql(u8, method, \"%s\")) return core.FnReturnType(@TypeOf(@This().%s));\n", ziggy_name, ziggy_name);
 		free(ziggy_name);
 		g_base_info_unref(method);
@@ -388,6 +390,7 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 		char *ziggy_name = snake_to_camel(method_name);
 		printf("        else if (comptime std.mem.eql(u8, method, \"%s\")) {\n", ziggy_name);
 		if (strcmp(ziggy_name, "break") == 0 || strcmp(ziggy_name, "continue") == 0 || strcmp(ziggy_name, "error") == 0 || strcmp(ziggy_name, "export") == 0 || strcmp(ziggy_name, "union") == 0) printf("             return @call(.auto, @This().@\"%s\", .{self} ++ args);\n", ziggy_name);
+		else if (strcmp(ziggy_name, "self") == 0) printf("            return @call(.auto, @This.getSelf, .{self} ++ args);\n");
 		else printf("            return @call(.auto, @This().%s, .{self} ++ args);\n", ziggy_name);
 		printf("        }\n");
 		free(ziggy_name);
@@ -493,6 +496,7 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 		const char *method_name = g_base_info_get_name(method);
 		char *ziggy_name = snake_to_camel(method_name);
 		if (strcmp(ziggy_name, "break") == 0 || strcmp(ziggy_name, "continue") == 0 || strcmp(ziggy_name, "error") == 0 || strcmp(ziggy_name, "export") == 0 || strcmp(ziggy_name, "union") == 0) printf("        if (std.mem.eql(method, \"%s\")) return core.fnReturnType(@This().@\"%s\");", ziggy_name, ziggy_name);
+		else if (strcmp(ziggy_name, "self") == 0) printf("        if (std.mem.eql(u8, method, \"self\")) return core.FnReturnType(@TypeOf(@This.getSelf));\n");
 		else printf("        if (std.mem.eql(u8, method, \"%s\")) return core.FnReturnType(@TypeOf(@This().%s));\n", ziggy_name, ziggy_name);
 		free(ziggy_name);
 		g_base_info_unref(method);
@@ -538,6 +542,7 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 		char *ziggy_name = snake_to_camel(method_name);
 		printf("        else if (comptime std.mem.eql(u8, method, \"%s\")) {\n", ziggy_name);
 		if (strcmp(ziggy_name, "break") == 0 || strcmp(ziggy_name, "continue") == 0 || strcmp(ziggy_name, "error") == 0 || strcmp(ziggy_name, "export") == 0 || strcmp(ziggy_name, "union") == 0) printf("             return @call(.auto, @This().@\"%s\", .{self} ++ args);\n", ziggy_name);
+		else if (strcmp(ziggy_name, "self") == 0) printf("            return @call(.auto, @This.getSelf, .{self} ++ args);\n");
 		else printf("            return @call(.auto, @This().%s, .{self} ++ args);\n", ziggy_name);
 		printf("        }\n");
 		free(ziggy_name);
@@ -629,11 +634,12 @@ void emit_constant(GIBaseInfo *info, const char *name, int is_deprecated)
 void emit_union(GIBaseInfo *info, const char *name, int is_deprecated)
 {
 	if (is_deprecated && !config_enable_deprecated) return;
-	unsigned long size = g_union_info_get_size(info);
-	unsigned long align = g_union_info_get_alignment(info);
+	// unsigned long size = g_union_info_get_size(info);
+	// unsigned long align = g_union_info_get_alignment(info);
 	if (is_deprecated) printf("/// (deprecated)\n");
-	if (size == 0) printf("pub const %sImpl = opaque {};\n", name);
-	else printf("pub const %sImpl = [%ld]u%ld;\n", name, size / align, 8 * align);
+	// if (size == 0) printf("pub const %sImpl = opaque {};\n", name);
+	// else printf("pub const %sImpl = [%ld]u%ld;\n", name, size / align, 8 * align);
+	printf("pub const %sImpl = opaque {};\n", name);
 	emit_nullable(name);
 	if (is_deprecated) printf("/// (deprecated)\n");
 	printf("pub const %s = packed struct {\n", name);
@@ -670,8 +676,7 @@ void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, in
 		case GI_TYPE_TAG_BOOLEAN:
 			if (optional) printf("?");
 			if (pointer) printf("*");
-			if (prefer_c) printf("core.Boolean");
-			else printf("bool");
+			printf("core.Boolean");
 			break;
 		case GI_TYPE_TAG_INT8:
 			if (optional) printf("?");
@@ -785,7 +790,7 @@ void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, in
 					int array_length = g_type_info_get_array_length(type_info);
 					if (!is_slice && array_length != -1) printf("[*]");
 					int array_fixed_size = g_type_info_get_array_fixed_size(type_info);
-					if (!is_slice && array_fixed_size != -1) printf("%s[%d]", prefer_c ? "*" : "", array_fixed_size);
+					if (!is_slice && array_fixed_size != -1) printf("%s[%d]", prefer_c ? "*" : "", array_fixed_size); /* PREFER_C here */
 					int zero_terminated = g_type_info_is_zero_terminated(type_info);
 					if (!is_slice && zero_terminated)
 					{
@@ -1274,7 +1279,6 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		if (param_dir[i] == PARAM_IN && param_nullable[i] && !param_is_slice_ptr[i] && !param_instance[i]) printf("if (arg_%s) |some|", arg_name);
 		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
 		GITypeTag type = g_type_info_get_tag(type_info);
-		if (type == GI_TYPE_TAG_BOOLEAN) printf("core.boolToInt(");
 		if (param_dir[i] != PARAM_IN && is_basic_type(type)) printf("&");
 		if (is_fixed_size_array(type_info)) printf("&"); /* workaround for fixed-size array */
 		if (param_slice_len_ptr_pos[i] != -1 || param_is_slice_ptr[i]) printf("%s", arg_name);
@@ -1284,7 +1288,6 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 			else printf("arg_%s", arg_name);
 		}
 		else printf("%s_mut", arg_name);
-		if (type == GI_TYPE_TAG_BOOLEAN) printf(")");
 		if (param_optional[i] && param_slice_len_ptr_pos[i] == -1 && !param_instance[i]) printf(" else null");
 		if (param_dir[i] == PARAM_IN && param_nullable[i] && !param_is_slice_ptr[i] && !param_instance[i]) printf(" else null");
 		g_base_info_unref(type_info);
@@ -1314,12 +1317,8 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		if (!skip_return)
 		{
 			if (multiple_return > 1) printf(".ret = ");
-			if (return_nullable && !return_instance) printf("if (ret) |some| ");
-			if (return_type == GI_TYPE_TAG_BOOLEAN) printf("core.intToBool(");
-			if (return_nullable && !return_instance) printf("some");
+			if (return_nullable && !return_instance) printf("if (ret) |some| some else null");
 			else printf("ret");
-			if (return_type == GI_TYPE_TAG_BOOLEAN) printf(")");
-			if (return_nullable && !return_instance) printf(" else null");
 			first_output_param = 0;
 		}
 		for (int i = 0; i < n; i++)
@@ -1333,8 +1332,6 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 			if (multiple_return > 1) printf(".%s = ", arg_name);
 			if (param_optional[i] && !param_instance[i]) printf("if (arg_%s) |_| ", arg_name);
 			GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-			GITypeTag type = g_type_info_get_tag(type_info);
-			if (type == GI_TYPE_TAG_BOOLEAN) printf("core.intToBool(");
 			printf("%s", arg_name);
 			if (param_is_slice_ptr[i])
 			{
@@ -1345,7 +1342,6 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 				g_base_info_unref(len_info);
 			}
 			else printf("_mut");
-			if (type == GI_TYPE_TAG_BOOLEAN) printf(")");
 			if (param_optional[i] && !param_instance[i]) printf(" else null");
 			g_base_info_unref(type_info);
 			g_base_info_unref(arg_info);
@@ -1385,7 +1381,9 @@ void emit_field(GIFieldInfo *field_info, const char *container_name)
 		printf(" {\n");
 		printf("        return @ptrCast(*");
 		emit_type(field_type_info, 0, 0, 0, field_type != GI_TYPE_TAG_ARRAY);
-		printf(", @ptrCast([*]u8, self.instance) + %d).*;\n", field_offset);
+		printf(", @alignCast(@alignOf(*");
+		emit_type(field_type_info, 0, 0, 0, field_type != GI_TYPE_TAG_ARRAY);
+		printf("), @ptrCast([*]u8, self.instance) + %d)).*;\n", field_offset);
 		printf("    }\n");
 	}
 	/* setter */
@@ -1403,7 +1401,9 @@ void emit_field(GIFieldInfo *field_info, const char *container_name)
 		printf(") void {\n");
 		printf("        @ptrCast(*");
 		emit_type(field_type_info, 0, 0, 0, field_type != GI_TYPE_TAG_ARRAY);
-		printf(", @ptrCast([*]u8, self.instance) + %d).* = field_%s;\n", field_offset, field_name);
+		printf(", @alignCast(@alignOf(*");
+		emit_type(field_type_info, 0, 0, 0, field_type != GI_TYPE_TAG_ARRAY);
+		printf("), @ptrCast([*]u8, self.instance) + %d)).* = field_%s;\n", field_offset, field_name);
 		printf("    }\n");
 	}
 	free(ziggy_field_name);

@@ -9,6 +9,8 @@ GIRepository *repository = NULL;
 
 int main(int argc, char *argv[])
 {
+	/* c types are all marked as opaque currently */
+	/* this makes custom widget with runtime gtype check impossible */
 	repository = g_irepository_get_default();
 	GError *error = NULL;
 	g_irepository_require(repository, "Gtk", NULL, 0, &error);
