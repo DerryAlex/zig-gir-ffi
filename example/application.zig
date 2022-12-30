@@ -14,7 +14,7 @@ pub fn activate(arg_app: core.Application) void {
         .Ok => |_| {},
         .Err => |err| {
             defer err.free();
-            std.log.warn("{s}", .{err.getFieldMessage()});
+            std.log.warn("{s}", .{err.instance.Message});
             return;
         },
     }

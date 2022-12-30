@@ -122,19 +122,22 @@ void emit_struct(GIBaseInfo *info, const char *name, int is_deprecated)
 	// unsigned long size = g_struct_info_get_size(info);
 	// unsigned long align = g_struct_info_get_alignment(info);
 	if (is_deprecated) printf("/// (deprecated)\n");
-	// if (size == 0) printf("pub const %sImpl = opaque {};\n", name);
-	// else printf("pub const %sImpl = [%ld]u%ld;\n", name, size / align, 8 * align);
-	printf("pub const %sImpl = opaque {};\n", name);
+	int n = g_struct_info_get_n_fields(info);
+	if (n == 0) printf("pub const %sImpl = opaque {};\n", name);
+	else
+	{
+		printf("pub const %sImpl = extern struct {\n", name);
+		for (int i = 0; i < n; i++)
+		{
+			GIFieldInfo *field_info = g_struct_info_get_field(info, i);
+			emit_field(field_info, i == 0);
+		}
+		printf("};\n");
+	}
 	emit_nullable(name);
 	if (is_deprecated) printf("/// (deprecated)\n");
 	printf("pub const %s = packed struct {\n", name);
 	printf("    instance: *%sImpl,\n", name);
-	int n = g_struct_info_get_n_fields(info);
-	for (int i = 0; i < n; i++)
-	{
-		GIFieldInfo *field_info = g_struct_info_get_field(info, i);
-		emit_field(field_info, name);
-	}
 	n = g_struct_info_get_n_methods(info);
 	for (int i = 0; i < n; i++)
 	{
@@ -144,6 +147,7 @@ void emit_struct(GIBaseInfo *info, const char *name, int is_deprecated)
 		emit_function(method, method_name, name, g_base_info_is_deprecated(method));
 		g_base_info_unref(method);
 	}
+	emit_registered_type(info);
 	printf("};\n");
 }
 
@@ -252,43 +256,23 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 {
 	if (is_deprecated && !config_enable_deprecated) return;
 	int n = g_object_info_get_n_fields(info);
-	// if (n == 0) printf("pub const %sImpl = opaque {};\n", name);
-	// else
-	// {
-	// 	printf("pub const %sImpl = extern struct {\n", name);
-	// 	for (int i = 0; i < n; i++)
-	// 	{
-	// 		GIFieldInfo *field_info = g_object_info_get_field(info, i);
-	// 		GITypeInfo *type_info = g_field_info_get_type(field_info);
-	// 		GITypeTag type = g_type_info_get_tag(type_info);
-	// 		const char *field_name = g_base_info_get_name(field_info);
-	// 		printf("    field_%s: ", field_name);
-	// 		emit_type(type_info, 0, 0, 0, type != GI_TYPE_TAG_ARRAY);
-	// 		printf(",\n");
-	// 		g_base_info_unref(type_info);
-	// 	}
-	// 	printf("};\n");
-	// }
-	printf("pub const %sImpl = opaque {};\n", name);
+	if (n == 0) printf("pub const %sImpl = opaque {};\n", name);
+	else
+	{
+		printf("pub const %sImpl = extern struct {\n", name);
+		for (int i = 0; i < n; i++)
+		{
+			GIFieldInfo *field_info = g_object_info_get_field(info, i);
+			emit_field(field_info, i == 0);
+		}
+		printf("};\n");
+	}
 	emit_nullable(name);
 	if (is_deprecated) printf("/// (deprecated)\n");
-	// n = g_object_info_get_n_properties(info);
-	// for (int i = 0; i < n; i++)
-	// {
-	// 	GIPropertyInfo *property_info = g_object_info_get_property(info, i);
-	// 	emit_property_comment(property_info);
-	// 	g_base_info_unref(property_info);
-	// }
 	printf("pub const %s = packed struct {\n", name);
 	printf("    instance: *%sImpl,\n", name);
 	emit_interface_mark(info);
 	emit_ancestor_mark(info);
-	n = g_object_info_get_n_fields(info);
-	for (int i = 0; i < n; i++)
-	{
-		GIFieldInfo *field_info = g_object_info_get_field(info, i);
-		emit_field(field_info, name);
-	}
 	n = g_object_info_get_n_constants(info);
 	for (int i = 0; i < n; i++)
 	{
@@ -434,7 +418,7 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 	printf("        }\n");
 	printf("    }\n");
 
-	emit_registered_type_helper(info);
+	emit_registered_type(info);
 
 	printf("\n");
 	printf("    pub fn isAImpl(comptime T: type) bool {\n");
@@ -448,6 +432,18 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 {
 	if (is_deprecated && !config_enable_deprecated) return;
+	if (TRUE)
+	{
+		int n = g_interface_info_get_n_prerequisites(info);
+		for (int i = 0; i < n; i++)
+		{
+			GIBaseInfo *req = g_interface_info_get_prerequisite(info, i);
+			const char *namespace = g_base_info_get_namespace(req);
+			const char *name = g_base_info_get_name(req);
+			printf("/// %s:%s\n", namespace, name);
+			g_base_info_unref(req);
+		}
+	}
 	printf("pub const %sImpl = opaque {};\n", name);
 	emit_nullable(name);
 	if (is_deprecated) printf("/// (deprecated)\n");
@@ -565,7 +561,7 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 	printf("        }\n");
 	printf("    }\n");
 
-	emit_registered_type_helper(info);
+	emit_registered_type(info);
 
 	printf("\n");
 	printf("    pub fn isAImpl(comptime T: type) bool {\n");
@@ -637,19 +633,22 @@ void emit_union(GIBaseInfo *info, const char *name, int is_deprecated)
 	// unsigned long size = g_union_info_get_size(info);
 	// unsigned long align = g_union_info_get_alignment(info);
 	if (is_deprecated) printf("/// (deprecated)\n");
-	// if (size == 0) printf("pub const %sImpl = opaque {};\n", name);
-	// else printf("pub const %sImpl = [%ld]u%ld;\n", name, size / align, 8 * align);
-	printf("pub const %sImpl = opaque {};\n", name);
+	int n = g_union_info_get_n_fields(info);
+	if (n == 0) printf("pub const %sImpl = opaque {};\n", name);
+	else
+	{
+		printf("pub const %sImpl = extern union {\n", name);
+		for (int i = 0; i < n; i++)
+		{
+			GIFieldInfo *field_info = g_union_info_get_field(info, i);
+			emit_field(field_info, i == 0);
+		}
+		printf("};\n");
+	}
 	emit_nullable(name);
 	if (is_deprecated) printf("/// (deprecated)\n");
 	printf("pub const %s = packed struct {\n", name);
 	printf("    instance: * %sImpl,\n", name);
-	int n = g_union_info_get_n_fields(info);
-	for (int i = 0; i < n; i++)
-	{
-		GIFieldInfo *field_info = g_union_info_get_field(info, i);
-		emit_field(field_info, name);
-	}
 	n = g_union_info_get_n_methods(info);
 	for (int i = 0; i < n; i++)
 	{
@@ -659,6 +658,7 @@ void emit_union(GIBaseInfo *info, const char *name, int is_deprecated)
 		emit_function(method, method_name, name, g_base_info_is_deprecated(method));
 		g_base_info_unref(method);
 	}
+	emit_registered_type(info);
 	printf("};\n");
 }
 
@@ -741,46 +741,16 @@ void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, in
 			switch (array_type)
 			{
 				case GI_ARRAY_TYPE_ARRAY:
-					if (optional)
-					{
-						// if (prefer_c) printf("?*core.ArrayImpl");
-						// else printf("core.ArrayNullable");
-						printf("core.ArrayNullable");
-					}
-					else
-					{
-						// if (prefer_c) printf("*core.ArrayImpl");
-						// else printf("core.Array");
-						printf("core.Array");
-					}
+					printf("core.Array");
+					if (optional) printf("Nullable");
 					break;
 				case GI_ARRAY_TYPE_PTR_ARRAY:
-					if (optional)
-					{
-						// if (prefer_c) printf("?*core.PtrArrayImpl");
-						// else printf("core.PtrArrayNullable");
-						printf("core.PtrArrayNullable");
-					}
-					else
-					{
-						// if (prefer_c) printf("*core.PtrArrayImpl");
-						// else printf("core.PtrArray");
-						printf("core.PtrArray");
-					}
+					printf("core.PtrArray");
+					if (optional) printf("Nullable");
 					break;
 				case GI_ARRAY_TYPE_BYTE_ARRAY:
-					if (optional)
-					{
-						// if (prefer_c) printf("?*core.ByteArrayImpl");
-						// else printf("core.ByteArrayNullable");
-						printf("core.ByteArrayNullable");
-					}
-					else
-					{
-						// if (prefer_c) printf("*core.ByteArrayImpl");
-						// else printf("core.ByteArray");
-						printf("core.ByteArray");
-					}
+					printf("core.ByteArray");
+					if (optional) printf("Nullable");
 					break;
 				default:
 					/* C array */
@@ -816,23 +786,8 @@ void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, in
 				case GI_INFO_TYPE_OBJECT:
 				case GI_INFO_TYPE_INTERFACE:
 				case GI_INFO_TYPE_UNION:
-					// if (pointer)
-					if (TRUE)
-					{
-						if (optional)
-						{
-							// if (prefer_c) printf("?*%s.%sImpl", namespace, name);
-							// else printf("%s.%sNullable", namespace, name);
-							printf("%s.%sNullable", namespace, name);
-						}
-						else
-						{
-							// if (prefer_c) printf("*%s.%sImpl", namespace, name);
-							// else printf("%s.%s", namespace, name);
-							printf("%s.%s", namespace, name);
-						}
-					}
-					else printf("%s.%sImpl", namespace, name);
+					printf("%s.%s", namespace, name);
+					if (optional) printf("Nullable");
 					break;
 				case GI_INFO_TYPE_CALLBACK:
 					if (optional) printf("?");
@@ -851,60 +806,20 @@ void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, in
 			g_base_info_unref(interface);
 			break;
 		case GI_TYPE_TAG_GLIST:
-			if (optional)
-			{
-				// if (prefer_c) printf("?*core.ListImpl");
-				// else printf("core.ListNullable");
-				printf("core.ListNullable");
-			}
-			else
-			{
-				// if (prefer_c) printf("*core.ListImpl");
-				// else printf("core.List");
-				printf("core.List");
-			}
+			printf("core.List");
+			if (optional) printf("Nullable");
 			break;
 		case GI_TYPE_TAG_GSLIST:
-			if (optional)
-			{
-				// if (prefer_c) printf("?*core.SListImpl");
-				// else printf("core.SListNullable");
-				printf("core.SListNullable");
-			}
-			else
-			{
-				// if (prefer_c) printf("*core.SListImpl");
-				// else printf("core.SList");
-				printf("core.SList");
-			}
+			printf("core.SList");
+			if (optional) printf("Nullable");
 			break;
 		case GI_TYPE_TAG_GHASH:
-			if (optional)
-			{
-				// if (prefer_c) printf("?*core.HashTableImpl");
-				// else printf("core.HashTableNullable");
-				printf("core.HashTableNullable");
-			}
-			else
-			{
-				// if (prefer_c) printf("*core.HashTableImpl");
-				// else printf("core.HashTable");
-				printf("core.HashTable");
-			}
+			printf("core.HashTable");
+			if (optional) printf("Nullable");
 			break;
 		case GI_TYPE_TAG_ERROR:
-			if (optional)
-			{
-				// if (prefer_c) printf("?*core.ErrorImpl");
-				// else printf("core.ErrorNullable");
-				printf("core.ErrorNullable");
-			}
-			else
-			{
-				// if (prefer_c) printf("*core.ErrorImpl");
-				// else printf("core.Error");
-				printf("core.Error");
-			}
+			printf("core.Error");
+			if (optional) printf("Nullable");
 			break;
 		case GI_TYPE_TAG_UNICHAR:
 			if (optional) printf("?");
@@ -1195,9 +1110,9 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 			{
 				printf("    var %s: ", arg_name);
 				GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-				emit_type(type_info, 0, 0, 0, 1);
+				emit_type(type_info, 0, 0, 0, 0);
 				printf(" = @intCast(");
-				emit_type(type_info, 0, 0, 0, 1);
+				emit_type(type_info, 0, 0, 0, 0);
 				printf(", ");
 				if (param_nullable[ptr_pos] || param_optional[ptr_pos]) printf("if (arg_%s) |some| some.len else 0", ptr_name);
 				else printf("arg_%s.len", ptr_name);
@@ -1208,7 +1123,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 				/* callee-allocated non-optional output parameter */
 				printf("    var %s: ", arg_name);
 				GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-				emit_type(type_info, 0, 0, 0, 1);
+				emit_type(type_info, 0, 0, 0, 0);
 				printf(" = 0;\n");
 				g_base_info_unref(type_info);
 			}
@@ -1228,7 +1143,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 			{
 				printf("    var %s: ", arg_name);
 				GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-				emit_type(type_info, 0, 0, 0, 0 /* workaround for fixed-size array */);
+				emit_type(type_info, 0, 0, 0, 0);
 				printf(" = undefined;\n");
 				g_base_info_unref(type_info);
 			}
@@ -1250,8 +1165,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 			const char *arg_name = g_base_info_get_name(arg_info);
 			printf("    var %s_mut: ", arg_name);
 			GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-			GITypeTag type = g_type_info_get_tag(type_info);
-			emit_type(type_info, 0, 0, 0, type != GI_TYPE_TAG_ARRAY); /* workaround for fixed-size array */
+			emit_type(type_info, 0, 0, 0, 0);
 			printf(" = undefined;\n");
 			g_base_info_unref(type_info);
 			g_base_info_unref(arg_info);
@@ -1358,75 +1272,23 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 	free(ziggy_name);
 }
 
-void emit_field(GIFieldInfo *field_info, const char *container_name)
+void emit_field(GIFieldInfo *field_info, int first_field)
 {
-	int field_offset = g_field_info_get_offset(field_info);
 	GITypeInfo *field_type_info = g_field_info_get_type(field_info);
-	GITypeTag field_type = g_type_info_get_tag(field_type_info);
 	GIFieldInfoFlags field_flags = g_field_info_get_flags(field_info);
 	const char *field_name = g_base_info_get_name(field_info);
 	char *ziggy_field_name = snake_to_title(field_name);
-	/* getter */
-	if (field_flags & GI_FIELD_IS_READABLE)
-	{
-		printf("\n");
-		printf("    /// @%s: (field", field_name);
-		if (field_flags & GI_FIELD_IS_READABLE) printf(", read");
-		if (field_flags & GI_FIELD_IS_WRITABLE) printf(", write");
-		printf(") ");
-		emit_type(field_type_info, 0, 0, 0, 0);
-		printf("\n");
-		printf("    pub fn getField%s(self: %s) ", ziggy_field_name, container_name);
-		emit_type(field_type_info, 0, 0, 0, field_type != GI_TYPE_TAG_ARRAY); /* workaround for fixed-size array */
-		printf(" {\n");
-		printf("        return @ptrCast(*");
-		emit_type(field_type_info, 0, 0, 0, field_type != GI_TYPE_TAG_ARRAY);
-		printf(", @alignCast(@alignOf(*");
-		emit_type(field_type_info, 0, 0, 0, field_type != GI_TYPE_TAG_ARRAY);
-		printf("), @ptrCast([*]u8, self.instance) + %d)).*;\n", field_offset);
-		printf("    }\n");
-	}
-	/* setter */
-	if (field_flags & GI_FIELD_IS_WRITABLE)
-	{
-		printf("\n");
-		printf("    /// @%s: (field", field_name);
-		if (field_flags & GI_FIELD_IS_READABLE) printf(", read");
-		if (field_flags & GI_FIELD_IS_WRITABLE) printf(", write");
-		printf(") ");
-		emit_type(field_type_info, 0, 0, 0, 0);
-		printf("\n");
-		printf("    pub fn setField%s(self: %s, field_%s: ", ziggy_field_name, container_name, field_name);
-		emit_type(field_type_info, 0, 0, 0, field_type != GI_TYPE_TAG_ARRAY); /* workaround for fixed-size array */
-		printf(") void {\n");
-		printf("        @ptrCast(*");
-		emit_type(field_type_info, 0, 0, 0, field_type != GI_TYPE_TAG_ARRAY);
-		printf(", @alignCast(@alignOf(*");
-		emit_type(field_type_info, 0, 0, 0, field_type != GI_TYPE_TAG_ARRAY);
-		printf("), @ptrCast([*]u8, self.instance) + %d)).* = field_%s;\n", field_offset, field_name);
-		printf("    }\n");
-	}
+	printf("    /// ");
+	if (field_flags & GI_FIELD_IS_READABLE) printf("read ");
+	if (field_flags & GI_FIELD_IS_WRITABLE) printf("write ");
+	printf("\n");
+	printf("    %s: ", ziggy_field_name);
+	emit_type(field_type_info, 0, 0, 0, 0);
+	if (first_field && is_instance(field_type_info)) printf(".cType()");
+	printf(",\n");
 	free(ziggy_field_name);
 	g_base_info_unref(field_type_info);
 	g_base_info_unref(field_info);
-}
-
-void emit_property_comment(GIPropertyInfo *property_info)
-{
-	GParamFlags flags = g_property_info_get_flags(property_info);
-	if ((flags & G_PARAM_DEPRECATED) && !config_enable_deprecated) return;
-	const char *property_name = g_base_info_get_name(property_info);
-	printf("/// @%s: (property", property_name);
-	if (flags & G_PARAM_DEPRECATED) printf(", deprecated");
-	if (flags & G_PARAM_READABLE) printf(", read");
-	if (flags & G_PARAM_WRITABLE) printf(", write");
-	if (flags & G_PARAM_CONSTRUCT) printf(", construct");
-	if (flags & G_PARAM_CONSTRUCT_ONLY) printf(", construct-only");
-	printf(") ");
-	GITypeInfo *type_info = g_property_info_get_type(property_info);
-	emit_type(type_info, 0, 0, 0, 0);
-	g_base_info_unref(type_info);
-	printf("\n");
 }
 
 void emit_signal(GISignalInfo *info, const char *container_name)
@@ -1481,7 +1343,7 @@ void emit_signal(GISignalInfo *info, const char *container_name)
 	free(ziggy_signal_name);
 }
 
-void emit_registered_type_helper(GIRegisteredTypeInfo *info)
+void emit_registered_type(GIRegisteredTypeInfo *info)
 {
 	const char *name = g_base_info_get_name(info);
 	printf("\n");
@@ -1494,7 +1356,6 @@ void emit_registered_type_helper(GIRegisteredTypeInfo *info)
 	printf("\n");
 	printf("    pub usingnamespace struct {\n");
 	printf("        extern fn %s() core.GType;\n", g_registered_type_info_get_type_init(info));
-	printf("        /// GType=%ld\n", id);
 	printf("        pub fn gType() core.GType {\n");
 	printf("            return %s();\n", g_registered_type_info_get_type_init(info));
 	printf("        }\n");
