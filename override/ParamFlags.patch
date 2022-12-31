@@ -1,0 +1,10 @@
+--- ParamFlags.pre
++++ ParamFlags.post
+@@ -6,7 +6,6 @@
+     ConstructOnly = 0x8,
+     LaxValidation = 0x10,
+     StaticName = 0x20,
+-    Private = 0x20,
+     StaticNick = 0x40,
+     StaticBlurb = 0x80,
+     ExplicitNotify = 0x40000000,

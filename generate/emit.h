@@ -24,7 +24,7 @@ void emit_function_symbol(GIBaseInfo *info);
 void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *container_name, int is_deprecated);
 void emit_field(GIFieldInfo *field_info, int first_field);
 void emit_signal(GISignalInfo *info, const char *container_name);
-void emit_registered_type(GIRegisteredTypeInfo *info);
+void emit_registered_type(GIRegisteredTypeInfo *info, int is_instance);
 void emit_nullable(const char *name);
 
 #ifdef __cplusplus

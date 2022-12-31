@@ -9,27 +9,15 @@ const meta = std.meta;
 const assert = std.debug.assert;
 
 // ----------
-// meta begin
-
-pub fn FnReturnType(comptime T: type) type {
-    const fn_info = @typeInfo(T);
-    return if (fn_info.Fn.return_type) |some| some else void;
-}
-
-pub fn maybeUnused(arg: anytype) void {
-    _ = arg;
-}
-
-// meta end
-// --------
-
-// ----------
 // type begin
 
 pub const Unsupported = @compileError("Unsupported");
 
 pub const Boolean = packed struct {
     value: c_int,
+
+    pub const True = Boolean{ .value = 1 };
+    pub const False = Boolean{ .value = 0 };
 
     pub fn new(value: bool) Boolean {
         return .{ .value = @boolToInt(value) };
@@ -46,7 +34,31 @@ pub const Boolean = packed struct {
     }
 };
 
-pub const GType = usize;
+pub const GType = packed struct {
+    value: usize,
+
+    pub const Invalid = GType{ .value = 0 };
+    pub const None = GType{ .value = 4 };
+    pub const Interface = GType{ .value = 8 };
+    pub const Char = GType{ .value = 12 };
+    pub const UChar = GType{ .value = 16 };
+    pub const Boolean = GType{ .value = 20 };
+    pub const Int = GType{ .value = 24 };
+    pub const Uint = GType{ .value = 28 };
+    pub const Long = GType{ .value = 32 };
+    pub const Ulong = GType{ .value = 36 };
+    pub const Int64 = GType{ .value = 40 };
+    pub const Uint64 = GType{ .value = 44 };
+    pub const Enum = GType{ .value = 48 };
+    pub const Flags = GType{ .value = 52 };
+    pub const Float = GType{ .value = 56 };
+    pub const Double = GType{ .value = 60 };
+    pub const String = GType{ .value = 64 };
+    pub const Pointer = GType{ .value = 68 };
+    pub const Boxed = GType{ .value = 72 };
+    pub const Object = GType{ .value = 80 };
+    pub const Variant = GType{ .value = 84 };
+};
 
 /// UCS-4
 pub const Unichar = u32;
@@ -86,6 +98,10 @@ pub fn dynamicCast(comptime T: type, object: anytype) ?T {
 
 pub fn unsafeCast(comptime T: type, object: anytype) T {
     return T{ .instance = @ptrCast(*T.cType(), @alignCast(@alignOf(*T.cType()), object.instance)) };
+}
+
+pub fn unsafeCastPtr(comptime T: type, ptr: *anyopaque) T {
+    return T{ .instance = @ptrCast(*T.cType(), @alignCast(@alignOf(*T.cType()), ptr)) };
 }
 
 // cast end
@@ -183,23 +199,68 @@ pub fn createClosure(comptime func: anytype, args: anytype, comptime swapped: bo
 // closure end
 // -----------
 
-// -------------
-// connect begin
+// ----------
+// misc begin
 
-extern fn g_signal_connect_data(GObject.Object, [*:0]const u8, GObject.Callback, ?*anyopaque, GObject.ClosureNotify, GObject.ConnectFlags) usize;
-
-pub const ZigConnectFlags = struct {
-    after: bool = false,
-    swapped: bool = false,
-};
-
-pub fn connect(object: anytype, comptime signal: [*:0]const u8, comptime handler: anytype, args: anytype, comptime flags: ZigConnectFlags, comptime signature: anytype) usize {
-    const closure = createClosure(handler, args, flags.swapped, signature);
-    const closure_invoke = @ptrCast(GObject.Callback, closure.invoke_fn());
-    const closure_deinit = @ptrCast(GObject.ClosureNotify, closure.deinit_fn());
-    const flag = (if (flags.after) @enumToInt(GObject.ConnectFlags.After) else 0) | (if (flags.swapped) @enumToInt(GObject.ConnectFlags.Swapped) else 0);
-    return g_signal_connect_data(upCast(GObject.Object, object), signal, closure_invoke, closure, closure_deinit, @intToEnum(GObject.ConnectFlags, flag));
+pub fn FnReturnType(comptime T: type) type {
+    const fn_info = @typeInfo(T);
+    return if (fn_info.Fn.return_type) |some| some else void;
 }
 
-// connect end
-// -----------
+/// Suppress `unused`
+pub fn maybeUnused(arg: anytype) void {
+    _ = arg;
+}
+
+pub usingnamespace struct {
+    extern fn g_free(?*const anyopaque) void;
+
+    /// Supress `discard const`
+    pub fn freeDiscardConst(mem: ?*const anyopaque) void {
+        g_free(mem);
+    }
+};
+
+// misc end
+// --------
+
+// ----------------------------------
+// indirectly available binding begin
+
+pub usingnamespace struct {
+    extern fn g_signal_connect_data(GObject.Object, [*:0]const u8, GObject.Callback, ?*anyopaque, GObject.ClosureNotify, GObject.ConnectFlags) usize;
+
+    pub const ZigConnectFlags = struct {
+        after: bool = false,
+        swapped: bool = false,
+    };
+
+    pub fn connect(object: anytype, comptime signal: [*:0]const u8, comptime handler: anytype, args: anytype, comptime flags: ZigConnectFlags, comptime signature: anytype) usize {
+        const closure = createClosure(handler, args, flags.swapped, signature);
+        const closure_invoke = @ptrCast(GObject.Callback, closure.invoke_fn());
+        const closure_deinit = @ptrCast(GObject.ClosureNotify, closure.deinit_fn());
+        const flag = (if (flags.after) @enumToInt(GObject.ConnectFlags.After) else 0) | (if (flags.swapped) @enumToInt(GObject.ConnectFlags.Swapped) else 0);
+        return g_signal_connect_data(upCast(GObject.Object, object), signal, closure_invoke, closure, closure_deinit, @intToEnum(GObject.ConnectFlags, flag));
+    }
+};
+
+pub usingnamespace struct {
+    extern fn g_object_new_with_properties(GType, c_uint, ?[*][*:0]const u8, ?[*]GObject.Value.cType()) GObject.Object;
+
+    pub fn newObject(object_type: GType, names: ?[][*:0]const u8, values: ?[]GObject.Value.cType()) GObject.Object {
+        assert((names == null) == (values == null));
+        if (names) |_| assert(names.?.len == values.?.len);
+        return g_object_new_with_properties(object_type, if (names) |some| @intCast(c_uint, some.len) else 0, if (names) |some| some.ptr else null, if (values) |some| some.ptr else null);
+    }
+};
+
+pub usingnamespace struct {
+    extern fn g_type_register_static_simple(GType, [*:0]const u8, c_uint, GObject.ClassInitFunc, c_uint, GObject.InstanceInitFunc, GObject.TypeFlags) GType;
+
+    pub fn typeRegisterStaticSimple(parent_type: GType, type_name: [*:0]const u8, class_size: usize, class_init: GObject.ClassInitFunc, instance_size: usize, instance_init: GObject.InstanceInitFunc, flags: GObject.TypeFlags) GType {
+        return g_type_register_static_simple(parent_type, type_name, @intCast(c_uint, class_size), class_init, @intCast(c_uint, instance_size), instance_init, flags);
+    }
+};
+
+// indirectly available binding end
+// --------------------------------

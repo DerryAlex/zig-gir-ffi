@@ -37,10 +37,30 @@ static inline int is_instance(GITypeInfo *type_info)
 	{
 		GIBaseInfo *interface = g_type_info_get_interface(type_info);
 		GIInfoType info_type = g_base_info_get_type(interface);
-		g_base_info_unref(interface);
 		if (info_type == GI_INFO_TYPE_STRUCT || info_type == GI_INFO_TYPE_BOXED || info_type == GI_INFO_TYPE_OBJECT || info_type == GI_INFO_TYPE_INTERFACE || info_type == GI_INFO_TYPE_UNION) return 1;
+		g_base_info_unref(interface);
 	}
 	if (type == GI_TYPE_TAG_GLIST || type == GI_TYPE_TAG_GSLIST || type == GI_TYPE_TAG_GHASH || type == GI_TYPE_TAG_ERROR) return 1;
+	return 0;
+}
+
+static inline int is_callback(GITypeInfo *type_info)
+{
+	GITypeTag type = g_type_info_get_tag(type_info);
+	if (type == GI_TYPE_TAG_INTERFACE)
+	{
+		GIBaseInfo *interface = g_type_info_get_interface(type_info);
+		GIInfoType info_type = g_base_info_get_type(interface);
+		if (info_type == GI_INFO_TYPE_CALLBACK) return 1;
+		g_base_info_unref(interface);
+	}
+	return 0;
+}
+
+static inline int patch_return_nullable(GITypeInfo *type_info)
+{
+	GITypeTag type = g_type_info_get_tag(type_info);
+	if (type == GI_TYPE_TAG_GLIST || type == GI_TYPE_TAG_GSLIST || type == GI_TYPE_TAG_GHASH) return 1;
 	return 0;
 }
 
@@ -77,7 +97,7 @@ void emit_function(GIBaseInfo *info, const char *name, const char *container_nam
 	printf(") ");
 	int return_nullable = g_callable_info_may_return_null(info);
 	GITypeInfo *return_type_info = g_callable_info_get_return_type(info);
-	emit_type(return_type_info, return_nullable, 0, 0, 1);
+	emit_type(return_type_info, return_nullable || patch_return_nullable(return_type_info), 0, 0, 1);
 	g_base_info_unref(return_type_info);
 	printf(";\n");
 	emit_function_wrapper(info, name, container_name, is_deprecated);
@@ -107,7 +127,7 @@ void emit_callback(GIBaseInfo *info, const char *name, int is_deprecated, int ty
 		g_base_info_unref(type_info);
 		g_base_info_unref(arg_info);
 	}
-	printf(") ");
+	printf(") callconv(.C)");
 	int return_nullable = g_callable_info_may_return_null(info);
 	GITypeInfo *return_type_info = g_callable_info_get_return_type(info);
 	emit_type(return_type_info, return_nullable, 0, 0, 1);
@@ -147,7 +167,7 @@ void emit_struct(GIBaseInfo *info, const char *name, int is_deprecated)
 		emit_function(method, method_name, name, g_base_info_is_deprecated(method));
 		g_base_info_unref(method);
 	}
-	emit_registered_type(info);
+	emit_registered_type(info, 1);
 	printf("};\n");
 }
 
@@ -221,6 +241,7 @@ void emit_enum(GIBaseInfo *info, const char *name, int is_flags, int is_deprecat
 		emit_function(method, method_name, name, g_base_info_is_deprecated(method) || is_deprecated);
 		g_base_info_unref(method);
 	}
+	emit_registered_type(info, 0);
 	printf("};\n");
 }
 
@@ -355,7 +376,7 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 	printf("            break :gen_return_type some;\n");
 	printf("        }\n");
 	printf("        else {\n");
-	printf("            @compileError(\"No such method\");\n");
+	printf("            @compileError(std.fmt.comptimePrint(\"No such method {s}\", .{method}));\n");
 	printf("        }\n");
 	printf("    } {\n");
 	printf("        if (false) {\n");
@@ -418,7 +439,7 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 	printf("        }\n");
 	printf("    }\n");
 
-	emit_registered_type(info);
+	emit_registered_type(info, 1);
 
 	printf("\n");
 	printf("    pub fn isAImpl(comptime T: type) bool {\n");
@@ -516,7 +537,7 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 	printf("            break :gen_return_type some;\n");
 	printf("        }\n");
 	printf("        else {\n");
-	printf("            @compileError(\"No such method\");\n");
+	printf("            @compileError(std.fmt.comptimePrint(\"No such method {s}\", .{method}));\n");
 	printf("        }\n");
 	printf("    } {\n");
 	printf("        core.maybeUnused(self);\n");
@@ -561,7 +582,7 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 	printf("        }\n");
 	printf("    }\n");
 
-	emit_registered_type(info);
+	emit_registered_type(info, 1);
 
 	printf("\n");
 	printf("    pub fn isAImpl(comptime T: type) bool {\n");
@@ -620,6 +641,7 @@ void emit_constant(GIBaseInfo *info, const char *name, int is_deprecated)
 			printf("pub const %s = \"%s\";\n", ziggy_name, (char *)value.v_pointer);
 			break;
 		default:
+			printf("pub const %s = core.Unsupported;\n", ziggy_name);
 			fprintf(stderr, "Unsupported constant type %s\n", g_type_tag_to_string(type));
 			break;
 	}
@@ -641,7 +663,7 @@ void emit_union(GIBaseInfo *info, const char *name, int is_deprecated)
 		for (int i = 0; i < n; i++)
 		{
 			GIFieldInfo *field_info = g_union_info_get_field(info, i);
-			emit_field(field_info, i == 0);
+			emit_field(field_info, 0);
 		}
 		printf("};\n");
 	}
@@ -658,10 +680,28 @@ void emit_union(GIBaseInfo *info, const char *name, int is_deprecated)
 		emit_function(method, method_name, name, g_base_info_is_deprecated(method));
 		g_base_info_unref(method);
 	}
-	emit_registered_type(info);
+	emit_registered_type(info, 1);
 	printf("};\n");
 }
 
+/*
+ * TODO: fix output parameter
+ *
+ *                                                                                 out              out            out
+ * PROTOTYPE gboolean g_file_load_contents(GFile* file, GCancellable* cancellable, char** contents, gsize* length, char** etag_out, GError** error);
+ * EXPECT    extern fn g_file_load_contents(File, Gio.CancellableNullable, *[*]u8, ?*u64, ?*[*:0]const u8, *core.ErrorNullable) core.Boolean;
+ * FOUND     extern fn g_file_load_contents(File, Gio.CancellableNullable,  [*]u8, ?*u64,  ?[*:0]const u8, *core.ErrorNullable) core.Boolean;
+ * 
+ *                                                                    inout       inout
+ * PROTOTYPE gboolean g_option_context_parse(GOptionContext* context, gint* argc, gchar*** argv, GError** error);
+ * EXPECT    extern fn g_option_context_parse(OptionContext, ?*i32, ?*?[*][*:0]const u8, *core.ErrorNullable) core.Boolean;
+ * FOUND     extern fn g_option_context_parse(OptionContext, ?*i32,   ?[*][*:0]const u8, *core.ErrorNullable) core.Boolean;
+ *
+ *                                            inout        inout
+ * PROTOTYPE guchar* g_base64_decode_inplace (gchar* text, gsize* out_len);
+ * EXPECT    extern fn g_base64_decode_inplace([*]u8, *u64) [*]u8;
+ * FOUND     extern fn g_base64_decode_inplace([*]u8, *u64)   *u8;
+ */
 void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, int prefer_c)
 {
 	int pointer = g_type_info_is_pointer(type_info) || is_out;
@@ -760,7 +800,7 @@ void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, in
 					int array_length = g_type_info_get_array_length(type_info);
 					if (!is_slice && array_length != -1) printf("[*]");
 					int array_fixed_size = g_type_info_get_array_fixed_size(type_info);
-					if (!is_slice && array_fixed_size != -1) printf("%s[%d]", prefer_c ? "*" : "", array_fixed_size); /* PREFER_C here */
+					if (!is_slice && array_fixed_size != -1) printf("%s[%d]", prefer_c ? "*" : "", array_fixed_size); /* PREFER_C */
 					int zero_terminated = g_type_info_is_zero_terminated(type_info);
 					if (!is_slice && zero_terminated)
 					{
@@ -769,7 +809,7 @@ void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, in
 					}
 					if (!is_slice && array_length == -1 && array_fixed_size == -1 && !zero_terminated) printf("[*]");
 					GITypeTag elem_type = g_type_info_get_tag(array_info);
-					emit_type(array_info, zero_terminated && (!is_basic_type(elem_type) || g_type_info_is_pointer(array_info)), 0, 0, prefer_c);
+					emit_type(array_info, zero_terminated && (!is_basic_type(elem_type) || g_type_info_is_pointer(array_info)), 0, 0, 0);
 					g_base_info_unref(array_info);
 					break;
 			}
@@ -796,6 +836,7 @@ void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, in
 					break;
 				case GI_INFO_TYPE_ENUM:
 				case GI_INFO_TYPE_FLAGS:
+					if (optional) printf("?");
 					printf("%s.%s", namespace, name);
 					break;
 				default:
@@ -827,6 +868,7 @@ void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, in
 			printf("core.Unichar");
 			break;
 		default:
+			printf("code.Unsupported");
 			fprintf(stderr, "Unsupported type %s\n", g_type_tag_to_string(type));
 			break;
 	}
@@ -1071,7 +1113,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		if (!skip_return)
 		{
 			if (multiple_return > 1) printf("    ret: ");
-			emit_type(return_type_info, return_nullable, 0, 0, 0);
+			emit_type(return_type_info, return_nullable || patch_return_nullable(return_type_info), 0, 0, 0);
 			if (multiple_return > 1) printf(",\n");
 		}
 		for (int i = 0; i < n; i++)
@@ -1190,7 +1232,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		if (!first_call_param) printf(", ");
 		first_call_param = 0;
 		if (param_optional[i] && param_slice_len_ptr_pos[i] == -1 && !param_instance[i]) printf("if (arg_%s) |_|", arg_name);
-		if (param_dir[i] == PARAM_IN && param_nullable[i] && !param_is_slice_ptr[i] && !param_instance[i]) printf("if (arg_%s) |some|", arg_name);
+		if (param_dir[i] == PARAM_IN && param_nullable[i] && !param_is_slice_ptr[i] && !param_instance[i]) printf("if (arg_%s) |some| ", arg_name);
 		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
 		GITypeTag type = g_type_info_get_tag(type_info);
 		if (param_dir[i] != PARAM_IN && is_basic_type(type)) printf("&");
@@ -1283,8 +1325,8 @@ void emit_field(GIFieldInfo *field_info, int first_field)
 	if (field_flags & GI_FIELD_IS_WRITABLE) printf("write ");
 	printf("\n");
 	printf("    %s: ", ziggy_field_name);
-	emit_type(field_type_info, 0, 0, 0, 0);
-	if (first_field && is_instance(field_type_info)) printf(".cType()");
+	emit_type(field_type_info, g_type_info_is_pointer(field_type_info) || is_callback(field_type_info), 0, 0, 0);
+	if (first_field && is_instance(field_type_info) && !g_type_info_is_pointer(field_type_info)) printf(".cType()");
 	printf(",\n");
 	free(ziggy_field_name);
 	g_base_info_unref(field_type_info);
@@ -1343,13 +1385,16 @@ void emit_signal(GISignalInfo *info, const char *container_name)
 	free(ziggy_signal_name);
 }
 
-void emit_registered_type(GIRegisteredTypeInfo *info)
+void emit_registered_type(GIRegisteredTypeInfo *info, int is_instance)
 {
-	const char *name = g_base_info_get_name(info);
-	printf("\n");
-	printf("    pub fn cType() type {\n");
-	printf("        return %sImpl;\n", name);
-	printf("    }\n");
+	if (is_instance)
+	{
+		const char *name = g_base_info_get_name(info);
+		printf("\n");
+		printf("    pub fn cType() type {\n");
+		printf("        return %sImpl;\n", name);
+		printf("    }\n");
+	}
 
 	unsigned long id = g_registered_type_info_get_g_type(info);
 	if (id == G_TYPE_NONE) return;
