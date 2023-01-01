@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-int config_enable_deprecated = 1;
+int config_enable_deprecated = 0;
 int config_enable_uppercase_constant = 1;
 GIRepository *repository = NULL;
 

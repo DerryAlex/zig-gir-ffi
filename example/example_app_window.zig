@@ -71,20 +71,21 @@ pub const ExampleAppWindow = packed struct {
         view.callMethod("setEditable", .{core.Boolean.new(false)});
         view.callMethod("setCursorVisible", .{core.Boolean.new(false)});
         scrolled.callMethod("setChild", .{Gtk.WidgetNullable.new(core.upCast(Gtk.Widget, view))});
-        _ = self.instance.stack.callMethod("addTitled", .{core.upCast(Gtk.Widget, scrolled), basename, basename});
-        // var result = file.loadContents(core.CancellableNullable.new(null), null);
-        // switch (result) {
-        //     .Ok => |ok| {
-        //         defer core.free(ok.contents.ptr);
-        //         var buffer = view.callMethod("getBuffer", .{});
-        //         buffer.setText(@ptrCast([*:0]const u8, ok.contents.ptr), @intCast(i32, ok.contents.len));
-        //     },
-        //     .Err => |err| {
-        //         defer err.free();
-        //         std.log.warn("{s}", .{err.instance.Message.?});
-        //         return;
-        //     },
-        // }
+        _ = self.instance.stack.callMethod("addTitled", .{ core.upCast(Gtk.Widget, scrolled), basename, basename });
+        var result = file.loadContents(core.CancellableNullable.new(null));
+        switch (result) {
+            .Ok => |ok| {
+                defer core.free(ok.contents.ptr);
+                defer core.freeDiscardConst(ok.etag_out);
+                var buffer = view.callMethod("getBuffer", .{});
+                buffer.setText(@ptrCast([*:0]const u8, ok.contents.ptr), @intCast(i32, ok.contents.len));
+            },
+            .Err => |err| {
+                defer err.free();
+                std.log.warn("{s}", .{err.instance.Message.?});
+                return;
+            },
+        }
     }
 
     pub fn CallMethod(comptime method: []const u8) ?type {

@@ -85,7 +85,7 @@ void emit_function(GIBaseInfo *info, const char *name, const char *container_nam
 		GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
 		GIDirection direction = g_arg_info_get_direction(arg_info);
 		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT, 1);
+		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT, 1);
 		g_base_info_unref(type_info);
 		g_base_info_unref(arg_info);
 	}
@@ -123,7 +123,7 @@ void emit_callback(GIBaseInfo *info, const char *name, int is_deprecated, int ty
 		GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
 		GIDirection direction = g_arg_info_get_direction(arg_info);
 		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT, 1);
+		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT, 1);
 		g_base_info_unref(type_info);
 		g_base_info_unref(arg_info);
 	}
@@ -676,7 +676,7 @@ void emit_union(GIBaseInfo *info, const char *name, int is_deprecated)
 	emit_nullable(name);
 	if (is_deprecated) printf("/// (deprecated)\n");
 	printf("pub const %s = packed struct {\n", name);
-	printf("    instance: * %sImpl,\n", name);
+	printf("    instance: *%sImpl,\n", name);
 	n = g_union_info_get_n_methods(info);
 	for (int i = 0; i < n; i++)
 	{
@@ -711,11 +711,13 @@ void emit_union(GIBaseInfo *info, const char *name, int is_deprecated)
 void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, int prefer_c)
 {
 	int pointer = g_type_info_is_pointer(type_info) || is_out;
+	int out = g_type_info_is_pointer(type_info) && is_out;
 	GITypeTag type = g_type_info_get_tag(type_info);
 	switch (type)
 	{
 		case GI_TYPE_TAG_VOID:
 			if (optional) printf("?");
+			if (out) printf("*");
 			if (pointer) printf("*anyopaque");
 			else printf("void");
 			break;
@@ -780,6 +782,7 @@ void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, in
 		case GI_TYPE_TAG_UTF8:
 		case GI_TYPE_TAG_FILENAME:
 			if (optional) printf("?");
+			if (out) printf("*");
 			printf("[*:0]const u8");
 			break;
 		case GI_TYPE_TAG_ARRAY:
@@ -801,6 +804,7 @@ void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, in
 				default:
 					/* C array */
 					if (optional) printf("?");
+					if (out) printf("*");
 					if (is_slice) printf("[]");
 					GITypeInfo *array_info = g_type_info_get_param_type(type_info, 0);
 					int array_length = g_type_info_get_array_length(type_info);
@@ -989,8 +993,9 @@ void emit_function_comment(GIBaseInfo *info)
 			/* (transfer none) */
 			break;
 	}
-	int return_nullable = g_callable_info_may_return_null(info);
 	GITypeInfo *return_type_info = g_callable_info_get_return_type(info);
+	int return_nullable = g_callable_info_may_return_null(info) || patch_return_nullable(return_type_info);
+	if (return_nullable) printf("(nullable) ");
 	emit_type(return_type_info, return_nullable, 0, 0, 0);
 	g_base_info_unref(return_type_info);
 	printf("\n");
@@ -1074,7 +1079,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 	}
 	for (int i = 0; i < n; i++)
 	{
-		if ((param_dir[i] & PARAM_IN) || param_caller_allocate[i] || param_optional[i])
+		if ((param_dir[i] & PARAM_IN) || param_caller_allocate[i])
 		{
 			if (param_slice_len_ptr_pos[i] != -1) continue;
 			if (!first_input_param) printf(", ");
@@ -1154,7 +1159,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 			int ptr_pos = param_slice_len_ptr_pos[i];
 			GIArgInfo *ptr_info = g_callable_info_get_arg(info, ptr_pos);
 			const char *ptr_name = g_base_info_get_name(ptr_info);
-			if ((param_dir[ptr_pos] & PARAM_IN) || param_caller_allocate[ptr_pos] || param_optional[ptr_pos])
+			if ((param_dir[ptr_pos] & PARAM_IN) || param_caller_allocate[ptr_pos])
 			{
 				printf("    var %s: ", arg_name);
 				GITypeInfo *type_info = g_arg_info_get_type(arg_info);
@@ -1182,7 +1187,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		{
 			GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
 			const char *arg_name = g_base_info_get_name(arg_info);
-			if ((param_dir[i] & PARAM_IN) || param_caller_allocate[i] || param_optional[i])
+			if ((param_dir[i] & PARAM_IN) || param_caller_allocate[i])
 			{
 				if (param_nullable[i] || param_optional[i]) printf("    var %s = if (arg_%s) |some| some.ptr else undefined;\n", arg_name, arg_name);
 				else printf("    var %s = arg_%s.ptr;\n", arg_name, arg_name);
@@ -1197,7 +1202,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 			}
 			g_base_info_unref(arg_info);
 		}
-		else if ((param_dir[i] & PARAM_IN) || param_caller_allocate[i] || param_optional[i])
+		else if ((param_dir[i] & PARAM_IN) || param_caller_allocate[i])
 		{
 			if (param_dir[i] == PARAM_IN) continue;
 			GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
@@ -1237,12 +1242,10 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		const char *arg_name = g_base_info_get_name(arg_info);
 		if (!first_call_param) printf(", ");
 		first_call_param = 0;
-		if (param_optional[i] && param_slice_len_ptr_pos[i] == -1 && !param_instance[i]) printf("if (arg_%s) |_|", arg_name);
+		if (param_optional[i] && param_caller_allocate[i] && param_slice_len_ptr_pos[i] == -1 && !param_instance[i]) printf("if (arg_%s) |_|", arg_name);
 		if (param_dir[i] == PARAM_IN && param_nullable[i] && !param_is_slice_ptr[i] && !param_instance[i]) printf("if (arg_%s) |some| ", arg_name);
 		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-		GITypeTag type = g_type_info_get_tag(type_info);
-		if (param_dir[i] != PARAM_IN && is_basic_type(type)) printf("&");
-		if (is_fixed_size_array(type_info)) printf("&"); /* workaround for fixed-size array */
+		if (param_dir[i] != PARAM_IN || is_fixed_size_array(type_info)) printf("&");
 		if (param_slice_len_ptr_pos[i] != -1 || param_is_slice_ptr[i]) printf("%s", arg_name);
 		else if (param_dir[i] == PARAM_IN)
 		{
@@ -1250,7 +1253,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 			else printf("arg_%s", arg_name);
 		}
 		else printf("%s_mut", arg_name);
-		if (param_optional[i] && param_slice_len_ptr_pos[i] == -1 && !param_instance[i]) printf(" else null");
+		if (param_optional[i] && param_caller_allocate[i] && param_slice_len_ptr_pos[i] == -1 && !param_instance[i]) printf(" else null");
 		if (param_dir[i] == PARAM_IN && param_nullable[i] && !param_is_slice_ptr[i] && !param_instance[i]) printf(" else null");
 		g_base_info_unref(type_info);
 		g_base_info_unref(arg_info);
@@ -1292,7 +1295,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 			GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
 			const char *arg_name = g_base_info_get_name(arg_info);
 			if (multiple_return > 1) printf(".%s = ", arg_name);
-			if (param_optional[i] && !param_instance[i]) printf("if (arg_%s) |_| ", arg_name);
+			if (param_optional[i] && param_caller_allocate[i] && !param_instance[i]) printf("if (arg_%s) |_| ", arg_name);
 			GITypeInfo *type_info = g_arg_info_get_type(arg_info);
 			printf("%s", arg_name);
 			if (param_is_slice_ptr[i])
@@ -1304,7 +1307,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 				g_base_info_unref(len_info);
 			}
 			else printf("_mut");
-			if (param_optional[i] && !param_instance[i]) printf(" else null");
+			if (param_optional[i] && param_caller_allocate[i] && !param_instance[i]) printf(" else null");
 			g_base_info_unref(type_info);
 			g_base_info_unref(arg_info);
 		}

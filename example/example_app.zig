@@ -81,6 +81,7 @@ pub const ExampleApp = packed struct {
         for (files) |file| {
             win.callMethod("open", .{file});
         }
+        win.callMethod("present", .{});
     }
 
     pub fn CallMethod(comptime method: []const u8) ?type {
