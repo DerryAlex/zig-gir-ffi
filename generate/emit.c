@@ -85,7 +85,7 @@ void emit_function(GIBaseInfo *info, const char *name, const char *container_nam
 		GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
 		GIDirection direction = g_arg_info_get_direction(arg_info);
 		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT, 1);
+		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT, 1);
 		g_base_info_unref(type_info);
 		g_base_info_unref(arg_info);
 	}
@@ -123,11 +123,11 @@ void emit_callback(GIBaseInfo *info, const char *name, int is_deprecated, int ty
 		GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
 		GIDirection direction = g_arg_info_get_direction(arg_info);
 		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT, 1);
+		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT, 1);
 		g_base_info_unref(type_info);
 		g_base_info_unref(arg_info);
 	}
-	printf(") callconv(.C)");
+	printf(") callconv(.C) ");
 	int return_nullable = g_callable_info_may_return_null(info);
 	GITypeInfo *return_type_info = g_callable_info_get_return_type(info);
 	emit_type(return_type_info, return_nullable, 0, 0, 1);
@@ -208,10 +208,18 @@ void emit_enum(GIBaseInfo *info, const char *name, int is_flags, int is_deprecat
 			break;
 	}
 	printf("pub const %s = enum%s {\n", name, storage_type);
+	long last_value = -1;
 	int n = g_enum_info_get_n_values(info);
 	for (int i = 0; i < n; i++)
 	{
 		GIValueInfo *value_info = g_enum_info_get_value(info, i);
+		long value = g_value_info_get_value(value_info);
+		if (i > 0 && value == last_value)
+		{
+			g_base_info_unref(value_info);
+			continue;
+		}
+		last_value = value;
 		const char *value_name = g_base_info_get_name(value_info);
 		char *ziggy_value_name = snake_to_title(value_name);
 		if (!isupper(ziggy_value_name[0]))
@@ -226,7 +234,6 @@ void emit_enum(GIBaseInfo *info, const char *name, int is_flags, int is_deprecat
 			free(ziggy_value_name);
 			ziggy_value_name = tmp;
 		}
-		long value = g_value_info_get_value(value_info);
 		if (!is_flags) printf("    %s = %ld,\n", ziggy_value_name, value);
 		else printf("    %s = %s0x%lx,\n", ziggy_value_name, value >= 0 ? "" : "~", value >= 0 ? value : ~value);
 		free(ziggy_value_name);
@@ -297,6 +304,7 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 	n = g_object_info_get_n_constants(info);
 	for (int i = 0; i < n; i++)
 	{
+		printf("\n");
 		GIConstantInfo *constant_info = g_object_info_get_constant(info, i);
 		const char *constant_name = g_base_info_get_name(constant_info);
 		int is_deprecated_constant = g_base_info_is_deprecated(constant_info);
@@ -453,27 +461,25 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 {
 	if (is_deprecated && !config_enable_deprecated) return;
-	if (TRUE)
-	{
-		int n = g_interface_info_get_n_prerequisites(info);
-		for (int i = 0; i < n; i++)
-		{
-			GIBaseInfo *req = g_interface_info_get_prerequisite(info, i);
-			const char *namespace = g_base_info_get_namespace(req);
-			const char *name = g_base_info_get_name(req);
-			printf("/// %s:%s\n", namespace, name);
-			g_base_info_unref(req);
-		}
-	}
 	printf("pub const %sImpl = opaque {};\n", name);
 	emit_nullable(name);
 	if (is_deprecated) printf("/// (deprecated)\n");
 	printf("pub const %s = packed struct{\n", name);
-	printf("    instance: *%sImpl\n,", name);
-	printf("    interface%s%s: void = {},\n", g_base_info_get_namespace(info), name);
-	int n = g_interface_info_get_n_constants(info);
+	printf("    instance: *%sImpl,\n", name);
+	int n = g_interface_info_get_n_prerequisites(info);
 	for (int i = 0; i < n; i++)
 	{
+		GIBaseInfo *req = g_interface_info_get_prerequisite(info, i);
+		const char *namespace = g_base_info_get_namespace(req);
+		const char *name = g_base_info_get_name(req);
+		printf("    %s%s%s: void = {},\n", GI_IS_INTERFACE_INFO(req) ? "interface" : "class", namespace, name);
+		g_base_info_unref(req);
+	}
+	printf("    interface%s%s: void = {},\n", g_base_info_get_namespace(info), name);
+	n = g_interface_info_get_n_constants(info);
+	for (int i = 0; i < n; i++)
+	{
+		printf("\n");
 		GIConstantInfo *constant_info = g_interface_info_get_constant(info, i);
 		const char *constant_name = g_base_info_get_name(constant_info);
 		int is_deprecated_constant = g_base_info_is_deprecated(constant_info);
@@ -641,8 +647,8 @@ void emit_constant(GIBaseInfo *info, const char *name, int is_deprecated)
 			printf("pub const %s = \"%s\";\n", ziggy_name, (char *)value.v_pointer);
 			break;
 		default:
-			printf("pub const %s = core.Unsupported;\n", ziggy_name);
-			fprintf(stderr, "Unsupported constant type %s\n", g_type_tag_to_string(type));
+			// printf("pub const %s = core.Unsupported;\n", ziggy_name);
+			fprintf(stderr, "Unsupported constant type %s [%s]\n", g_type_tag_to_string(type), ziggy_name);
 			break;
 	}
 	free(ziggy_name);
@@ -868,7 +874,7 @@ void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, in
 			printf("core.Unichar");
 			break;
 		default:
-			printf("code.Unsupported");
+			printf("core.Unsupported");
 			fprintf(stderr, "Unsupported type %s\n", g_type_tag_to_string(type));
 			break;
 	}
