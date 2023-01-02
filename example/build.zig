@@ -8,9 +8,18 @@ pub fn build(b: *Builder) !void {
     const exe = b.addExecutable("application", "application.zig");
     var pid = try std.os.fork();
     if (pid == 0) {
-        const argv = [_]?[*:0]const u8{ "glib-compile-resources", "exampleapp.gresource.xml", "--target=resources.c", "--generate-source", null };
+        const argv = [_:null]?[*:0]const u8{ "glib-compile-resources", "exampleapp.gresource.xml", "--target=resources.c", "--generate-source", null };
         const envp = [_]?[*:0]const u8{null};
         var err = std.os.execvpeZ("glib-compile-resources", @ptrCast([*:null]const ?[*:0]u8, &argv), @ptrCast([*:null]const ?[*:0]u8, &envp));
+        return err;
+    } else {
+        std.debug.assert(std.os.waitpid(pid, 0).status == 0);
+    }
+    pid = try std.os.fork();
+    if (pid == 0) {
+        const argv = [_]?[*:0]const u8{ "glib-compile-schemas", ".", null };
+        const envp = [_]?[*:0]const u8{null};
+        var err = std.os.execvpeZ("glib-compile-schemas", @ptrCast([*:null]const ?[*:0]u8, &argv), @ptrCast([*:null]const ?[*:0]u8, &envp));
         return err;
     } else {
         std.debug.assert(std.os.waitpid(pid, 0).status == 0);

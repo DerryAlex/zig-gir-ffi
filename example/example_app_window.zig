@@ -3,10 +3,24 @@ const root = @import("root");
 const Gtk = root.Gtk;
 const core = root.core;
 const meta = std.meta;
+const assert = std.debug.assert;
 const ExampleApp = @import("example_app.zig").ExampleApp;
+
+pub const CstrContext = struct {
+    pub fn hash(self: CstrContext, key: [*:0]const u8) u64 {
+        _ = self;
+        return std.hash.Wyhash.hash(0, key[0..std.mem.indexOfSentinel(u8, 0, key)]);
+    }
+
+    pub fn eql(self: CstrContext, a: [*:0]const u8, b: [*:0]const u8) bool {
+        _ = self;
+        return std.cstr.cmp(a, b) == 0;
+    }
+};
 
 const Static = struct {
     var type_id: core.GType = core.GType.Invalid;
+    var parent_class: ?Gtk.ApplicationWindowClass = null;
 };
 
 const ExampleAppWindowClassImpl = extern struct {
@@ -17,14 +31,65 @@ pub const ExampleAppWindowClass = packed struct {
     instance: *ExampleAppWindowClassImpl,
 
     pub fn init(self: ExampleAppWindowClass) callconv(.C) void {
+        Static.parent_class = core.unsafeCast(Gtk.ApplicationWindowClass, core.typeClassPeek(Gtk.ApplicationWindow.gType()));
+        core.unsafeCast(core.ObjectClass, self).instance.Dispose = &dispose;
         core.unsafeCast(Gtk.WidgetClass, self).setTemplateFromResource("/org/gtk/exampleapp/window.ui");
         core.unsafeCast(Gtk.WidgetClass, self).bindTemplateChildFull("stack", core.Boolean.new(false), @offsetOf(ExampleAppWindowImpl, "stack"));
+        core.unsafeCast(Gtk.WidgetClass, self).bindTemplateChildFull("gears", core.Boolean.new(false), @offsetOf(ExampleAppWindowImpl, "gears"));
+        core.unsafeCast(Gtk.WidgetClass, self).bindTemplateChildFull("search", core.Boolean.new(false), @offsetOf(ExampleAppWindowImpl, "search"));
+        core.unsafeCast(Gtk.WidgetClass, self).bindTemplateChildFull("searchbar", core.Boolean.new(false), @offsetOf(ExampleAppWindowImpl, "searchbar"));
+        core.unsafeCast(Gtk.WidgetClass, self).bindTemplateChildFull("searchentry", core.Boolean.new(false), @offsetOf(ExampleAppWindowImpl, "searchentry"));
+        core.unsafeCast(Gtk.WidgetClass, self).bindTemplateChildFull("sidebar", core.Boolean.new(false), @offsetOf(ExampleAppWindowImpl, "sidebar"));
+        core.unsafeCast(Gtk.WidgetClass, self).bindTemplateChildFull("words", core.Boolean.new(false), @offsetOf(ExampleAppWindowImpl, "words"));
+        core.unsafeCast(Gtk.WidgetClass, self).bindTemplateChildFull("lines", core.Boolean.new(false), @offsetOf(ExampleAppWindowImpl, "lines"));
+        core.unsafeCast(Gtk.WidgetClass, self).bindTemplateChildFull("lines_label", core.Boolean.new(false), @offsetOf(ExampleAppWindowImpl, "lines_label"));
+        core.unsafeCast(Gtk.WidgetClass, self).bindTemplateCallbackFull("search_text_changed", @ptrCast(core.Callback, &searchTextChanged));
+        core.unsafeCast(Gtk.WidgetClass, self).bindTemplateCallbackFull("visible_child_changed", @ptrCast(core.Callback, &visibleChildChanged));
+    }
+
+    pub fn dispose(object: core.Object) callconv(.C) void {
+        var win = core.downCast(ExampleAppWindow, object).?;
+        win.callMethod("dispose", .{});
+    }
+
+    pub fn searchTextChanged(entry: Gtk.Entry, win: ExampleAppWindow) callconv(.C) void {
+        var text = entry.callMethod("getText", .{});
+        if (text[0] == 0) return;
+        var tab = core.downCast(Gtk.ScrolledWindow, win.instance.stack.getVisibleChild().get().?).?;
+        var view = core.downCast(Gtk.TextView, tab.getChild().get().?).?;
+        var buffer = view.getBuffer();
+        var iters: [3]Gtk.TextIter.cType() = undefined;
+        var start = core.unsafeCastPtr(Gtk.TextIter, &iters[0]);
+        _ = buffer.getStartIter(start);
+        var match_start = core.unsafeCastPtr(Gtk.TextIter, &iters[1]);
+        var match_end = core.unsafeCastPtr(Gtk.TextIter, &iters[2]);
+        if (start.forwardSearch(text, .CaseInsensitive, Gtk.TextIterNullable.new(match_start), Gtk.TextIterNullable.new(match_end), Gtk.TextIterNullable.new(null)).ret.get()) {
+            buffer.selectRange(match_start, match_end);
+            _ = view.scrollToIter(match_start, 0, core.Boolean.new(false), 0, 0);
+        }
+    }
+
+    pub fn visibleChildChanged(stack: Gtk.Stack, pspec: core.ParamSpec, win: ExampleAppWindow) callconv(.C) void {
+        _ = pspec;
+        if (stack.callMethod("inDestruction", .{}).get()) return;
+        win.instance.searchbar.setSearchMode(core.Boolean.new(false));
+        win.updateWords();
+        win.updateLines();
     }
 };
 
 const ExampleAppWindowImpl = extern struct {
     parent: Gtk.ApplicationWindow.cType(),
+    settings: core.Settings,
     stack: Gtk.Stack,
+    gears: Gtk.MenuButton,
+    search: Gtk.ToggleButton,
+    searchbar: Gtk.SearchBar,
+    searchentry: Gtk.SearchEntry,
+    sidebar: Gtk.Revealer,
+    words: Gtk.ListBox,
+    lines: Gtk.Label,
+    lines_label: Gtk.Label,
 };
 
 pub const ExampleAppWindowNullable = packed struct {
@@ -50,6 +115,22 @@ pub const ExampleAppWindow = packed struct {
 
     pub fn init(self: ExampleAppWindow) callconv(.C) void {
         self.callMethod("initTemplate", .{});
+        var builder = Gtk.Builder.newFromResource("/org/gtk/exampleapp/gears-menu.ui");
+        defer builder.callMethod("unref", .{});
+        var menu = core.downCast(core.MenuModel, builder.getObject("menu").get().?).?;
+        self.instance.gears.setMenuModel(core.MenuModelNullable.new(menu));
+        self.instance.settings = core.Settings.new("org.gtk.exampleapp");
+        self.instance.settings.bind("transition", core.upCast(core.Object, self.instance.stack), "transition-type", .Default);
+        self.instance.settings.bind("show-words", core.upCast(core.Object, self.instance.sidebar), "reveal-child", .Default);
+        _ = self.instance.search.callMethod("bindProperty", .{ "active", core.upCast(core.Object, self.instance.searchbar), "search-mode-enabled", .Bidirectional });
+        _ = core.connect(self.instance.sidebar, "notify::reveal-child", updateWords, .{self}, .{ .swapped = true }, .{ void, Gtk.Revealer, core.ParamSpec });
+        var action1 = self.instance.settings.createAction("show-words");
+        defer core.unsafeCast(core.Object, action1).unref();
+        self.callMethod("addAction", .{action1});
+        var action2 = core.PropertyAction.new("show-lines", core.upCast(core.Object, self.instance.lines), "visible");
+        defer action2.callMethod("unref", .{});
+        self.callMethod("addAction", .{core.upCast(core.Action, action2)});
+        _ = self.instance.lines.callMethod("bindProperty", .{ "visible", core.upCast(core.Object, self.instance.lines_label), "visible", .Default });
     }
 
     pub fn new(arg_app: ExampleApp) ExampleAppWindow {
@@ -61,6 +142,12 @@ pub const ExampleAppWindow = packed struct {
         return core.downCast(ExampleAppWindow, core.newObject(gType(), property_names[0..], property_values[0..])).?;
     }
 
+    pub fn dispose(self: ExampleAppWindow) void {
+        self.instance.settings.callMethod("unref", .{});
+        const dispose_fn = core.unsafeCast(core.ObjectClass, Static.parent_class.?).instance.Dispose.?;
+        dispose_fn(core.upCast(core.Object, self));
+    }
+
     pub fn open(self: ExampleAppWindow, file: core.File) void {
         var basename = file.getBasename().?;
         defer core.freeDiscardConst(basename);
@@ -68,16 +155,16 @@ pub const ExampleAppWindow = packed struct {
         scrolled.callMethod("setHexpand", .{core.Boolean.new(true)});
         scrolled.callMethod("setVexpand", .{core.Boolean.new(true)});
         var view = core.downCast(Gtk.TextView, Gtk.TextView.new()).?;
-        view.callMethod("setEditable", .{core.Boolean.new(false)});
-        view.callMethod("setCursorVisible", .{core.Boolean.new(false)});
-        scrolled.callMethod("setChild", .{Gtk.WidgetNullable.new(core.upCast(Gtk.Widget, view))});
-        _ = self.instance.stack.callMethod("addTitled", .{ core.upCast(Gtk.Widget, scrolled), basename, basename });
+        view.setEditable(core.Boolean.new(false));
+        view.setCursorVisible(core.Boolean.new(false));
+        scrolled.setChild(Gtk.WidgetNullable.new(core.upCast(Gtk.Widget, view)));
+        _ = self.instance.stack.addTitled(core.upCast(Gtk.Widget, scrolled), basename, basename);
+        var buffer = view.getBuffer();
         var result = file.loadContents(core.CancellableNullable.new(null));
         switch (result) {
             .Ok => |ok| {
                 defer core.free(ok.contents.ptr);
                 defer core.freeDiscardConst(ok.etag_out);
-                var buffer = view.callMethod("getBuffer", .{});
                 buffer.setText(@ptrCast([*:0]const u8, ok.contents.ptr), @intCast(i32, ok.contents.len));
             },
             .Err => |err| {
@@ -86,9 +173,83 @@ pub const ExampleAppWindow = packed struct {
                 return;
             },
         }
+        var tag = Gtk.TextTag.new(null);
+        _ = buffer.getTagTable().add(tag);
+        self.instance.settings.bind("font", core.upCast(core.Object, tag), "font", .Default);
+        var iters: [2]Gtk.TextIter.cType() = undefined;
+        var start_iter = buffer.getStartIter(core.unsafeCastPtr(Gtk.TextIter, &iters[0]));
+        var end_iter = buffer.getEndIter(core.unsafeCastPtr(Gtk.TextIter, &iters[1]));
+        buffer.applyTag(tag, start_iter, end_iter);
+        self.instance.search.callMethod("setSensitive", .{core.Boolean.new(true)});
+        self.updateWords();
+        self.updateLines();
+    }
+
+    fn findWord(button: Gtk.Button, win: ExampleAppWindow) void {
+        var word = button.getLabel().?;
+        win.instance.searchentry.callMethod("setText", .{word});
+    }
+
+    pub fn updateWords(self: ExampleAppWindow) void {
+        var tab = if (self.instance.stack.getVisibleChild().get()) |some| core.downCast(Gtk.ScrolledWindow, some).? else return;
+        var view = core.downCast(Gtk.TextView, tab.getChild().get().?).?;
+        var buffer = view.getBuffer();
+        var iters: [2]Gtk.TextIter.cType() = undefined;
+        var start = core.unsafeCastPtr(Gtk.TextIter, &iters[0]);
+        _ = buffer.getStartIter(start);
+        var end = core.unsafeCastPtr(Gtk.TextIter, &iters[1]);
+        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        defer {
+            if (gpa.deinit()) @panic("");
+        }
+        const allocator = gpa.allocator();
+        var strings = std.HashMap([*:0]const u8, void, CstrContext, std.hash_map.default_max_load_percentage).init(allocator);
+        defer {
+            var iter = strings.keyIterator();
+            while (iter.next()) |some| {
+                core.freeDiscardConst(some.*);
+            }
+            strings.deinit();
+        }
+        outer: while (!start.isEnd().get()) {
+            while (!start.startsWord().get()) {
+                if (!start.forwardChar().get()) break :outer;
+            }
+            end.instance.* = start.instance.*;
+            if (!end.forwardWordEnd().get()) break :outer;
+            var word = buffer.getText(start, end, core.Boolean.new(false));
+            defer core.freeDiscardConst(word);
+            strings.put(core.utf8Strdown(word, -1), {}) catch @panic("");
+            start.instance.* = end.instance.*;
+        }
+        while (true) {
+            var child = self.instance.words.callMethod("getFirstChild", .{});
+            if (child.get()) |some| {
+                self.instance.words.remove(some);
+            } else {
+                break;
+            }
+        }
+        var iter = strings.keyIterator();
+        while (iter.next()) |some| {
+            var row = core.downCast(Gtk.Button, Gtk.Button.newWithLabel(some.*)).?;
+            row.signalClicked().connect(findWord, .{self}, .{});
+            self.instance.words.insert(core.upCast(Gtk.Widget, row), -1);
+        }
+    }
+
+    pub fn updateLines(self: ExampleAppWindow) void {
+        var tab = if (self.instance.stack.getVisibleChild().get()) |some| core.downCast(Gtk.ScrolledWindow, some).? else return;
+        var view = core.downCast(Gtk.TextView, tab.getChild().get().?).?;
+        var buffer = view.getBuffer();
+        var count = buffer.getLineCount();
+        var buf: [22]u8 = undefined;
+        _ = std.fmt.bufPrint(buf[0..], "{d}{c}", .{ count, 0 }) catch @panic("");
+        self.instance.lines.setText(@ptrCast([*:0]const u8, &buf));
     }
 
     pub fn CallMethod(comptime method: []const u8) ?type {
+        if (std.mem.eql(u8, method, "dispose")) return void;
         if (std.mem.eql(u8, method, "open")) return void;
         if (Gtk.ApplicationWindow.CallMethod(method)) |some| return some;
         return null;
@@ -101,7 +262,9 @@ pub const ExampleAppWindow = packed struct {
             @compileError(std.fmt.comptimePrintf("No such method {s}", .{method}));
         }
     } {
-        if (comptime std.mem.eql(u8, method, "open")) {
+        if (comptime std.mem.eql(u8, method, "dispose")) {
+            return @call(.auto, dispose, .{self} ++ args);
+        } else if (comptime std.mem.eql(u8, method, "open")) {
             return @call(.auto, open, .{self} ++ args);
         } else if (Gtk.ApplicationWindow.CallMethod(method)) |_| {
             return core.upCast(Gtk.ApplicationWindow, self).callMethod(method, args);

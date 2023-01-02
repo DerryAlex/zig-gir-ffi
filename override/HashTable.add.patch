@@ -1,0 +1,15 @@
+--- HashTable.add.pre
++++ HashTable.add.post
+@@ -1,9 +1,9 @@
+     pub usingnamespace struct {
+-        extern fn g_hash_table_add(core.HashTable, ?*anyopaque) core.Boolean;
++        extern fn g_hash_table_add(core.HashTable, ?*const anyopaque) core.Boolean;
+         /// @hash_table: core.HashTable
+-        /// @key: (transfer full) (nullable) ?*anyopaque
++        /// @key: (transfer full) (nullable) ?*const anyopaque
+         /// Return: core.Boolean
+-        pub fn add(arg_hash_table: core.HashTable, arg_key: ?*anyopaque) core.Boolean {
++        pub fn add(arg_hash_table: core.HashTable, arg_key: ?*const anyopaque) core.Boolean {
+             var ret = g_hash_table_add(arg_hash_table, if (arg_key) |some| some else null);
+             return ret;
+         }

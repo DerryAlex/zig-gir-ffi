@@ -73,9 +73,9 @@ pub fn isA(comptime T: type) meta.trait.TraitFn {
     return T.isAImpl;
 }
 
-fn runtimeTypeCheck(object: anytype, type_id: GType) bool {
+fn runtimeTypeCheck(ptr: *anyopaque, type_id: GType) bool {
     const T = *GObject.TypeInstanceImpl;
-    return GObject.typeCheckInstanceIsA(.{ .instance = @ptrCast(T, @alignCast(@alignOf(T), object.instance)) }, type_id).get();
+    return GObject.typeCheckInstanceIsA(.{ .instance = @ptrCast(T, @alignCast(@alignOf(T), ptr)) }, type_id).get();
 }
 
 pub fn upCast(comptime T: type, object: anytype) T {
@@ -87,17 +87,22 @@ pub fn upCast(comptime T: type, object: anytype) T {
 pub fn downCast(comptime T: type, object: anytype) ?T {
     const U = @TypeOf(object);
     comptime assert(isA(U)(T));
-    if (!runtimeTypeCheck(object, T.gType())) return null;
+    if (!runtimeTypeCheck(object.instance, T.gType())) return null;
     return T{ .instance = @ptrCast(*T.cType(), @alignCast(@alignOf(*T.cType()), object.instance)) };
 }
 
 pub fn dynamicCast(comptime T: type, object: anytype) ?T {
-    if (!runtimeTypeCheck(object, T.gType())) return null;
+    if (!runtimeTypeCheck(object.instance, T.gType())) return null;
     return T{ .instance = @ptrCast(*T.cType(), @alignCast(@alignOf(*T.cType()), object.instance)) };
 }
 
 pub fn unsafeCast(comptime T: type, object: anytype) T {
     return T{ .instance = @ptrCast(*T.cType(), @alignCast(@alignOf(*T.cType()), object.instance)) };
+}
+
+pub fn dynamicCastPtr(comptime T: type, ptr: *anyopaque) ?T {
+    if (!runtimeTypeCheck(ptr, T.gType())) return null;
+    return T{ .instance = @ptrCast(*T.cType(), @alignCast(@alignOf(*T.cType()), ptr)) };
 }
 
 pub fn unsafeCastPtr(comptime T: type, ptr: *anyopaque) T {
@@ -128,37 +133,43 @@ fn ZigClosure(comptime T: type, comptime U: type, comptime swapped: bool, compti
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 2) struct {
-            pub fn invoke(object: signature[1], self: *Self) callconv(.C) signature[0] {
+            pub fn invoke(object: signature[1], data: ?*anyopaque) callconv(.C) signature[0] {
+                var self = @ptrCast(*Self, @alignCast(@alignOf(*Self), data.?));
                 return @call(.auto, self.func, .{object} ++ self.args);
             }
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 3) struct {
-            pub fn invoke(object: signature[1], arg2: signature[2], self: *Self) callconv(.C) signature[0] {
+            pub fn invoke(object: signature[1], arg2: signature[2], data: ?*anyopaque) callconv(.C) signature[0] {
+                var self = @ptrCast(*Self, @alignCast(@alignOf(*Self), data.?));
                 return @call(.auto, self.func, .{ object, arg2 } ++ self.args);
             }
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 4) struct {
-            pub fn invoke(object: signature[1], arg2: signature[2], arg3: signature[3], self: *Self) callconv(.C) signature[0] {
+            pub fn invoke(object: signature[1], arg2: signature[2], arg3: signature[3], data: ?*anyopaque) callconv(.C) signature[0] {
+                var self = @ptrCast(*Self, @alignCast(@alignOf(*Self), data.?));
                 return @call(.auto, self.func, .{ object, arg2, arg3 } ++ self.args);
             }
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 5) struct {
-            pub fn invoke(object: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], self: *Self) callconv(.C) signature[0] {
+            pub fn invoke(object: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], data: ?*anyopaque) callconv(.C) signature[0] {
+                var self = @ptrCast(*Self, @alignCast(@alignOf(*Self), data.?));
                 return @call(.auto, self.func, .{ object, arg2, arg3, arg4 } ++ self.args);
             }
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 6) struct {
-            pub fn invoke(object: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], arg5: signature[5], self: *Self) callconv(.C) signature[0] {
+            pub fn invoke(object: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], arg5: signature[5], data: ?*anyopaque) callconv(.C) signature[0] {
+                var self = @ptrCast(*Self, @alignCast(@alignOf(*Self), data.?));
                 return @call(.auto, self.func, .{ object, arg2, arg3, arg4, arg5 } ++ self.args);
             }
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 7) struct {
-            pub fn invoke(object: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], arg5: signature[5], arg6: signature[6], self: *Self) callconv(.C) signature[0] {
+            pub fn invoke(object: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], arg5: signature[5], arg6: signature[6], data: ?*anyopaque) callconv(.C) signature[0] {
+                var self = @ptrCast(*Self, @alignCast(@alignOf(*Self), data.?));
                 return @call(.auto, self.func, .{ object, arg2, arg3, arg4, arg5, arg6 } ++ self.args);
             }
         } else struct {};
@@ -228,7 +239,7 @@ pub usingnamespace struct {
 // indirectly available binding begin
 
 pub usingnamespace struct {
-    extern fn g_signal_connect_data(GObject.Object, [*:0]const u8, GObject.Callback, ?*anyopaque, GObject.ClosureNotify, GObject.ConnectFlags) usize;
+    extern fn g_signal_connect_data(GObject.Object, [*:0]const u8, GObject.Callback, ?*anyopaque, GObject.ClosureNotify, GObject.ConnectFlags) c_ulong;
 
     pub const ZigConnectFlags = struct {
         after: bool = false,
@@ -253,6 +264,14 @@ pub usingnamespace struct {
         return g_object_new_with_properties(object_type, if (names) |some| @intCast(c_uint, some.len) else 0, if (names) |some| some.ptr else null, if (values) |some| some.ptr else null);
     }
 };
+
+// pub usingnamespace struct {
+//     extern fn g_hash_table_new_full(GLib.HashFunc, GLib.EqualFunc, ?GLib.DestroyNotify, ?GLib.DestroyNotify) GLib.HashTable;
+
+//     pub fn newHashTable(hash_func: GLib.HashFunc, key_equal_func: GLib.EqualFunc, key_destroy_func: ?GLib.DestroyNotify, value_destroy_func: ?GLib.DestroyNotify) GLib.HashTable {
+//         return g_hash_table_new_full(hash_func, key_equal_func, key_destroy_func, value_destroy_func);
+//     }
+// };
 
 pub usingnamespace struct {
     extern fn g_type_register_static_simple(GType, [*:0]const u8, c_uint, GObject.ClassInitFunc, c_uint, GObject.InstanceInitFunc, GObject.TypeFlags) GType;
