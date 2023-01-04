@@ -1,9 +1,0 @@
---- SList.pre
-+++ SList.post	2022-12-31
-@@ -2,5 +2,5 @@
-     /// read write
-     Data: ?*anyopaque,
-     /// read write
--    Next: core.SListNullable,
-+    Next: ?*SListImpl,
- };

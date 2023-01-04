@@ -19,11 +19,11 @@ pub const Boolean = packed struct {
     pub const True = Boolean{ .value = 1 };
     pub const False = Boolean{ .value = 0 };
 
-    pub fn new(value: bool) Boolean {
+    pub fn from(value: bool) Boolean {
         return .{ .value = @boolToInt(value) };
     }
 
-    pub fn get(self: Boolean) bool {
+    pub fn into(self: Boolean) bool {
         return self.value != 0;
     }
 
@@ -73,20 +73,22 @@ pub fn isA(comptime T: type) meta.trait.TraitFn {
     return T.isAImpl;
 }
 
+fn comptimeTypeCheck(comptime U: type, comptime V: type) void {
+    if (comptime !isA(U)(V)) @compileError(std.fmt.comptimePrint("{s} cannot cast into {s}", .{@typeName(V), @typeName(U)}));
+}
+
 fn runtimeTypeCheck(ptr: *anyopaque, type_id: GType) bool {
-    const T = *GObject.TypeInstanceImpl;
-    return GObject.typeCheckInstanceIsA(.{ .instance = @ptrCast(T, @alignCast(@alignOf(T), ptr)) }, type_id).get();
+    const T = GObject.TypeInstance;
+    return GObject.typeCheckInstanceIsA(@ptrCast(*T, @alignCast(@alignOf(*T), ptr)), type_id).into();
 }
 
 pub fn upCast(comptime T: type, object: anytype) T {
-    const U = @TypeOf(object);
-    comptime assert(isA(T)(U));
+    comptimeTypeCheck(T, @TypeOf(object));
     return T{ .instance = @ptrCast(*T.cType(), @alignCast(@alignOf(*T.cType()), object.instance)) };
 }
 
 pub fn downCast(comptime T: type, object: anytype) ?T {
-    const U = @TypeOf(object);
-    comptime assert(isA(U)(T));
+    comptimeTypeCheck(@TypeOf(object), T);
     if (!runtimeTypeCheck(object.instance, T.gType())) return null;
     return T{ .instance = @ptrCast(*T.cType(), @alignCast(@alignOf(*T.cType()), object.instance)) };
 }
@@ -256,22 +258,14 @@ pub usingnamespace struct {
 };
 
 pub usingnamespace struct {
-    extern fn g_object_new_with_properties(GType, c_uint, ?[*][*:0]const u8, ?[*]GObject.Value.cType()) GObject.Object;
+    extern fn g_object_new_with_properties(GType, c_uint, ?[*][*:0]const u8, ?[*]GObject.Value) GObject.Object;
 
-    pub fn newObject(object_type: GType, names: ?[][*:0]const u8, values: ?[]GObject.Value.cType()) GObject.Object {
+    pub fn newObject(object_type: GType, names: ?[][*:0]const u8, values: ?[]GObject.Value) GObject.Object {
         assert((names == null) == (values == null));
         if (names) |_| assert(names.?.len == values.?.len);
         return g_object_new_with_properties(object_type, if (names) |some| @intCast(c_uint, some.len) else 0, if (names) |some| some.ptr else null, if (values) |some| some.ptr else null);
     }
 };
-
-// pub usingnamespace struct {
-//     extern fn g_hash_table_new_full(GLib.HashFunc, GLib.EqualFunc, ?GLib.DestroyNotify, ?GLib.DestroyNotify) GLib.HashTable;
-
-//     pub fn newHashTable(hash_func: GLib.HashFunc, key_equal_func: GLib.EqualFunc, key_destroy_func: ?GLib.DestroyNotify, value_destroy_func: ?GLib.DestroyNotify) GLib.HashTable {
-//         return g_hash_table_new_full(hash_func, key_equal_func, key_destroy_func, value_destroy_func);
-//     }
-// };
 
 pub usingnamespace struct {
     extern fn g_type_register_static_simple(GType, [*:0]const u8, c_uint, GObject.ClassInitFunc, c_uint, GObject.InstanceInitFunc, GObject.TypeFlags) GType;

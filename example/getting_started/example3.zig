@@ -7,25 +7,25 @@ pub fn printHello() void {
 }
 
 pub fn activate(arg_app: core.Application) void {
-    var app = core.downCast(Gtk.Application, arg_app).?;
+    var app = arg_app.tryInto(Gtk.Application).?;
     var builder = Gtk.Builder.new();
     defer builder.callMethod("unref", .{});
-    switch (builder.callMethod("addFromFile", .{"builder.ui"})) {
+    switch (builder.addFromFile("builder.ui")) {
         .Ok => |_| {},
         .Err => |err| {
             defer err.free();
-            std.log.warn("{s}", .{err.instance.Message.?});
+            std.log.warn("{s}", .{err.message.?});
             return;
         },
     }
-    var window = core.downCast(Gtk.Window, builder.callMethod("getObject", .{"window"}).get().?).?;
-    window.callMethod("setApplication", .{Gtk.ApplicationNullable.new(app)});
-    var button1 = core.downCast(Gtk.Button, builder.callMethod("getObject", .{"button1"}).get().?).?;
-    button1.callMethod("signalClicked", .{}).connect(printHello, .{}, .{ .swapped = true });
-    var button2 = core.downCast(Gtk.Button, builder.callMethod("getObject", .{"button2"}).get().?).?;
-    button2.callMethod("signalClicked", .{}).connect(printHello, .{}, .{ .swapped = true });
-    var quit = core.downCast(Gtk.Button, builder.callMethod("getObject", .{"quit"}).get().?).?;
-    quit.callMethod("signalClicked", .{}).connect(Gtk.Window.destroy, .{window}, .{ .swapped = true });
+    var window = builder.getObject("window").into().?.tryInto(Gtk.Window).?;
+    window.setApplication(app.asNullable());
+    var button1 = builder.getObject("button1").into().?.tryInto(Gtk.Button).?;
+    button1.signalClicked().connect(printHello, .{}, .{ .swapped = true });
+    var button2 = builder.getObject("button2").into().?.tryInto(Gtk.Button).?;
+    button2.signalClicked().connect(printHello, .{}, .{ .swapped = true });
+    var quit = builder.getObject("quit").into().?.tryInto(Gtk.Button).?;
+    quit.signalClicked().connect(Gtk.Window.destroy, .{window}, .{ .swapped = true });
     window.callMethod("show", .{});
 }
 

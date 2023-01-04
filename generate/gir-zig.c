@@ -64,7 +64,7 @@ int main(int argc, char *argv[])
 			switch (type)
 			{
 				case GI_INFO_TYPE_FUNCTION:
-					emit_function(info, name, "", is_deprecated);
+					emit_function(info, name, "", is_deprecated, 0);
 					break;
 				case GI_INFO_TYPE_CALLBACK:
 					emit_callback(info, name, is_deprecated, 0);

@@ -1,0 +1,18 @@
+--- ActionEntry.pre
++++ ActionEntry.post
+@@ -2,13 +2,13 @@
+     /// read write
+     name: ?[*:0]const u8,
+     /// read
+-    activate: ?*const fn (Gio.SimpleAction, *GLib.Variant, ?*anyopaque) callconv(.C) void,
++    activate: ?*const fn (*Gio.SimpleAction, *GLib.Variant, ?*anyopaque) callconv(.C) void,
+     /// read write
+     parameter_type: ?[*:0]const u8,
+     /// read write
+     state: ?[*:0]const u8,
+     /// read
+-    change_state: ?*const fn (Gio.SimpleAction, *GLib.Variant, ?*anyopaque) callconv(.C) void,
++    change_state: ?*const fn (*Gio.SimpleAction, *GLib.Variant, ?*anyopaque) callconv(.C) void,
+     /// read
+     padding: [3]u64,
+ };

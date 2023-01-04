@@ -8,26 +8,22 @@ const ExampleAppWindow = @import("example_app_window.zig").ExampleAppWindow;
 
 const Static = struct {
     var type_id: core.GType = core.GType.Invalid;
-    var parent_class: ?Gtk.DialogClass = null;
+    var parent_class: ?*Gtk.DialogClass = null;
 };
 
-const ExampleAppPrefsClassImpl = extern struct {
-    parent: Gtk.DialogClass.cType(),
-};
+const ExampleAppPrefsClass = extern struct {
+    parent: Gtk.DialogClass,
 
-pub const ExampleAppPrefsClass = packed struct {
-    instance: *ExampleAppPrefsClassImpl,
-
-    pub fn init(self: ExampleAppPrefsClass) callconv(.C) void {
-        Static.parent_class = core.unsafeCast(Gtk.DialogClass, core.typeClassPeek(Gtk.Dialog.gType()));
-        core.unsafeCast(core.ObjectClass, self).instance.Dispose = &dispose;
-        core.unsafeCast(Gtk.WidgetClass, self).setTemplateFromResource("/org/gtk/exampleapp/prefs.ui");
-        core.unsafeCast(Gtk.WidgetClass, self).bindTemplateChildFull("font", core.Boolean.new(false), @offsetOf(ExampleAppPrefsImpl, "font"));
-        core.unsafeCast(Gtk.WidgetClass, self).bindTemplateChildFull("transition", core.Boolean.new(false), @offsetOf(ExampleAppPrefsImpl, "transition"));
+    pub fn init(self: *ExampleAppPrefsClass) callconv(.C) void {
+        Static.parent_class = @ptrCast(*Gtk.DialogClass, core.typeClassPeek(Gtk.Dialog.gType()));
+        @ptrCast(*core.ObjectClass, self).dispose = &dispose;
+        @ptrCast(*Gtk.WidgetClass, self).setTemplateFromResource("/org/gtk/exampleapp/prefs.ui");
+        @ptrCast(*Gtk.WidgetClass, self).bindTemplateChildFull("font", core.Boolean.False, @offsetOf(ExampleAppPrefsImpl, "font"));
+        @ptrCast(*Gtk.WidgetClass, self).bindTemplateChildFull("transition", core.Boolean.False, @offsetOf(ExampleAppPrefsImpl, "transition"));
     }
 
     pub fn dispose(object: core.Object) callconv(.C) void {
-        var prefs = core.downCast(ExampleAppPrefs, object).?;
+        var prefs = object.tryInto(ExampleAppPrefs).?;
         prefs.callMethod("dispose", .{});
     }
 };
@@ -40,25 +36,25 @@ const ExampleAppPrefsImpl = extern struct {
 };
 
 pub const ExampleAppPrefsNullable = packed struct {
-    instance: ?*ExampleAppPrefsImpl,
+    ptr: ?*ExampleAppPrefsImpl,
 
-    pub fn new(self: ?ExampleAppPrefs) ExampleAppPrefsNullable {
-        return .{ .instance = if (self) |some| some.instance else null };
+    pub fn from(that: ?ExampleAppPrefs) ExampleAppPrefsNullable {
+        return .{ .ptr = if (that) |some| some.instance else null };
     }
 
-    pub fn get(self: ExampleAppPrefsNullable) ?ExampleAppPrefs {
-        return if (self.instance) |some| ExampleAppPrefs{ .instance = some } else null;
+    pub fn into(self: ExampleAppPrefsNullable) ?ExampleAppPrefs {
+        return if (self.ptr) |some| ExampleAppPrefs{ .instance = some } else null;
     }
 };
 
 pub const ExampleAppPrefs = packed struct {
     instance: *ExampleAppPrefsImpl,
-    classGObjectObject: void = {},
-    classGObjectInitiallyUnowned: void = {},
-    classGtkWidget: void = {},
-    classGtkWindow: void = {},
-    classGtkDialog: void = {},
-    classExampleAppPrefs: void = {},
+    traitGObjectObject: void = {},
+    traitGObjectInitiallyUnowned: void = {},
+    traitGtkWidget: void = {},
+    traitGtkWindow: void = {},
+    traitGtkDialog: void = {},
+    traitExampleAppPrefs: void = {},
 
     pub fn init(self: ExampleAppPrefs) callconv(.C) void {
         self.callMethod("initTemplate", .{});
@@ -69,20 +65,20 @@ pub const ExampleAppPrefs = packed struct {
 
     pub fn new(win: ExampleAppWindow) ExampleAppPrefs {
         var property_names = [_][*:0]const u8{ "transient-for", "use-header-bar" };
-        var property_values = std.mem.zeroes([2]core.Value.cType());
-        var transient_for = core.unsafeCastPtr(core.Value, &property_values[0]);
+        var property_values = std.mem.zeroes([2]core.Value);
+        var transient_for = &property_values[0];
         _ = transient_for.init(core.GType.Object);
-        transient_for.setObject(core.ObjectNullable.new(core.upCast(core.Object, win)));
-        var use_header_bar = core.unsafeCastPtr(core.Value, &property_values[1]);
+        transient_for.setObject(win.into(core.Object).asNullable());
+        var use_header_bar = &property_values[1];
         _ = use_header_bar.init(core.GType.Boolean);
-        use_header_bar.setBoolean(core.Boolean.new(true));
+        use_header_bar.setBoolean(core.Boolean.True);
         return core.downCast(ExampleAppPrefs, core.newObject(gType(), property_names[0..], property_values[0..])).?;
     }
 
     pub fn dispose(self: ExampleAppPrefs) void {
         self.instance.settings.callMethod("unref", .{});
-        const dispose_fn = core.unsafeCast(core.ObjectClass, Static.parent_class.?).instance.Dispose.?;
-        dispose_fn(core.upCast(core.Object, self));
+        const dispose_fn = @ptrCast(*core.ObjectClass, Static.parent_class.?).dispose.?;
+        dispose_fn(self.into(core.Object));
     }
 
     pub fn CallMethod(comptime method: []const u8) ?type {
@@ -101,7 +97,7 @@ pub const ExampleAppPrefs = packed struct {
         if (comptime std.mem.eql(u8, method, "dispose")) {
             return @call(.auto, dispose, .{self} ++ args);
         } else if (Gtk.Dialog.CallMethod(method)) |_| {
-            return core.upCast(Gtk.Dialog, self).callMethod(method, args);
+            return self.into(Gtk.Dialog).callMethod(method, args);
         } else {
             @compileError("No such method");
         }
@@ -112,12 +108,12 @@ pub const ExampleAppPrefs = packed struct {
     }
 
     pub fn gType() core.GType {
-        if (core.onceInitEnter(&Static.type_id).get()) {
+        if (core.onceInitEnter(&Static.type_id).into()) {
             // zig fmt: off
             var type_id = core.typeRegisterStaticSimple(
                 Gtk.Dialog.gType(),
                 "ExampleAppPrefs",
-                @sizeOf(ExampleAppPrefsClassImpl), @ptrCast(core.ClassInitFunc, &ExampleAppPrefsClass.init),
+                @sizeOf(ExampleAppPrefsClass), @ptrCast(core.ClassInitFunc, &ExampleAppPrefsClass.init),
                 @sizeOf(ExampleAppPrefsImpl), @ptrCast(core.InstanceInitFunc, &ExampleAppPrefs.init),
                 .None
             );
@@ -128,6 +124,18 @@ pub const ExampleAppPrefs = packed struct {
     }
 
     pub fn isAImpl(comptime T: type) bool {
-        return meta.trait.hasField("classExampleAppPrefs")(T);
+        return meta.trait.hasField("traitExampleAppPrefs")(T);
+    }
+
+    pub fn into(self: ExampleAppPrefs, comptime T: type) T {
+        return core.upCast(T, self);
+    }
+
+    pub fn tryInto(self: ExampleAppPrefs, comptime T: type) ?T {
+        return core.downCast(T, self);
+    }
+
+    pub fn asNullable(self: ExampleAppPrefs) ExampleAppPrefsNullable {
+        return .{.ptr = self.instance};
     }
 };
