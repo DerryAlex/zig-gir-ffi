@@ -61,13 +61,13 @@ pub const ExampleApp = packed struct {
     traitGtkApplication: void = {},
     traitExampleApp: void = {},
 
-    fn preferenceActivate(_: *core.SimpleAction, _: *core.Variant, self: ExampleApp) void {
-        var win = self.callMethod("getActiveWindow", .{}).into().?.tryInto(ExampleAppWindow).?;
+    fn preferenceActivate(_: core.SimpleAction, _: *core.Variant, self: ExampleApp) void {
+        var win = self.callMethod("getActiveWindow", .{}).tryInto().?.tryInto(ExampleAppWindow).?;
         var prefs = ExampleAppPrefs.new(win);
         prefs.callMethod("present", .{});
     }
 
-    fn quitActivate(_: *core.SimpleAction, _: *core.Variant, self: ExampleApp) void {
+    fn quitActivate(_: core.SimpleAction, _: *core.Variant, self: ExampleApp) void {
         self.callMethod("quit", .{});
     }
 
@@ -101,8 +101,8 @@ pub const ExampleApp = packed struct {
     }
 
     pub fn startup(self: ExampleApp) void {
-        var action_preference = core.createClosure(preferenceActivate, .{self}, false, .{ void, *core.SimpleAction, *core.Variant }); // Memery leak, we don't call `closure.deinit` or ask glib to destroy it
-        var action_quit = core.createClosure(quitActivate, .{self}, false, .{ void, *core.SimpleAction, *core.Variant });
+        var action_preference = core.createClosure(preferenceActivate, .{self}, false, .{ void, core.SimpleAction, *core.Variant }); // Memery leak, we don't call `closure.deinit` or ask glib to destroy it
+        var action_quit = core.createClosure(quitActivate, .{self}, false, .{ void, core.SimpleAction, *core.Variant });
         // zig fmt: off
         var app_entries = [_]core.ActionEntry{
             .{ .name = "preferences", .activate = action_preference.invoke_fn(), .parameter_type = null, .state = null, .change_state = null, .padding = undefined },
@@ -178,6 +178,6 @@ pub const ExampleApp = packed struct {
     }
 
     pub fn asNullable(self: ExampleApp) ExampleAppNullable {
-        return .{.ptr = self.instance};
+        return .{ .ptr = self.instance };
     }
 };

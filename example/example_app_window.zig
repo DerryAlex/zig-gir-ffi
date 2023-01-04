@@ -51,8 +51,8 @@ pub const ExampleAppWindowClass = extern struct {
     pub fn searchTextChanged(entry: Gtk.Entry, win: ExampleAppWindow) callconv(.C) void {
         var text = entry.callMethod("getText", .{});
         if (text[0] == 0) return;
-        var tab = win.instance.stack.getVisibleChild().into().?.tryInto(Gtk.ScrolledWindow).?;
-        var view = tab.getChild().into().?.tryInto(Gtk.TextView).?;
+        var tab = win.instance.stack.getVisibleChild().tryInto().?.tryInto(Gtk.ScrolledWindow).?;
+        var view = tab.getChild().tryInto().?.tryInto(Gtk.TextView).?;
         var buffer = view.getBuffer();
         var start = buffer.getStartIter();
         var ret = start.forwardSearch(text, .CaseInsensitive, null);
@@ -112,7 +112,7 @@ pub const ExampleAppWindow = packed struct {
         self.callMethod("initTemplate", .{});
         var builder = Gtk.Builder.newFromResource("/org/gtk/exampleapp/gears-menu.ui");
         defer builder.callMethod("unref", .{});
-        var menu = builder.getObject("menu").into().?.tryInto(core.MenuModel).?;
+        var menu = builder.getObject("menu").tryInto().?.tryInto(core.MenuModel).?;
         self.instance.gears.setMenuModel(menu.asNullable());
         self.instance.settings = core.Settings.new("org.gtk.exampleapp");
         self.instance.settings.bind("transition", self.instance.stack.into(core.Object), "transition-type", .Default);
@@ -185,8 +185,8 @@ pub const ExampleAppWindow = packed struct {
     }
 
     pub fn updateWords(self: ExampleAppWindow) void {
-        var tab = if (self.instance.stack.getVisibleChild().into()) |some| some.tryInto(Gtk.ScrolledWindow).? else return;
-        var view = tab.getChild().into().?.tryInto(Gtk.TextView).?;
+        var tab = if (self.instance.stack.getVisibleChild().tryInto()) |some| some.tryInto(Gtk.ScrolledWindow).? else return;
+        var view = tab.getChild().tryInto().?.tryInto(Gtk.TextView).?;
         var buffer = view.getBuffer();
         var start = buffer.getStartIter();
         var end: Gtk.TextIter = undefined;
@@ -216,7 +216,7 @@ pub const ExampleAppWindow = packed struct {
         }
         while (true) {
             var child = self.instance.words.callMethod("getFirstChild", .{});
-            if (child.into()) |some| {
+            if (child.tryInto()) |some| {
                 self.instance.words.remove(some);
             } else {
                 break;
@@ -231,8 +231,8 @@ pub const ExampleAppWindow = packed struct {
     }
 
     pub fn updateLines(self: ExampleAppWindow) void {
-        var tab = if (self.instance.stack.getVisibleChild().into()) |some| some.tryInto(Gtk.ScrolledWindow).? else return;
-        var view = tab.getChild().into().?.tryInto(Gtk.TextView).?;
+        var tab = if (self.instance.stack.getVisibleChild().tryInto()) |some| some.tryInto(Gtk.ScrolledWindow).? else return;
+        var view = tab.getChild().tryInto().?.tryInto(Gtk.TextView).?;
         var buffer = view.getBuffer();
         var count = buffer.getLineCount();
         var buf: [22]u8 = undefined;
@@ -298,6 +298,6 @@ pub const ExampleAppWindow = packed struct {
     }
 
     pub fn asNullable(self: ExampleAppWindow) ExampleAppWindowNullable {
-        return .{.ptr = self.instance};
+        return .{ .ptr = self.instance };
     }
 };

@@ -18,13 +18,13 @@ pub fn activate(arg_app: core.Application) void {
             return;
         },
     }
-    var window = builder.getObject("window").into().?.tryInto(Gtk.Window).?;
+    var window = builder.getObject("window").tryInto().?.tryInto(Gtk.Window).?;
     window.setApplication(app.asNullable());
-    var button1 = builder.getObject("button1").into().?.tryInto(Gtk.Button).?;
+    var button1 = builder.getObject("button1").tryInto().?.tryInto(Gtk.Button).?;
     button1.signalClicked().connect(printHello, .{}, .{ .swapped = true });
-    var button2 = builder.getObject("button2").into().?.tryInto(Gtk.Button).?;
+    var button2 = builder.getObject("button2").tryInto().?.tryInto(Gtk.Button).?;
     button2.signalClicked().connect(printHello, .{}, .{ .swapped = true });
-    var quit = builder.getObject("quit").into().?.tryInto(Gtk.Button).?;
+    var quit = builder.getObject("quit").tryInto().?.tryInto(Gtk.Button).?;
     quit.signalClicked().connect(Gtk.Window.destroy, .{window}, .{ .swapped = true });
     window.callMethod("show", .{});
 }

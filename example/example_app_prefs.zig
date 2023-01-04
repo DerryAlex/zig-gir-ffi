@@ -136,6 +136,6 @@ pub const ExampleAppPrefs = packed struct {
     }
 
     pub fn asNullable(self: ExampleAppPrefs) ExampleAppPrefsNullable {
-        return .{.ptr = self.instance};
+        return .{ .ptr = self.instance };
     }
 };

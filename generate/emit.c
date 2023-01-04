@@ -1372,6 +1372,7 @@ void emit_signal(GISignalInfo *info, const char *container_name)
 		GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
 		GIDirection direction = g_arg_info_get_direction(arg_info);
 		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
+		if (!is_basic_type(g_type_info_get_tag(type_info)) && maybe_allocatote_on_stack(type_info)) printf("*"); /* no pointer annotation for struct */
 		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT, 1);
 		g_base_info_unref(type_info);
 		g_base_info_unref(arg_info);
@@ -1392,6 +1393,7 @@ void emit_signal(GISignalInfo *info, const char *container_name)
 		GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
 		GIDirection direction = g_arg_info_get_direction(arg_info);
 		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
+		if (!is_basic_type(g_type_info_get_tag(type_info)) && maybe_allocatote_on_stack(type_info)) printf("*"); /* no pointer annotation for struct */
 		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT, 1);
 		g_base_info_unref(type_info);
 		g_base_info_unref(arg_info);
@@ -1438,7 +1440,7 @@ void emit_nullable(const char *name)
 	printf("        return .{ .ptr = if (that) |some| some.instance else null };\n");
 	printf("    }\n");
 	printf("\n");
-	printf("    pub fn into(self: %sNullable) ?%s {\n", name, name);
+	printf("    pub fn tryInto(self: %sNullable) ?%s {\n", name, name);
 	printf("        return if (self.ptr) |some| %s{ .instance = some } else null;\n", name);
 	printf("    }\n");
 	printf("};\n");
