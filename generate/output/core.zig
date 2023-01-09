@@ -74,7 +74,7 @@ pub fn isA(comptime T: type) meta.trait.TraitFn {
 }
 
 fn comptimeTypeCheck(comptime U: type, comptime V: type) void {
-    if (comptime !isA(U)(V)) @compileError(std.fmt.comptimePrint("{s} cannot cast into {s}", .{@typeName(V), @typeName(U)}));
+    if (comptime !isA(U)(V)) @compileError(std.fmt.comptimePrint("{s} cannot cast into {s}", .{ @typeName(V), @typeName(U) }));
 }
 
 fn runtimeTypeCheck(ptr: *anyopaque, type_id: GType) bool {

@@ -17,9 +17,10 @@ pub const ExampleAppClass = extern struct {
 
     pub fn init(self: *ExampleAppClass) callconv(.C) void {
         Static.parent_class = @ptrCast(*Gtk.ApplicationClass, core.typeClassPeek(Gtk.Application.gType()));
-        @ptrCast(*core.ApplicationClass, self).activate = &activate;
-        @ptrCast(*core.ApplicationClass, self).open = &open;
-        @ptrCast(*core.ApplicationClass, self).startup = &startup;
+        var application_class = @ptrCast(*core.ApplicationClass, self);
+        application_class.activate = &activate;
+        application_class.open = &open;
+        application_class.startup = &startup;
     }
 
     pub fn activate(arg_app: core.Application) callconv(.C) void {
@@ -45,11 +46,13 @@ const ExampleAppImpl = extern struct {
 pub const ExampleAppNullable = packed struct {
     ptr: ?*ExampleAppImpl,
 
+    pub const Nil = ExampleAppNullable{ .ptr = null };
+
     pub fn from(that: ?ExampleApp) ExampleAppNullable {
         return .{ .ptr = if (that) |some| some.instance else null };
     }
 
-    pub fn into(self: ExampleAppNullable) ?ExampleApp {
+    pub fn tryInto(self: ExampleAppNullable) ?ExampleApp {
         return if (self.ptr) |some| ExampleApp{ .instance = some } else null;
     }
 };
@@ -177,7 +180,7 @@ pub const ExampleApp = packed struct {
         return core.downCast(T, self);
     }
 
-    pub fn asNullable(self: ExampleApp) ExampleAppNullable {
+    pub fn asSome(self: ExampleApp) ExampleAppNullable {
         return .{ .ptr = self.instance };
     }
 };

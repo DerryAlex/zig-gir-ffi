@@ -23,24 +23,28 @@ const Static = struct {
     var parent_class: ?*Gtk.ApplicationWindowClass = null;
 };
 
+fn bindTemplateChildAll(class: *Gtk.WidgetClass, comptime Impl: type) void {
+    inline for (comptime meta.fieldNames(Impl)) |name| {
+        if (comptime std.mem.eql(u8, name, "parent")) continue;
+        if (comptime std.mem.eql(u8, name, "settings")) continue;
+        comptime var name_c: [name.len:0]u8 = undefined;
+        comptime std.mem.copy(u8, name_c[0..], name);
+        class.bindTemplateChildFull(&name_c, core.Boolean.False, @offsetOf(Impl, name));
+    }
+}
+
 pub const ExampleAppWindowClass = extern struct {
     parent: Gtk.ApplicationWindowClass,
 
     pub fn init(self: *ExampleAppWindowClass) callconv(.C) void {
         Static.parent_class = @ptrCast(*Gtk.ApplicationWindowClass, core.typeClassPeek(Gtk.ApplicationWindow.gType()));
-        @ptrCast(*core.ObjectClass, self).dispose = &dispose;
-        @ptrCast(*Gtk.WidgetClass, self).setTemplateFromResource("/org/gtk/exampleapp/window.ui");
-        @ptrCast(*Gtk.WidgetClass, self).bindTemplateChildFull("stack", core.Boolean.False, @offsetOf(ExampleAppWindowImpl, "stack"));
-        @ptrCast(*Gtk.WidgetClass, self).bindTemplateChildFull("gears", core.Boolean.False, @offsetOf(ExampleAppWindowImpl, "gears"));
-        @ptrCast(*Gtk.WidgetClass, self).bindTemplateChildFull("search", core.Boolean.False, @offsetOf(ExampleAppWindowImpl, "search"));
-        @ptrCast(*Gtk.WidgetClass, self).bindTemplateChildFull("searchbar", core.Boolean.False, @offsetOf(ExampleAppWindowImpl, "searchbar"));
-        @ptrCast(*Gtk.WidgetClass, self).bindTemplateChildFull("searchentry", core.Boolean.False, @offsetOf(ExampleAppWindowImpl, "searchentry"));
-        @ptrCast(*Gtk.WidgetClass, self).bindTemplateChildFull("sidebar", core.Boolean.False, @offsetOf(ExampleAppWindowImpl, "sidebar"));
-        @ptrCast(*Gtk.WidgetClass, self).bindTemplateChildFull("words", core.Boolean.False, @offsetOf(ExampleAppWindowImpl, "words"));
-        @ptrCast(*Gtk.WidgetClass, self).bindTemplateChildFull("lines", core.Boolean.False, @offsetOf(ExampleAppWindowImpl, "lines"));
-        @ptrCast(*Gtk.WidgetClass, self).bindTemplateChildFull("lines_label", core.Boolean.False, @offsetOf(ExampleAppWindowImpl, "lines_label"));
-        @ptrCast(*Gtk.WidgetClass, self).bindTemplateCallbackFull("search_text_changed", @ptrCast(core.Callback, &searchTextChanged));
-        @ptrCast(*Gtk.WidgetClass, self).bindTemplateCallbackFull("visible_child_changed", @ptrCast(core.Callback, &visibleChildChanged));
+        var object_class = @ptrCast(*core.ObjectClass, self);
+        object_class.dispose = &dispose;
+        var widget_class = @ptrCast(*Gtk.WidgetClass, self);
+        widget_class.setTemplateFromResource("/org/gtk/exampleapp/window.ui");
+        bindTemplateChildAll(widget_class, ExampleAppWindowImpl);
+        widget_class.bindTemplateCallbackFull("search_text_changed", @ptrCast(core.Callback, &searchTextChanged));
+        widget_class.bindTemplateCallbackFull("visible_child_changed", @ptrCast(core.Callback, &visibleChildChanged));
     }
 
     pub fn dispose(object: core.Object) callconv(.C) void {
@@ -90,11 +94,13 @@ const ExampleAppWindowImpl = extern struct {
 pub const ExampleAppWindowNullable = packed struct {
     ptr: ?*ExampleAppWindowImpl,
 
+    pub const Nil = ExampleAppWindowNullable{ .ptr = null };
+
     pub fn from(that: ?ExampleAppWindow) ExampleAppWindowNullable {
         return .{ .ptr = if (that) |some| some.instance else null };
     }
 
-    pub fn get(self: ExampleAppWindowNullable) ?ExampleAppWindow {
+    pub fn tryInto(self: ExampleAppWindowNullable) ?ExampleAppWindow {
         return if (self.ptr) |some| ExampleAppWindow{ .instance = some } else null;
     }
 };
@@ -113,7 +119,7 @@ pub const ExampleAppWindow = packed struct {
         var builder = Gtk.Builder.newFromResource("/org/gtk/exampleapp/gears-menu.ui");
         defer builder.callMethod("unref", .{});
         var menu = builder.getObject("menu").tryInto().?.tryInto(core.MenuModel).?;
-        self.instance.gears.setMenuModel(menu.asNullable());
+        self.instance.gears.setMenuModel(menu.asSome());
         self.instance.settings = core.Settings.new("org.gtk.exampleapp");
         self.instance.settings.bind("transition", self.instance.stack.into(core.Object), "transition-type", .Default);
         self.instance.settings.bind("show-words", self.instance.sidebar.into(core.Object), "reveal-child", .Default);
@@ -133,7 +139,7 @@ pub const ExampleAppWindow = packed struct {
         var property_values = std.mem.zeroes([1]core.Value);
         var application = &property_values[0];
         _ = application.init(core.GType.Object);
-        application.setObject(app.into(core.Object).asNullable());
+        application.setObject(app.into(core.Object).asSome());
         return core.downCast(ExampleAppWindow, core.newObject(gType(), property_names[0..], property_values[0..])).?;
     }
 
@@ -146,16 +152,16 @@ pub const ExampleAppWindow = packed struct {
     pub fn open(self: ExampleAppWindow, file: core.File) void {
         var basename = file.getBasename().?;
         defer core.freeDiscardConst(basename);
-        var scrolled = Gtk.ScrolledWindow.new().tryInto(Gtk.ScrolledWindow).?;
+        var scrolled = Gtk.ScrolledWindow.new();
         scrolled.callMethod("setHexpand", .{core.Boolean.True});
         scrolled.callMethod("setVexpand", .{core.Boolean.True});
-        var view = Gtk.TextView.new().tryInto(Gtk.TextView).?;
+        var view = Gtk.TextView.new();
         view.setEditable(core.Boolean.False);
         view.setCursorVisible(core.Boolean.False);
-        scrolled.setChild(view.into(Gtk.Widget).asNullable());
+        scrolled.setChild(view.into(Gtk.Widget).asSome());
         _ = self.instance.stack.addTitled(scrolled.into(Gtk.Widget), basename, basename);
         var buffer = view.getBuffer();
-        var result = file.loadContents(core.CancellableNullable.from(null));
+        var result = file.loadContents(core.CancellableNullable.Nil);
         switch (result) {
             .Ok => |ok| {
                 defer core.free(ok.contents.ptr);
@@ -224,7 +230,7 @@ pub const ExampleAppWindow = packed struct {
         }
         var iter = strings.keyIterator();
         while (iter.next()) |some| {
-            var row = Gtk.Button.newWithLabel(some.*).tryInto(Gtk.Button).?;
+            var row = Gtk.Button.newWithLabel(some.*);
             row.signalClicked().connect(findWord, .{self}, .{});
             self.instance.words.insert(row.into(Gtk.Widget), -1);
         }
@@ -259,7 +265,7 @@ pub const ExampleAppWindow = packed struct {
         } else if (comptime std.mem.eql(u8, method, "open")) {
             return @call(.auto, open, .{self} ++ args);
         } else if (Gtk.ApplicationWindow.CallMethod(method)) |_| {
-            return core.upCast(Gtk.ApplicationWindow, self).callMethod(method, args);
+            return self.into(Gtk.ApplicationWindow).callMethod(method, args);
         } else {
             @compileError("No such method");
         }
@@ -297,7 +303,7 @@ pub const ExampleAppWindow = packed struct {
         return core.downCast(T, self);
     }
 
-    pub fn asNullable(self: ExampleAppWindow) ExampleAppWindowNullable {
+    pub fn asSome(self: ExampleAppWindow) ExampleAppWindowNullable {
         return .{ .ptr = self.instance };
     }
 };

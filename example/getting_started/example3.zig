@@ -19,7 +19,7 @@ pub fn activate(arg_app: core.Application) void {
         },
     }
     var window = builder.getObject("window").tryInto().?.tryInto(Gtk.Window).?;
-    window.setApplication(app.asNullable());
+    window.setApplication(app.asSome());
     var button1 = builder.getObject("button1").tryInto().?.tryInto(Gtk.Button).?;
     button1.signalClicked().connect(printHello, .{}, .{ .swapped = true });
     var button2 = builder.getObject("button2").tryInto().?.tryInto(Gtk.Button).?;

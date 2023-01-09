@@ -12,7 +12,7 @@ static inline int is_basic_type(GITypeTag type)
 	return type < GI_TYPE_TAG_UTF8 || type == GI_TYPE_TAG_UNICHAR;
 }
 
-static inline int maybe_allocatote_on_stack(GITypeInfo *type_info)
+static inline int maybe_allocate_on_stack(GITypeInfo *type_info)
 {
 	if (g_type_info_is_pointer(type_info)) return 0;
 	GITypeTag type = g_type_info_get_tag(type_info);
@@ -46,6 +46,32 @@ static inline int is_fixed_size_array(GITypeInfo *type_info)
 		{
 			if (g_type_info_get_array_fixed_size(type_info) != -1) return 1;
 		}
+	}
+	return 0;
+}
+
+static inline int is_struct_union(GITypeInfo *type_info)
+{
+	if (g_type_info_is_pointer(type_info)) return 0;
+	GITypeTag type = g_type_info_get_tag(type_info);
+	if (type == GI_TYPE_TAG_INTERFACE)
+	{
+		GIBaseInfo *interface = g_type_info_get_interface(type_info);
+		GIInfoType info_type = g_base_info_get_type(interface);
+		if (info_type == GI_INFO_TYPE_STRUCT || info_type == GI_INFO_TYPE_UNION || info_type == GI_INFO_TYPE_BOXED) return 1;
+	}
+	return 0;
+}
+
+static inline int is_gtk_widget(GITypeInfo *type_info)
+{
+	GITypeTag type = g_type_info_get_tag(type_info);
+	if (type == GI_TYPE_TAG_INTERFACE)
+	{
+		GIBaseInfo *interface = g_type_info_get_interface(type_info);
+		const char *namespace = g_base_info_get_namespace(interface);
+		const char *name = g_base_info_get_name(interface);
+		if (strcmp(namespace, "Gtk") == 0 && strcmp(name, "Widget") == 0) return 1;
 	}
 	return 0;
 }
@@ -117,7 +143,8 @@ void emit_function(GIBaseInfo *info, const char *name, const char *container_nam
 	printf(") ");
 	int return_nullable = g_callable_info_may_return_null(info);
 	GITypeInfo *return_type_info = g_callable_info_get_return_type(info);
-	emit_type(return_type_info, return_nullable || patch_return_nullable(return_type_info), 0, 0, 1);
+	if (is_gtk_widget(return_type_info) && strncmp(name, "new", 3) == 0) printf("%s", container_name);
+	else emit_type(return_type_info, return_nullable || patch_return_nullable(return_type_info), 0, 0, 1);
 	g_base_info_unref(return_type_info);
 	printf(";\n");
 	emit_function_wrapper(info, name, container_name, is_deprecated, is_container_struct);
@@ -443,7 +470,7 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 		const char *interface_name = g_base_info_get_name(interface);
 		const char *interface_namespace = g_base_info_get_namespace(interface);
 		printf("        else if (%s.%s.CallMethod(method)) |_| {\n", interface_namespace, interface_name);
-		printf("            return core.upCast(%s.%s, self).callMethod(method, args);\n", interface_namespace, interface_name);
+		printf("            return self.into(%s.%s).callMethod(method, args);\n", interface_namespace, interface_name);
 		printf("        }\n");
 		g_base_info_unref(interface);
 	}
@@ -453,7 +480,7 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 		const char *parent_name = g_base_info_get_name(parent);
 		const char *parent_namespace = g_base_info_get_namespace(parent);
 		printf("        else if (%s.%s.CallMethod(method)) |_| {\n", parent_namespace, parent_name);
-		printf("            return core.upCast(%s.%s, self).callMethod(method, args);\n", parent_namespace, parent_name);
+		printf("            return self.into(%s.%s).callMethod(method, args);\n", parent_namespace, parent_name);
 		printf("        }\n");
 		g_base_info_unref(parent);
 	}
@@ -1070,7 +1097,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		/* override */
 		if (param_dir[i] == PARAM_OUT && !param_caller_allocate[i]) param_optional[i] = 0;
 		/* override */
-		if (param_caller_allocate[i] && maybe_allocatote_on_stack(type_info))
+		if (param_caller_allocate[i] && maybe_allocate_on_stack(type_info))
 		{
 			param_caller_allocate[i] = 0;
 			param_optional[i] = 0;
@@ -1138,7 +1165,8 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		if (!skip_return)
 		{
 			if (multiple_return > 1) printf("    ret: ");
-			emit_type(return_type_info, return_nullable || patch_return_nullable(return_type_info), 0, 0, 0);
+			if (is_gtk_widget(return_type_info) && strncmp(name, "new", 3) == 0) printf("%s", container_name);
+			else emit_type(return_type_info, return_nullable || patch_return_nullable(return_type_info), 0, 0, 0);
 			if (multiple_return > 1) printf(",\n");
 		}
 		for (int i = 0; i < n; i++)
@@ -1372,7 +1400,7 @@ void emit_signal(GISignalInfo *info, const char *container_name)
 		GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
 		GIDirection direction = g_arg_info_get_direction(arg_info);
 		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-		if (!is_basic_type(g_type_info_get_tag(type_info)) && maybe_allocatote_on_stack(type_info)) printf("*"); /* no pointer annotation for struct */
+		if (is_struct_union(type_info)) printf("*");
 		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT, 1);
 		g_base_info_unref(type_info);
 		g_base_info_unref(arg_info);
@@ -1393,7 +1421,7 @@ void emit_signal(GISignalInfo *info, const char *container_name)
 		GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
 		GIDirection direction = g_arg_info_get_direction(arg_info);
 		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-		if (!is_basic_type(g_type_info_get_tag(type_info)) && maybe_allocatote_on_stack(type_info)) printf("*"); /* no pointer annotation for struct */
+		if (is_struct_union(type_info)) printf("*"); /* no pointer annotation for struct */
 		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT, 1);
 		g_base_info_unref(type_info);
 		g_base_info_unref(arg_info);
@@ -1436,6 +1464,8 @@ void emit_nullable(const char *name)
 	printf("pub const %sNullable = packed struct {\n", name);
 	printf("    ptr: ?*%sImpl,\n", name);
 	printf("\n");
+	printf("    pub const Nil = %sNullable{ .ptr = null };\n", name);
+	printf("\n");
 	printf("    pub fn from(that: ?%s) %sNullable {\n", name, name);
 	printf("        return .{ .ptr = if (that) |some| some.instance else null };\n");
 	printf("    }\n");
@@ -1456,7 +1486,7 @@ void emit_into(const char *name)
 	printf("        return core.downCast(T, self);\n");
 	printf("    }\n");
 	printf("\n");
-	printf("    pub fn asNullable(self: %s) %sNullable {\n", name, name);
+	printf("    pub fn asSome(self: %s) %sNullable {\n", name, name);
 	printf("        return .{ .ptr = self.instance };\n");
 	printf("    }\n");
 }

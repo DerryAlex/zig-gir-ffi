@@ -16,10 +16,12 @@ const ExampleAppPrefsClass = extern struct {
 
     pub fn init(self: *ExampleAppPrefsClass) callconv(.C) void {
         Static.parent_class = @ptrCast(*Gtk.DialogClass, core.typeClassPeek(Gtk.Dialog.gType()));
-        @ptrCast(*core.ObjectClass, self).dispose = &dispose;
-        @ptrCast(*Gtk.WidgetClass, self).setTemplateFromResource("/org/gtk/exampleapp/prefs.ui");
-        @ptrCast(*Gtk.WidgetClass, self).bindTemplateChildFull("font", core.Boolean.False, @offsetOf(ExampleAppPrefsImpl, "font"));
-        @ptrCast(*Gtk.WidgetClass, self).bindTemplateChildFull("transition", core.Boolean.False, @offsetOf(ExampleAppPrefsImpl, "transition"));
+        var object_class = @ptrCast(*core.ObjectClass, self);
+        object_class.dispose = &dispose;
+        var widget_class = @ptrCast(*Gtk.WidgetClass, self);
+        widget_class.setTemplateFromResource("/org/gtk/exampleapp/prefs.ui");
+        widget_class.bindTemplateChildFull("font", core.Boolean.False, @offsetOf(ExampleAppPrefsImpl, "font"));
+        widget_class.bindTemplateChildFull("transition", core.Boolean.False, @offsetOf(ExampleAppPrefsImpl, "transition"));
     }
 
     pub fn dispose(object: core.Object) callconv(.C) void {
@@ -38,11 +40,13 @@ const ExampleAppPrefsImpl = extern struct {
 pub const ExampleAppPrefsNullable = packed struct {
     ptr: ?*ExampleAppPrefsImpl,
 
+    pub const Nil = ExampleAppPrefsNullable{ .ptr = null };
+
     pub fn from(that: ?ExampleAppPrefs) ExampleAppPrefsNullable {
         return .{ .ptr = if (that) |some| some.instance else null };
     }
 
-    pub fn into(self: ExampleAppPrefsNullable) ?ExampleAppPrefs {
+    pub fn tryInto(self: ExampleAppPrefsNullable) ?ExampleAppPrefs {
         return if (self.ptr) |some| ExampleAppPrefs{ .instance = some } else null;
     }
 };
@@ -59,8 +63,8 @@ pub const ExampleAppPrefs = packed struct {
     pub fn init(self: ExampleAppPrefs) callconv(.C) void {
         self.callMethod("initTemplate", .{});
         self.instance.settings = core.Settings.new("org.gtk.exampleapp");
-        self.instance.settings.callMethod("bind", .{ "font", core.upCast(core.Object, self.instance.font), "font", .Default });
-        self.instance.settings.callMethod("bind", .{ "transition", core.upCast(core.Object, self.instance.transition), "active-id", .Default });
+        self.instance.settings.callMethod("bind", .{ "font", self.instance.font.into(core.Object), "font", .Default });
+        self.instance.settings.callMethod("bind", .{ "transition", self.instance.transition.into(core.Object), "active-id", .Default });
     }
 
     pub fn new(win: ExampleAppWindow) ExampleAppPrefs {
@@ -68,7 +72,7 @@ pub const ExampleAppPrefs = packed struct {
         var property_values = std.mem.zeroes([2]core.Value);
         var transient_for = &property_values[0];
         _ = transient_for.init(core.GType.Object);
-        transient_for.setObject(win.into(core.Object).asNullable());
+        transient_for.setObject(win.into(core.Object).asSome());
         var use_header_bar = &property_values[1];
         _ = use_header_bar.init(core.GType.Boolean);
         use_header_bar.setBoolean(core.Boolean.True);
@@ -135,7 +139,7 @@ pub const ExampleAppPrefs = packed struct {
         return core.downCast(T, self);
     }
 
-    pub fn asNullable(self: ExampleAppPrefs) ExampleAppPrefsNullable {
+    pub fn asSome(self: ExampleAppPrefs) ExampleAppPrefsNullable {
         return .{ .ptr = self.instance };
     }
 };
