@@ -109,12 +109,8 @@ static inline int patch_return_nullable(GITypeInfo *type_info)
 	return 0;
 }
 
-// toplevel
-void emit_function(GIBaseInfo *info, const char *name, const char *container_name, int is_deprecated, int is_container_struct)
+void emit_c_function(GIBaseInfo *info, const char *name, const char *container_name, int is_deprecated, int is_container_struct)
 {
-	if (is_deprecated && !config_enable_deprecated) return;
-	printf("pub usingnamespace struct {\n"); /* make extern declaration private */
-	if (is_deprecated) printf("/// (deprecated)\n");
 	printf("extern fn ");
 	emit_function_symbol(info);
 	printf("(");
@@ -147,8 +143,13 @@ void emit_function(GIBaseInfo *info, const char *name, const char *container_nam
 	else emit_type(return_type_info, return_nullable || patch_return_nullable(return_type_info), 0, 0, 1);
 	g_base_info_unref(return_type_info);
 	printf(";\n");
+}
+
+// toplevel
+void emit_function(GIBaseInfo *info, const char *name, const char *container_name, int is_deprecated, int is_container_struct)
+{
+	if (is_deprecated && !config_enable_deprecated) return;
 	emit_function_wrapper(info, name, container_name, is_deprecated, is_container_struct);
-	printf("};\n"); /* make extern declaration private */
 }
 
 // toplevel
@@ -1356,6 +1357,10 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 	/* call C API */
 	if (skip_return) printf("    _ = ");
 	else printf("    var ret = ");
+	printf("struct {\n");
+	printf("pub ");
+	emit_c_function(info, name, container_name, is_deprecated, is_container_struct);
+	printf("}.");
 	emit_function_symbol(info);
 	printf("(");
 	int first_call_param = 1;
@@ -1638,12 +1643,11 @@ void emit_registered_type(GIRegisteredTypeInfo *info, int is_instance)
 	unsigned long id = g_registered_type_info_get_g_type(info);
 	if (id == G_TYPE_NONE) return;
 	printf("\n");
-	printf("    pub usingnamespace struct {\n");
-	printf("        extern fn %s() core.GType;\n", g_registered_type_info_get_type_init(info));
-	printf("        pub fn gType() core.GType {\n");
-	printf("            return %s();\n", g_registered_type_info_get_type_init(info));
-	printf("        }\n");
-	printf("    };\n");
+	printf("    pub fn gType() core.GType {\n");
+	printf("        return struct {\n");
+	printf("            pub extern fn %s() core.GType;\n", g_registered_type_info_get_type_init(info));
+	printf("        }.%s();\n", g_registered_type_info_get_type_init(info));
+	printf("    }\n");
 }
 
 void emit_nullable(const char *name)
