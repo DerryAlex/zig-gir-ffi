@@ -1218,8 +1218,19 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		if (param_slice_len_ptr_pos[i] != -1) continue;
 		if (param_dir[i] != PARAM_IN) multiple_return++;
 	}
+	int boolean_error = 0;
+	/* override */
+	if (!skip_return && return_type == GI_TYPE_TAG_BOOLEAN && multiple_return > 1) boolean_error = 1;
 	int return_nullable = g_callable_info_may_return_null(info);
 	if (throw)
+	{
+		printf("union(enum) {\n");
+		printf("    Ok: Ok,\n");
+		printf("    Err: Err,\n");
+		printf("\n");
+		printf("    const Ok = ");
+	}
+	else if (boolean_error)
 	{
 		printf("union(enum) {\n");
 		printf("    Ok: Ok,\n");
@@ -1231,7 +1242,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 	else
 	{
 		if (multiple_return > 1) printf("struct {\n");
-		if (!skip_return)
+		if (!skip_return && !boolean_error)
 		{
 			if (multiple_return > 1) printf("    ret: ");
 			if (is_gtk_widget(return_type_info) && strncmp(name, "new", 3) == 0) printf("%s", container_name);
@@ -1257,6 +1268,12 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 	{
 		printf(";\n");
 		printf("    const Err = *core.Error;\n");
+		printf("}");
+	}
+	else if (boolean_error)
+	{
+		printf(";\n");
+		printf("    const Err = void;\n");
 		printf("}");
 	}
 	printf(" {\n");
@@ -1381,6 +1398,11 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		printf("    if (err) |some| return .{ .Err = some };\n");
 		printf("    return .{ .Ok = ");
 	}
+	else if (boolean_error)
+	{
+		printf("    if (!ret.toBool()) return .{ .Err = {}};\n");
+		printf("    return .{. Ok = ");
+	}
 	else
 	{
 		printf("    return ");
@@ -1390,7 +1412,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 	{
 		if (multiple_return > 1) printf(".{ ");
 		int first_output_param = 1;
-		if (!skip_return)
+		if (!skip_return && !boolean_error)
 		{
 			if (multiple_return > 1) printf(".ret = ");
 			if (return_nullable && !return_instance) printf("if (ret) |some| some else null");
@@ -1425,6 +1447,10 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		if (multiple_return > 1) printf(" }");
 	}
 	if (throw)
+	{
+		printf(" }");
+	}
+	else if (boolean_error)
 	{
 		printf(" }");
 	}

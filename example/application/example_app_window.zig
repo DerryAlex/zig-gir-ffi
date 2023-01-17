@@ -59,12 +59,15 @@ pub const ExampleAppWindowClass = extern struct {
         var view = tab.getChild().expect("child").tryInto(Gtk.TextView).?;
         var buffer = view.getBuffer();
         var start = buffer.getStartIter();
-        var ret = start.forwardSearch(text, .CaseInsensitive, null);
-        if (ret.ret.toBool()) {
-            var match_start = ret.match_start;
-            var match_end = ret.match_end;
-            buffer.selectRange(&match_start, &match_end);
-            _ = view.scrollToIter(&match_start, 0, core.Boolean.False, 0, 0);
+        var success = start.forwardSearch(text, .CaseInsensitive, null);
+        switch (success) {
+            .Ok => |ret| {
+                var match_start = ret.match_start;
+                var match_end = ret.match_end;
+                buffer.selectRange(&match_start, &match_end);
+                _ = view.scrollToIter(&match_start, 0, core.Boolean.False, 0, 0);
+            },
+            .Err => {},
         }
     }
 
