@@ -343,6 +343,15 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 	printf("    instance: *%sImpl,\n", name);
 	emit_interface_mark(info);
 	emit_ancestor_mark(info);
+	GIObjectInfo *parent = g_object_info_get_parent(info);
+	if (parent != NULL)
+	{
+		const char *parent_name = g_base_info_get_name(parent);
+		const char *parent_namespace = g_base_info_get_namespace(parent);
+		printf("\n");
+		printf("    pub const Parent = %s.%s;\n", parent_namespace, parent_name);
+		g_base_info_unref(parent);
+	}
 	n = g_object_info_get_n_constants(info);
 	for (int i = 0; i < n; i++)
 	{
@@ -369,6 +378,14 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 		GISignalInfo *signal_info = g_object_info_get_signal(info, i);
 		emit_signal(signal_info, name);
 		g_base_info_unref(signal_info);
+	}
+	n = g_object_info_get_n_properties(info);
+	for (int i = 0; i < n; i++)
+	{
+		printf("\n");
+		GIPropertyInfo *property_info = g_object_info_get_property(info, i);
+		emit_property(property_info, name);
+		g_base_info_unref(property_info);
 	}
 	/* emit helper function */
 	printf("\n");
@@ -400,6 +417,16 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 		free(ziggy_signal_name);
 		g_base_info_unref(signal);
 	}
+	n = g_object_info_get_n_properties(info);
+	for (int i = 0; i < n; i++)
+	{
+		GIPropertyInfo *property = g_object_info_get_property(info, i);
+		const char *property_name = g_base_info_get_name(property);
+		char *ziggy_property_name = snake_to_title(property_name);
+		printf("        if (std.mem.eql(u8, method, \"property%s\")) return core.FnReturnType(@TypeOf(@This().property%s));\n", ziggy_property_name, ziggy_property_name);
+		free(ziggy_property_name);
+		g_base_info_unref(property);
+	}
 	n = g_object_info_get_n_interfaces(info);
 	for (int i = 0; i < n; i++)
 	{
@@ -409,12 +436,10 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 		printf("        if (%s.%s.CallMethod(method)) |some| return some;\n", interface_namespace, interface_name);
 		g_base_info_unref(interface);
 	}
-	GIObjectInfo *parent = g_object_info_get_parent(info);
+	parent = g_object_info_get_parent(info);
 	if (parent != NULL)
 	{
-		const char *parent_name = g_base_info_get_name(parent);
-		const char *parent_namespace = g_base_info_get_namespace(parent);
-		printf("        if (%s.%s.CallMethod(method)) |some| return some;\n", parent_namespace, parent_name);
+		printf("        if (Parent.CallMethod(method)) |some| return some;\n");
 		g_base_info_unref(parent);
 	}
 	printf("        return null;\n");
@@ -463,6 +488,18 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 		free(ziggy_signal_name);
 		g_base_info_unref(signal);
 	}
+	n = g_object_info_get_n_properties(info);
+	for (int i = 0; i < n; i++)
+	{
+		GIPropertyInfo *property = g_object_info_get_property(info, i);
+		const char *property_name = g_base_info_get_name(property);
+		char *ziggy_property_name = snake_to_title(property_name);
+		printf("        else if (comptime std.mem.eql(u8, method, \"property%s\")) {\n", ziggy_property_name);
+		printf("            return @call(.auto, @This().property%s, .{self} ++ args);\n", ziggy_property_name);
+		printf("        }\n");
+		free(ziggy_property_name);
+		g_base_info_unref(property);
+	}
 	n = g_object_info_get_n_interfaces(info);
 	for (int i = 0; i < n; i++)
 	{
@@ -477,10 +514,8 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 	parent = g_object_info_get_parent(info);
 	if (parent != NULL)
 	{
-		const char *parent_name = g_base_info_get_name(parent);
-		const char *parent_namespace = g_base_info_get_namespace(parent);
-		printf("        else if (%s.%s.CallMethod(method)) |_| {\n", parent_namespace, parent_name);
-		printf("            return self.into(%s.%s).callMethod(method, args);\n", parent_namespace, parent_name);
+		printf("        else if (Parent.CallMethod(method)) |_| {\n");
+		printf("            return self.into(Parent).callMethod(method, args);\n");
 		printf("        }\n");
 		g_base_info_unref(parent);
 	}
@@ -489,6 +524,7 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 	printf("        }\n");
 	printf("    }\n");
 
+	printf("\n");
 	emit_registered_type(info, 1);
 
 	printf("\n");
@@ -496,6 +532,7 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 	printf("        return meta.trait.hasField(\"trait%s%s\")(T);\n", g_base_info_get_namespace(info), name);
 	printf("    }\n");
 
+	printf("\n");
 	emit_into(name);
 
 	printf("};\n");
@@ -547,6 +584,14 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 		emit_signal(signal_info, name);
 		g_base_info_unref(signal_info);
 	}
+	n = g_interface_info_get_n_properties(info);
+	for (int i = 0; i < n; i++)
+	{
+		printf("\n");
+		GIPropertyInfo *property_info = g_interface_info_get_property(info, i);
+		emit_property(property_info, name);
+		g_base_info_unref(property_info);
+	}
 	
 	printf("\n");
 	printf("    pub fn CallMethod(comptime method: []const u8) ?type {\n");
@@ -577,6 +622,16 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 		printf("        if (std.mem.eql(u8, method, \"signal%s\")) return core.FnReturnType(@TypeOf(@This().signal%s));\n", ziggy_signal_name, ziggy_signal_name);
 		free(ziggy_signal_name);
 		g_base_info_unref(signal);
+	}
+	n = g_interface_info_get_n_properties(info);
+	for (int i = 0; i < n; i++)
+	{
+		GIPropertyInfo *property = g_interface_info_get_property(info, i);
+		const char *property_name = g_base_info_get_name(property);
+		char *ziggy_property_name = snake_to_title(property_name);
+		printf("        if (std.mem.eql(u8, method, \"property%s\")) return core.FnReturnType(@TypeOf(@This().property%s));\n", ziggy_property_name, ziggy_property_name);
+		free(ziggy_property_name);
+		g_base_info_unref(property);
 	}
 	printf("        return null;\n");
 	printf("    }\n");
@@ -627,11 +682,24 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 		free(ziggy_signal_name);
 		g_base_info_unref(signal);
 	}
+	n = g_interface_info_get_n_properties(info);
+	for (int i = 0; i < n; i++)
+	{
+		GIPropertyInfo *property = g_interface_info_get_property(info, i);
+		const char *property_name = g_base_info_get_name(property);
+		char *ziggy_property_name = snake_to_title(property_name);
+		printf("        else if (comptime std.mem.eql(u8, method, \"property%s\")) {\n", ziggy_property_name);
+		printf("            return @call(.auto, @This().property%s, .{self} ++ args);\n", ziggy_property_name);
+		printf("        }\n");
+		free(ziggy_property_name);
+		g_base_info_unref(property);
+	}
 	printf("        else {\n");
 	printf("            @compileError(\"No such method\");\n");
 	printf("        }\n");
 	printf("    }\n");
 
+	printf("\n");
 	emit_registered_type(info, 1);
 
 	printf("\n");
@@ -639,6 +707,7 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 	printf("        return meta.trait.hasField(\"trait%s%s\")(T);\n", g_base_info_get_namespace(info), name);
 	printf("    }\n");
 
+	printf("\n");
 	emit_into(name);
 
 	printf("};\n");
@@ -1389,8 +1458,13 @@ void emit_signal(GISignalInfo *info, const char *container_name)
 	if ((flags & G_SIGNAL_DEPRECATED) && !config_enable_deprecated) return;
 	const char *signal_name = g_base_info_get_name(info);
 	char *ziggy_signal_name = snake_to_title(signal_name); /* '-' is handled correctly */
-	printf("pub const Signal%s = struct {\n", ziggy_signal_name);
+	printf("const SignalProxy%s = struct {\n", ziggy_signal_name);
 	printf("    object: %s,\n", container_name);
+	printf("\n");
+	printf("    pub inline fn name(self: SignalProxy%s) [*:0]const u8 {\n", ziggy_signal_name);
+	printf("        _ = self;\n");
+	printf("        return \"%s\";\n", signal_name);
+	printf("    }\n");
 	printf("\n");
 	printf("    /// @handler: fn(%s", container_name);
 	int n = g_callable_info_get_n_args(info);
@@ -1410,8 +1484,8 @@ void emit_signal(GISignalInfo *info, const char *container_name)
 	GITypeInfo *return_type_info = g_callable_info_get_return_type(info);
 	emit_type(return_type_info, return_nullable, 0, 0, 1);
 	printf("\n");
-	printf("    pub fn connect(self: Signal%s, comptime handler: anytype, args: anytype, comptime flags: core.ZigConnectFlags) void {\n", ziggy_signal_name);
-	printf("        _ = core.connect(self.object, \"%s\", handler, args, flags, .{ ", signal_name);
+	printf("    pub fn connect(self: SignalProxy%s, comptime handler: anytype, args: anytype, comptime flags: core.ZigConnectFlags) usize {\n", ziggy_signal_name);
+	printf("        return core.connect(self.object, \"%s\", handler, args, flags, &[_]type{ ", signal_name);
 	emit_type(return_type_info, return_nullable, 0, 0, 1);
 	printf(", %s", container_name);
 	n = g_callable_info_get_n_args(info);
@@ -1430,11 +1504,98 @@ void emit_signal(GISignalInfo *info, const char *container_name)
 	printf("    }\n");
 	printf("};\n");
 	printf("\n");
-	printf("pub fn signal%s(self: %s) Signal%s {\n", ziggy_signal_name, container_name, ziggy_signal_name);
+	printf("pub fn signal%s(self: %s) SignalProxy%s {\n", ziggy_signal_name, container_name, ziggy_signal_name);
 	printf("    return .{ .object = self };\n");
 	printf("}\n");
 	g_base_info_unref(return_type_info);
 	free(ziggy_signal_name);
+}
+
+void emit_property(GIPropertyInfo *info, const char *container_name)
+{
+	GParamFlags flags = g_property_info_get_flags(info);
+	const char *property_name = g_base_info_get_name(info);
+	char *ziggy_property_name = snake_to_title(property_name);
+	GITypeInfo *type_info = g_property_info_get_type(info);
+	printf("const PropertyProxy%s = struct {\n", ziggy_property_name);
+	printf("    object: %s,\n", container_name);
+	printf("\n");
+	printf("    pub inline fn name(self: PropertyProxy%s) [*:0]const u8 {\n", ziggy_property_name);
+	printf("        _ = self;\n");
+	printf("        return \"%s\";\n", property_name);
+	printf("    }\n");
+	printf("\n");
+	printf("    pub fn connectNotify(self: PropertyProxy%s, comptime handler: anytype, args: anytype, comptime flags: core.ZigConnectFlags) usize {\n", ziggy_property_name);
+	printf("        return core.connect(self.object, \"notify::%s\", handler, args, flags, &[_]type{ void, %s, core.ParamSpec });\n", property_name, container_name);
+	printf("    }\n");
+	GIFunctionInfo *getter = g_property_info_get_getter(info);
+	if (getter != NULL)
+	{
+		printf("\n");
+		printf("    extern fn ");
+		emit_function_symbol(getter);
+		printf("(%s) ", container_name);
+		emit_type(type_info, 0, 0, 0, 1);
+		printf(";\n");
+		printf("    pub fn get(self: PropertyProxy%s) ", ziggy_property_name);
+		emit_type(type_info, 0, 0, 0, 1);
+		printf(" {\n");
+		printf("        return ");
+		emit_function_symbol(getter);
+		printf("(self.object);\n");
+		printf("    }\n");
+		g_base_info_unref(getter);
+	}
+	else if (flags & G_PARAM_READABLE)
+	{
+		printf("\n");
+		printf("    pub fn get(self: PropertyProxy%s) ", ziggy_property_name);
+		emit_type(type_info, 0, 0, 0, 1);
+		printf(" {\n");
+		printf("        var property_value = std.mem.zeroes(core.Value);\n");
+		emit_value_set("property_value", type_info, NULL);
+		printf("        self.callMethod(\"getProperty\", .{ \"%s\", &property_value });\n", property_name);
+		printf("        return ");
+		emit_value_get("property_value", type_info);
+		printf(";\n");
+		printf("    }\n");
+	}
+	GIFunctionInfo *setter = g_property_info_get_setter(info);
+	if (setter != NULL)
+	{
+		printf("\n");
+		printf("    extern fn ");
+		emit_function_symbol(setter);
+		printf("(%s, ", container_name);
+		emit_type(type_info, 0, 0, 0, 1);
+		printf(") void;\n");
+		printf("    pub fn set(self: PropertyProxy%s, value: ", ziggy_property_name);
+		emit_type(type_info, 0, 0, 0, 1);
+		printf(") void {\n");
+		printf("        ");
+		emit_function_symbol(setter);
+		printf("(self.object, value);\n");
+		printf("    }\n");
+		g_base_info_unref(setter);
+	}
+	else if ((flags & G_PARAM_WRITABLE) && !(flags & G_PARAM_CONSTRUCT_ONLY))
+	{
+		printf("\n");
+		printf("    pub fn set(self: PropertyProxy%s, value: ", ziggy_property_name);
+		emit_type(type_info, 0, 0, 0, 1);
+		printf(") void {\n");
+		printf("        var property_value = std.mem.zeroes(core.Value);\n");
+		emit_value_set("property_value", type_info, "value");
+		printf("        self.callMethod(\"setProperty\", .{ \"%s\", &property_value });\n", property_name);
+		printf("    }\n");
+	}
+	printf("};\n");
+	printf("\n");
+	printf("pub fn property%s(self: %s) PropertyProxy%s {\n", ziggy_property_name, container_name, ziggy_property_name);
+	printf("    return .{ .object = self };\n");
+	printf("}\n");
+	g_base_info_unref(type_info);
+	free(ziggy_property_name);
 }
 
 void emit_registered_type(GIRegisteredTypeInfo *info, int is_instance)
@@ -1464,13 +1625,11 @@ void emit_nullable(const char *name)
 	printf("pub const %sNullable = packed struct {\n", name);
 	printf("    ptr: ?*%sImpl,\n", name);
 	printf("\n");
-	printf("    pub const Nil = %sNullable{ .ptr = null };\n", name);
-	printf("\n");
-	printf("    pub fn from(that: ?%s) %sNullable {\n", name, name);
-	printf("        return .{ .ptr = if (that) |some| some.instance else null };\n");
+	printf("    pub fn expect(self: %sNullable, message: []const u8) %s {\n", name, name);
+	printf("        if (self.ptr) |some| { return %s{ .instance = some }; } else @panic(message);\n", name);
 	printf("    }\n");
 	printf("\n");
-	printf("    pub fn tryInto(self: %sNullable) ?%s {\n", name, name);
+	printf("    pub fn tryUnwrap(self: %sNullable) ?%s {\n", name, name);
 	printf("        return if (self.ptr) |some| %s{ .instance = some } else null;\n", name);
 	printf("    }\n");
 	printf("};\n");
@@ -1489,4 +1648,275 @@ void emit_into(const char *name)
 	printf("    pub fn asSome(self: %s) %sNullable {\n", name, name);
 	printf("        return .{ .ptr = self.instance };\n");
 	printf("    }\n");
+}
+
+void emit_value_get(const char *value_name, GITypeInfo *type_info)
+{
+	// TODO: support glib.variant
+	GITypeTag type = g_type_info_get_tag(type_info);
+	switch (type)
+	{
+		case GI_TYPE_TAG_VOID:
+			assert(g_type_info_is_pointer(type_info));
+			printf("%s.getPointer()", value_name);
+			break;
+		case GI_TYPE_TAG_BOOLEAN:
+			printf("%s.getBoolean()", value_name);
+			break;
+		case GI_TYPE_TAG_INT8:
+			printf("%s.getSchar()", value_name);
+			break;
+		case GI_TYPE_TAG_UINT8:
+			printf("%s.getUchar()", value_name);
+			break;
+		case GI_TYPE_TAG_INT16:
+			// fprintf(stderr, "Warning: i16 value\n");
+			printf("%s.getInt()", value_name);
+			break;
+		case GI_TYPE_TAG_UINT16:
+			// fprintf(stderr, "Warning: u16 value\n");
+			printf("%s.getUInt()", value_name);
+			break;
+		case GI_TYPE_TAG_INT32:
+			// fprintf(stderr, "Warning: i32 value\n");
+			printf("if (%s.g_type == core.GType.Int) %s.getInt() else %s.getLong()", value_name, value_name, value_name);
+			break;
+		case GI_TYPE_TAG_UINT32:
+			// fprintf(stderr, "Warning: u32 value\n");
+			printf("if (%s.g_type == core.GType.Uint) %s.getUint() else %s.getUlong()", value_name, value_name, value_name);
+			break;
+		case GI_TYPE_TAG_INT64:
+			// fprintf(stderr, "Warning: i64 value\n");
+			printf("if (%s.g_type == core.GType.Int64) %s.getInt64() else %s.getLong()", value_name, value_name, value_name);
+			break;
+		case GI_TYPE_TAG_UINT64:
+			// fprintf(stderr, "Warning: u64 value\n");
+			printf("if (%s.g_type == core.GType.UInt64) %s.getInt() else %s.getUlong()", value_name, value_name, value_name);
+			break;
+		case GI_TYPE_TAG_FLOAT:
+			printf("%s.getFloat()", value_name);
+			break;
+		case GI_TYPE_TAG_DOUBLE:
+			printf("%s.getDouble()", value_name);
+			break;
+		case GI_TYPE_TAG_GTYPE:
+			printf("%s.getGtype()", value_name);
+			break;
+		case GI_TYPE_TAG_UTF8:
+		case GI_TYPE_TAG_FILENAME:
+			printf("%s.getString()", value_name);
+			break;
+		case GI_TYPE_TAG_ARRAY:
+			GIArrayType array_type = g_type_info_get_array_type(type_info);
+			switch (array_type)
+			{
+				case GI_ARRAY_TYPE_ARRAY:
+					printf("@ptrCast(*core.Array, %s.getBoxed())\n", value_name);
+					break;
+				case GI_ARRAY_TYPE_PTR_ARRAY:
+					printf("@ptrCast(*core.PtrArray, %s.getBoxed())\n", value_name);
+					break;
+				case GI_ARRAY_TYPE_BYTE_ARRAY:
+					printf("@ptrCast(*core.ByteArray, %s.getBoxed())\n", value_name);
+					break;
+				default:
+					/* C array */
+					printf("@ptrCast(");
+					emit_type(type_info, 0, 0, 0, 1);
+					printf(", %s.getPointer())", value_name);
+					break;
+			}
+			break;
+		case GI_TYPE_TAG_INTERFACE:
+			GIBaseInfo *interface = g_type_info_get_interface(type_info);
+			GIInfoType info_type = g_base_info_get_type(interface);
+			switch (info_type)
+			{
+				case GI_INFO_TYPE_OBJECT:
+				case GI_INFO_TYPE_INTERFACE:
+					printf("%s.getObject().tryInto(", value_name);
+					emit_type(type_info, 0, 0, 0, 1);
+					printf(").?");
+					break;
+				case GI_INFO_TYPE_STRUCT:
+				case GI_INFO_TYPE_UNION:
+				case GI_INFO_TYPE_BOXED:
+					printf("core.alignedCast(*");
+					emit_type(type_info, 0, 0, 0, 1);
+					printf(", %s.getBoxed())", value_name);
+					break;
+				case GI_INFO_TYPE_ENUM:
+					printf("@intToEnum(");
+					emit_type(type_info, 0, 0, 0, 1);
+					printf(", %s.getEnum())", value_name);
+					break;
+				case GI_INFO_TYPE_FLAGS:
+					printf("@intToEnum(");
+					emit_type(type_info, 0, 0, 0, 1);
+					printf(", %s.getFlags())", value_name);
+					break;
+				case GI_INFO_TYPE_CALLBACK:
+				default:
+					printf("core.Unsupported");
+					fprintf(stderr, "Unsupported (value) interface type %s\n", g_info_type_to_string(info_type));
+					break;
+			}
+			g_base_info_unref(interface);
+			break;
+		case GI_TYPE_TAG_GLIST:
+		case GI_TYPE_TAG_GSLIST:
+		case GI_TYPE_TAG_GHASH:
+		case GI_TYPE_TAG_ERROR:
+		case GI_TYPE_TAG_UNICHAR:
+		default:
+			printf("core.Unsupported");
+			fprintf(stderr, "Unsupported (value) type %s\n", g_type_tag_to_string(type));
+			break;
+	}
+}
+
+void emit_value_set(const char *value_name, GITypeInfo *type_info, const char *value)
+{
+	GITypeTag type = g_type_info_get_tag(type_info);
+	switch (type)
+	{
+		case GI_TYPE_TAG_VOID:
+			assert(g_type_info_is_pointer(type_info));
+			printf("_ = %s.init(core.GType.Pointer);\n", value_name);
+			if (value != NULL) printf("%s.setPointer(%s);\n", value_name, value);
+			break;
+		case GI_TYPE_TAG_BOOLEAN:
+			printf("_ = %s.init(core.GType.Boolean);\n", value_name);
+			if (value != NULL) printf("%s.setBoolean(%s);\n", value_name, value);
+			break;
+		case GI_TYPE_TAG_INT8:
+			printf("_ = %s.init(core.GType.Char);\n", value_name);
+			if (value != NULL) printf("%s.setSchar(%s);\n", value_name, value);
+			break;
+		case GI_TYPE_TAG_UINT8:
+			printf("_ = %s.init(core.GType.Uchar);\n", value_name);
+			if (value != NULL) printf("%s.setUchar(%s);\n", value_name, value);
+			break;
+		case GI_TYPE_TAG_INT16:
+			// fprintf(stderr, "Warning: i16 value\n");
+			printf("_ = %s.init(core.GType.Int);\n", value_name);
+			if (value != NULL) printf("%s.setInt(%s);\n", value_name, value);
+			break;
+		case GI_TYPE_TAG_UINT16:
+			// fprintf(stderr, "Warning: u16 value\n");
+			printf("_ = %s.init(core.GType.Uint);\n", value_name);
+			if (value != NULL) printf("%s.setUInt(%s);\n", value_name, value);
+			break;
+		case GI_TYPE_TAG_INT32:
+			// fprintf(stderr, "Warning: i32 value\n");
+			if (sizeof(int) == 4)
+			{
+				printf("_ = %s.init(core.GType.Int);\n", value_name);
+				if (value != NULL) printf("%s.setInt(%s);\n", value_name, value);
+			}
+			else
+			{
+				printf("_ = %s.init(core.GType.Long);\n", value_name);
+				if (value != NULL) printf("%s.setLong(%s);\n", value_name, value);
+			}
+			break;
+		case GI_TYPE_TAG_UINT32:
+			// fprintf(stderr, "Warning: u32 value\n");
+			if (sizeof(int) == 4)
+			{
+				printf("_ = %s.init(core.GType.Uint);\n", value_name);
+				if (value != NULL) printf("%s.setUint(%s);\n", value_name, value);
+			}
+			else
+			{
+				printf("_ = %s.init(core.GType.Ulong);\n", value_name);
+				if (value != NULL) printf("%s.setUlong(%s);\n", value_name, value);
+			}
+			break;
+		case GI_TYPE_TAG_INT64:
+			// fprintf(stderr, "Warning: i64 value\n");
+			printf("_ = %s.init(core.GType.Int64);\n", value_name);
+			if (value != NULL) printf("%s.setInt64(%s);\n", value_name, value);
+			break;
+		case GI_TYPE_TAG_UINT64:
+			// fprintf(stderr, "Warning: u64 value\n");
+			printf("_ = %s.init(core.GType.Uint64);\n", value_name);
+			if (value != NULL) printf("%s.setUint64(%s);\n", value_name, value);
+			break;
+		case GI_TYPE_TAG_FLOAT:
+			printf("_ = %s.init(core.GType.Float);\n", value_name);
+			if (value != NULL) printf("%s.setFloat(%s);\n", value_name, value);
+			break;
+		case GI_TYPE_TAG_DOUBLE:
+			printf("_ = %s.init(core.GType.Double);\n", value_name);
+			if (value != NULL) printf("%s.setDouble(%s);\n", value_name, value);
+			break;
+		case GI_TYPE_TAG_GTYPE:
+			printf("_ = %s.init(core.gtypeGetType());\n", value_name);
+			if (value != NULL) printf("%s.setGtype(%s);\n", value_name, value);
+			break;
+		case GI_TYPE_TAG_UTF8:
+		case GI_TYPE_TAG_FILENAME:
+			printf("_ = %s.init(core.GType.String);\n", value_name);
+			if (value != NULL) printf("%s.setString(%s);\n", value_name, value);
+			break;
+		case GI_TYPE_TAG_ARRAY:
+			GIArrayType array_type = g_type_info_get_array_type(type_info);
+			switch (array_type)
+			{
+				case GI_ARRAY_TYPE_ARRAY:
+				case GI_ARRAY_TYPE_PTR_ARRAY:
+				case GI_ARRAY_TYPE_BYTE_ARRAY:
+					printf("_ = %s.init(core.GType.Boxed);\n", value_name);
+					if (value != NULL) printf("%s.setBoxed(%s);\n\n", value_name, value);
+					break;
+				default:
+					/* C array */
+					printf("_ = %s.init(core.GType.Pointer);\n", value_name);
+					if (value != NULL) printf("%s.setObject(%s);\n", value_name, value);
+					break;
+			}
+			break;
+		case GI_TYPE_TAG_INTERFACE:
+			GIBaseInfo *interface = g_type_info_get_interface(type_info);
+			GIInfoType info_type = g_base_info_get_type(interface);
+			switch (info_type)
+			{
+				case GI_INFO_TYPE_OBJECT:
+				case GI_INFO_TYPE_INTERFACE:
+					printf("_ = %s.init(core.GType.Object);", value_name);
+					if (value != NULL) printf("%s.setObject(%s.into(core.Object));\n", value_name, value);
+					break;
+				case GI_INFO_TYPE_STRUCT:
+				case GI_INFO_TYPE_UNION:
+				case GI_INFO_TYPE_BOXED:
+					printf("_ = %s.init(core.GType.Boxed);\n", value_name);
+					if (value != NULL) printf("%s.setBoxed(%s);\n", value_name, value);
+					break;
+				case GI_INFO_TYPE_ENUM:
+					printf("_ = %s.init(core.GType.Enum);\n", value_name);
+					if (value != NULL) printf("%s.setEnum(@enumToInt(%s));\n", value_name, value);
+					break;
+				case GI_INFO_TYPE_FLAGS:
+					printf("_ = %s.init(core.GType.Flags);\n", value_name);
+					if (value != NULL) printf("%s.setFlags(@enumToInt(%s));\n", value_name, value);
+					break;
+				case GI_INFO_TYPE_CALLBACK:
+				default:
+					printf("_ = core.Unsupported;\n");
+					fprintf(stderr, "Unsupported (value) interface type %s\n", g_info_type_to_string(info_type));
+					break;
+			}
+			g_base_info_unref(interface);
+			break;
+		case GI_TYPE_TAG_GLIST:
+		case GI_TYPE_TAG_GSLIST:
+		case GI_TYPE_TAG_GHASH:
+		case GI_TYPE_TAG_ERROR:
+		case GI_TYPE_TAG_UNICHAR:
+		default:
+			printf("_ = core.Unsupported;\n");
+			fprintf(stderr, "Unsupported (value) type %s\n", g_type_tag_to_string(type));
+			break;
+	}
 }

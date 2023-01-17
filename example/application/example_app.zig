@@ -1,7 +1,7 @@
 const std = @import("std");
 const root = @import("root");
 const Gtk = root.Gtk;
-const core = root.core;
+const core = Gtk.core;
 const meta = std.meta;
 const assert = std.debug.assert;
 const ExampleAppWindow = @import("example_app_window.zig").ExampleAppWindow;
@@ -46,26 +46,25 @@ const ExampleAppImpl = extern struct {
 pub const ExampleAppNullable = packed struct {
     ptr: ?*ExampleAppImpl,
 
-    pub const Nil = ExampleAppNullable{ .ptr = null };
-
-    pub fn from(that: ?ExampleApp) ExampleAppNullable {
-        return .{ .ptr = if (that) |some| some.instance else null };
+    pub fn expect(self: ExampleAppNullable, message: []const u8) ExampleApp {
+        if (self.ptr) |some| {
+            return ExampleApp{ .instance = some };
+        } else @panic(message);
     }
 
-    pub fn tryInto(self: ExampleAppNullable) ?ExampleApp {
+    pub fn tryUnwrap(self: ExampleAppNullable) ?ExampleApp {
         return if (self.ptr) |some| ExampleApp{ .instance = some } else null;
     }
 };
 
 pub const ExampleApp = packed struct {
     instance: *ExampleAppImpl,
-    traitGObjectObject: void = {},
-    traitGioApplication: void = {},
-    traitGtkApplication: void = {},
     traitExampleApp: void = {},
 
+    pub const Parent = Gtk.Application;
+
     fn preferenceActivate(_: core.SimpleAction, _: *core.Variant, self: ExampleApp) void {
-        var win = self.callMethod("getActiveWindow", .{}).tryInto().?.tryInto(ExampleAppWindow).?;
+        var win = self.callMethod("getActiveWindow", .{}).expect("active window").tryInto(ExampleAppWindow).?;
         var prefs = ExampleAppPrefs.new(win);
         prefs.callMethod("present", .{});
     }
@@ -96,7 +95,7 @@ pub const ExampleApp = packed struct {
     pub fn open(self: ExampleApp, files: []core.File, hint: [*:0]const u8) void {
         _ = hint;
         var windows = self.callMethod("getWindows", .{});
-        var win = if (windows) |some| core.unsafeCastPtr(ExampleAppWindow, some.data.?) else ExampleAppWindow.new(self);
+        var win = if (windows) |some| core.unsafeCast(ExampleAppWindow, some.data.?) else ExampleAppWindow.new(self);
         for (files) |file| {
             win.open(file);
         }
@@ -104,8 +103,8 @@ pub const ExampleApp = packed struct {
     }
 
     pub fn startup(self: ExampleApp) void {
-        var action_preference = core.createClosure(preferenceActivate, .{self}, false, .{ void, core.SimpleAction, *core.Variant }); // Memery leak, we don't call `closure.deinit` or ask glib to destroy it
-        var action_quit = core.createClosure(quitActivate, .{self}, false, .{ void, core.SimpleAction, *core.Variant });
+        var action_preference = core.createClosure(preferenceActivate, .{self}, false, &[_]type{ void, core.SimpleAction, *core.Variant }); // Memery leak, we don't call `closure.deinit` or ask glib to destroy it
+        var action_quit = core.createClosure(quitActivate, .{self}, false, &[_]type{ void, core.SimpleAction, *core.Variant });
         // zig fmt: off
         var app_entries = [_]core.ActionEntry{
             .{ .name = "preferences", .activate = action_preference.invoke_fn(), .parameter_type = null, .state = null, .change_state = null, .padding = undefined },
@@ -124,7 +123,7 @@ pub const ExampleApp = packed struct {
         if (std.mem.eql(u8, method, "activate")) return void;
         if (std.mem.eql(u8, method, "open")) return void;
         if (std.mem.eql(u8, method, "startup")) return void;
-        if (Gtk.Application.CallMethod(method)) |some| return some;
+        if (Parent.CallMethod(method)) |some| return some;
         return null;
     }
 
@@ -141,8 +140,8 @@ pub const ExampleApp = packed struct {
             return @call(.auto, open, .{self} ++ args);
         } else if (comptime std.mem.eql(u8, method, "startup")) {
             return @call(.auto, startup, .{self} ++ args);
-        } else if (Gtk.Application.CallMethod(method)) |_| {
-            return self.into(Gtk.Application).callMethod(method, args);
+        } else if (Parent.CallMethod(method)) |_| {
+            return self.into(Parent).callMethod(method, args);
         } else {
             @compileError("No such method");
         }
@@ -153,7 +152,7 @@ pub const ExampleApp = packed struct {
     }
 
     pub fn gType() core.GType {
-        if (core.onceInitEnter(&Static.type_id).into()) {
+        if (core.onceInitEnter(&Static.type_id).toBool()) {
             // zig fmt: off
             var type_id = core.typeRegisterStaticSimple(
                 Gtk.Application.gType(),

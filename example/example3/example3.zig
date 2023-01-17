@@ -1,6 +1,6 @@
 const std = @import("std");
 const Gtk = @import("Gtk");
-const core = @import("core");
+const core = Gtk.core;
 
 pub fn printHello() void {
     std.log.info("Hello World", .{});
@@ -18,20 +18,20 @@ pub fn activate(arg_app: core.Application) void {
             return;
         },
     }
-    var window = builder.getObject("window").tryInto().?.tryInto(Gtk.Window).?;
+    var window = builder.getObject("window").expect("window").tryInto(Gtk.Window).?;
     window.setApplication(app.asSome());
-    var button1 = builder.getObject("button1").tryInto().?.tryInto(Gtk.Button).?;
-    button1.signalClicked().connect(printHello, .{}, .{ .swapped = true });
-    var button2 = builder.getObject("button2").tryInto().?.tryInto(Gtk.Button).?;
-    button2.signalClicked().connect(printHello, .{}, .{ .swapped = true });
-    var quit = builder.getObject("quit").tryInto().?.tryInto(Gtk.Button).?;
-    quit.signalClicked().connect(Gtk.Window.destroy, .{window}, .{ .swapped = true });
+    var button1 = builder.getObject("button1").expect("button1").tryInto(Gtk.Button).?;
+    _ = button1.signalClicked().connect(printHello, .{}, .{ .swapped = true });
+    var button2 = builder.getObject("button2").expect("button2").tryInto(Gtk.Button).?;
+    _ = button2.signalClicked().connect(printHello, .{}, .{ .swapped = true });
+    var quit = builder.getObject("quit").expect("quit").tryInto(Gtk.Button).?;
+    _ = quit.signalClicked().connect(Gtk.Window.destroy, .{window}, .{ .swapped = true });
     window.callMethod("show", .{});
 }
 
 pub fn main() !void {
     var app = Gtk.Application.new("org.gtk.example", .FlagsNone);
     defer app.callMethod("unref", .{});
-    app.callMethod("signalActivate", .{}).connect(activate, .{}, .{});
+    _ = app.callMethod("signalActivate", .{}).connect(activate, .{}, .{});
     _ = app.callMethod("run", .{std.os.argv});
 }

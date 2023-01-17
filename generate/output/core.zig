@@ -19,11 +19,7 @@ pub const Boolean = packed struct {
     pub const True = Boolean{ .value = 1 };
     pub const False = Boolean{ .value = 0 };
 
-    pub fn from(value: bool) Boolean {
-        return .{ .value = @boolToInt(value) };
-    }
-
-    pub fn into(self: Boolean) bool {
+    pub inline fn toBool(self: Boolean) bool {
         return self.value != 0;
     }
 
@@ -69,8 +65,18 @@ pub const Unichar = u32;
 // ----------
 // cast begin
 
+pub inline fn alignedCast(comptime T: type, ptr: *anyopaque) T {
+    comptime assert(meta.trait.isSingleItemPtr(T));
+    return @ptrCast(T, @alignCast(@alignOf(T), ptr));
+}
+
 pub fn isA(comptime T: type) meta.trait.TraitFn {
-    return T.isAImpl;
+    const Closure = struct {
+        pub fn trait(comptime Ty: type) bool {
+            return T.isAImpl(Ty) or (@hasDecl(Ty, "Parent") and T.isAImpl(Ty.Parent));
+        }
+    };
+    return Closure.trait;
 }
 
 fn comptimeTypeCheck(comptime U: type, comptime V: type) void {
@@ -78,37 +84,27 @@ fn comptimeTypeCheck(comptime U: type, comptime V: type) void {
 }
 
 fn runtimeTypeCheck(ptr: *anyopaque, type_id: GType) bool {
-    const T = GObject.TypeInstance;
-    return GObject.typeCheckInstanceIsA(@ptrCast(*T, @alignCast(@alignOf(*T), ptr)), type_id).into();
+    return GObject.typeCheckInstanceIsA(alignedCast(*GObject.TypeInstance, ptr), type_id).toBool();
 }
 
 pub fn upCast(comptime T: type, object: anytype) T {
     comptimeTypeCheck(T, @TypeOf(object));
-    return T{ .instance = @ptrCast(*T.cType(), @alignCast(@alignOf(*T.cType()), object.instance)) };
+    return T{ .instance = alignedCast(*T.cType(), object.instance) };
 }
 
 pub fn downCast(comptime T: type, object: anytype) ?T {
     comptimeTypeCheck(@TypeOf(object), T);
     if (!runtimeTypeCheck(object.instance, T.gType())) return null;
-    return T{ .instance = @ptrCast(*T.cType(), @alignCast(@alignOf(*T.cType()), object.instance)) };
+    return T{ .instance = alignedCast(*T.cType(), object.instance) };
 }
 
-pub fn dynamicCast(comptime T: type, object: anytype) ?T {
-    if (!runtimeTypeCheck(object.instance, T.gType())) return null;
-    return T{ .instance = @ptrCast(*T.cType(), @alignCast(@alignOf(*T.cType()), object.instance)) };
-}
-
-pub fn unsafeCast(comptime T: type, object: anytype) T {
-    return T{ .instance = @ptrCast(*T.cType(), @alignCast(@alignOf(*T.cType()), object.instance)) };
-}
-
-pub fn dynamicCastPtr(comptime T: type, ptr: *anyopaque) ?T {
+pub fn dynamicCast(comptime T: type, ptr: *anyopaque) ?T {
     if (!runtimeTypeCheck(ptr, T.gType())) return null;
-    return T{ .instance = @ptrCast(*T.cType(), @alignCast(@alignOf(*T.cType()), ptr)) };
+    return T{ .instance = alignedCast(*T.cType(), ptr) };
 }
 
-pub fn unsafeCastPtr(comptime T: type, ptr: *anyopaque) T {
-    return T{ .instance = @ptrCast(*T.cType(), @alignCast(@alignOf(*T.cType()), ptr)) };
+pub fn unsafeCast(comptime T: type, ptr: *anyopaque) T {
+    return T{ .instance = alignedCast(*T.cType(), ptr) };
 }
 
 // cast end
@@ -119,8 +115,9 @@ pub fn unsafeCastPtr(comptime T: type, ptr: *anyopaque) T {
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
-fn ZigClosure(comptime T: type, comptime U: type, comptime swapped: bool, comptime signature: anytype) type {
+fn ZigClosure(comptime T: type, comptime U: type, comptime swapped: bool, comptime signature: []const type) type {
     comptime assert(meta.trait.isPtrTo(.Fn)(T));
+    comptime assert(signature.len <= 7);
 
     return struct {
         func: T,
@@ -201,7 +198,7 @@ fn ZigClosure(comptime T: type, comptime U: type, comptime swapped: bool, compti
 ///             e.g. `.{void, Object}` for `*const fn(Object, ?*anyopaque) callconv(.C) void`
 /// Use `closure.invoke_fn()` to get C callback
 /// Call `closure.deinit()` to destroy closure, or pass `closure.deinit_fn()` as destroy function
-pub fn createClosure(comptime func: anytype, args: anytype, comptime swapped: bool, comptime signature: anytype) *ZigClosure(@TypeOf(&func), @TypeOf(args), swapped, signature) {
+pub fn createClosure(comptime func: anytype, args: anytype, comptime swapped: bool, comptime signature: []const type) *ZigClosure(@TypeOf(&func), @TypeOf(args), swapped, signature) {
     const allocator = gpa.allocator();
     const closure = allocator.create(ZigClosure(@TypeOf(&func), @TypeOf(args), swapped, signature)) catch @panic("Out Of Memory");
     closure.func = &func;
@@ -248,7 +245,7 @@ pub usingnamespace struct {
         swapped: bool = false,
     };
 
-    pub fn connect(object: anytype, comptime signal: [*:0]const u8, comptime handler: anytype, args: anytype, comptime flags: ZigConnectFlags, comptime signature: anytype) usize {
+    pub fn connect(object: anytype, comptime signal: [*:0]const u8, comptime handler: anytype, args: anytype, comptime flags: ZigConnectFlags, comptime signature: []const type) usize {
         const closure = createClosure(handler, args, flags.swapped, signature);
         const closure_invoke = @ptrCast(GObject.Callback, closure.invoke_fn());
         const closure_deinit = @ptrCast(GObject.ClosureNotify, closure.deinit_fn());

@@ -45,10 +45,10 @@ int main(int argc, char *argv[])
 			int sep = 0;
 			for (sep = 0; dependency[sep] && dependency[sep] != '-'; sep++);
 			dependency[sep] = 0;
-			printf("const %s = @import(\"%s.zig\");\n", dependency, dependency);
+			printf("pub const %s = @import(\"%s.zig\");\n", dependency, dependency);
 			free(dependency);
 		}
-		printf("const core = @import(\"core.zig\");\n");
+		printf("pub const core = @import(\"core.zig\");\n");
 		printf("const std = @import(\"std\");\n");
 		printf("const meta = std.meta;\n");
 		printf("const assert = std.debug.assert;\n");

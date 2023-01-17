@@ -1,6 +1,6 @@
 const std = @import("std");
 pub const Gtk = @import("Gtk");
-pub const core = @import("core");
+const core = Gtk.core;
 const ExampleApp = @import("example_app.zig").ExampleApp;
 
 pub fn main() void {

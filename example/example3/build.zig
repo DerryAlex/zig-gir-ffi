@@ -7,7 +7,6 @@ pub fn build(b: *Builder) !void {
 
     const exe = b.addExecutable("example", "example3.zig");
     exe.addPackagePath("Gtk", "../../generate/output/Gtk.zig");
-    exe.addPackagePath("core", "../../generate/output/core.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.linkLibC();

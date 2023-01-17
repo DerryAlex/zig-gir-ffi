@@ -1,7 +1,7 @@
 const std = @import("std");
 const root = @import("root");
 const Gtk = root.Gtk;
-const core = root.core;
+const core = Gtk.core;
 const meta = std.meta;
 const assert = std.debug.assert;
 const ExampleAppWindow = @import("example_app_window.zig").ExampleAppWindow;
@@ -40,31 +40,28 @@ const ExampleAppPrefsImpl = extern struct {
 pub const ExampleAppPrefsNullable = packed struct {
     ptr: ?*ExampleAppPrefsImpl,
 
-    pub const Nil = ExampleAppPrefsNullable{ .ptr = null };
-
-    pub fn from(that: ?ExampleAppPrefs) ExampleAppPrefsNullable {
-        return .{ .ptr = if (that) |some| some.instance else null };
+    pub fn expect(self: ExampleAppPrefsNullable, message: []const u8) ExampleAppPrefs {
+        if (self.ptr) |some| {
+            return ExampleAppPrefs{ .instance = some };
+        } else @panic(message);
     }
 
-    pub fn tryInto(self: ExampleAppPrefsNullable) ?ExampleAppPrefs {
+    pub fn tryUnwrap(self: ExampleAppPrefsNullable) ?ExampleAppPrefs {
         return if (self.ptr) |some| ExampleAppPrefs{ .instance = some } else null;
     }
 };
 
 pub const ExampleAppPrefs = packed struct {
     instance: *ExampleAppPrefsImpl,
-    traitGObjectObject: void = {},
-    traitGObjectInitiallyUnowned: void = {},
-    traitGtkWidget: void = {},
-    traitGtkWindow: void = {},
-    traitGtkDialog: void = {},
     traitExampleAppPrefs: void = {},
+
+    pub const Parent = Gtk.Dialog;
 
     pub fn init(self: ExampleAppPrefs) callconv(.C) void {
         self.callMethod("initTemplate", .{});
         self.instance.settings = core.Settings.new("org.gtk.exampleapp");
-        self.instance.settings.callMethod("bind", .{ "font", self.instance.font.into(core.Object), "font", .Default });
-        self.instance.settings.callMethod("bind", .{ "transition", self.instance.transition.into(core.Object), "active-id", .Default });
+        self.instance.settings.callMethod("bind", .{ "font", self.instance.font.into(core.Object), self.instance.font.callMethod("propertyFont", .{}).name(), .Default });
+        self.instance.settings.callMethod("bind", .{ "transition", self.instance.transition.into(core.Object), self.instance.transition.callMethod("propertyActiveId", .{}).name(), .Default });
     }
 
     pub fn new(win: ExampleAppWindow) ExampleAppPrefs {
@@ -87,7 +84,7 @@ pub const ExampleAppPrefs = packed struct {
 
     pub fn CallMethod(comptime method: []const u8) ?type {
         if (std.mem.eql(u8, method, "dispose")) return void;
-        if (Gtk.Dialog.CallMethod(method)) |some| return some;
+        if (Parent.CallMethod(method)) |some| return some;
         return null;
     }
 
@@ -100,8 +97,8 @@ pub const ExampleAppPrefs = packed struct {
     } {
         if (comptime std.mem.eql(u8, method, "dispose")) {
             return @call(.auto, dispose, .{self} ++ args);
-        } else if (Gtk.Dialog.CallMethod(method)) |_| {
-            return self.into(Gtk.Dialog).callMethod(method, args);
+        } else if (Parent.CallMethod(method)) |_| {
+            return self.into(Parent).callMethod(method, args);
         } else {
             @compileError("No such method");
         }
@@ -112,7 +109,7 @@ pub const ExampleAppPrefs = packed struct {
     }
 
     pub fn gType() core.GType {
-        if (core.onceInitEnter(&Static.type_id).into()) {
+        if (core.onceInitEnter(&Static.type_id).toBool()) {
             // zig fmt: off
             var type_id = core.typeRegisterStaticSimple(
                 Gtk.Dialog.gType(),

@@ -1,7 +1,7 @@
 const std = @import("std");
 const root = @import("root");
 const Gtk = root.Gtk;
-const core = root.core;
+const core = Gtk.core;
 const meta = std.meta;
 const assert = std.debug.assert;
 const ExampleApp = @import("example_app.zig").ExampleApp;
@@ -55,12 +55,12 @@ pub const ExampleAppWindowClass = extern struct {
     pub fn searchTextChanged(entry: Gtk.Entry, win: ExampleAppWindow) callconv(.C) void {
         var text = entry.callMethod("getText", .{});
         if (text[0] == 0) return;
-        var tab = win.instance.stack.getVisibleChild().tryInto().?.tryInto(Gtk.ScrolledWindow).?;
-        var view = tab.getChild().tryInto().?.tryInto(Gtk.TextView).?;
+        var tab = win.instance.stack.getVisibleChild().expect("visible child").tryInto(Gtk.ScrolledWindow).?;
+        var view = tab.getChild().expect("child").tryInto(Gtk.TextView).?;
         var buffer = view.getBuffer();
         var start = buffer.getStartIter();
         var ret = start.forwardSearch(text, .CaseInsensitive, null);
-        if (ret.ret.into()) {
+        if (ret.ret.toBool()) {
             var match_start = ret.match_start;
             var match_end = ret.match_end;
             buffer.selectRange(&match_start, &match_end);
@@ -70,7 +70,7 @@ pub const ExampleAppWindowClass = extern struct {
 
     pub fn visibleChildChanged(stack: Gtk.Stack, pspec: core.ParamSpec, win: ExampleAppWindow) callconv(.C) void {
         _ = pspec;
-        if (stack.callMethod("inDestruction", .{}).into()) return;
+        if (stack.callMethod("inDestruction", .{}).toBool()) return;
         win.instance.searchbar.setSearchMode(core.Boolean.False);
         win.updateWords();
         win.updateLines();
@@ -94,44 +94,41 @@ const ExampleAppWindowImpl = extern struct {
 pub const ExampleAppWindowNullable = packed struct {
     ptr: ?*ExampleAppWindowImpl,
 
-    pub const Nil = ExampleAppWindowNullable{ .ptr = null };
-
-    pub fn from(that: ?ExampleAppWindow) ExampleAppWindowNullable {
-        return .{ .ptr = if (that) |some| some.instance else null };
+    pub fn expect(self: ExampleAppWindowNullable, message: []const u8) ExampleAppWindow {
+        if (self.ptr) |some| {
+            return ExampleAppWindow{ .instance = some };
+        } else @panic(message);
     }
 
-    pub fn tryInto(self: ExampleAppWindowNullable) ?ExampleAppWindow {
+    pub fn tryUnwrap(self: ExampleAppWindowNullable) ?ExampleAppWindow {
         return if (self.ptr) |some| ExampleAppWindow{ .instance = some } else null;
     }
 };
 
 pub const ExampleAppWindow = packed struct {
     instance: *ExampleAppWindowImpl,
-    traitGObjectObject: void = {},
-    traitGObjectInitiallyUnowned: void = {},
-    traitGtkWidget: void = {},
-    traitGtkWindow: void = {},
-    traitGtkApplicationWindow: void = {},
     traitExampleAppWindow: void = {},
+
+    pub const Parent = Gtk.ApplicationWindow;
 
     pub fn init(self: ExampleAppWindow) callconv(.C) void {
         self.callMethod("initTemplate", .{});
         var builder = Gtk.Builder.newFromResource("/org/gtk/exampleapp/gears-menu.ui");
         defer builder.callMethod("unref", .{});
-        var menu = builder.getObject("menu").tryInto().?.tryInto(core.MenuModel).?;
+        var menu = builder.getObject("menu").expect("menu").tryInto(core.MenuModel).?;
         self.instance.gears.setMenuModel(menu.asSome());
         self.instance.settings = core.Settings.new("org.gtk.exampleapp");
-        self.instance.settings.bind("transition", self.instance.stack.into(core.Object), "transition-type", .Default);
-        self.instance.settings.bind("show-words", self.instance.sidebar.into(core.Object), "reveal-child", .Default);
-        _ = self.instance.search.callMethod("bindProperty", .{ "active", self.instance.searchbar.into(core.Object), "search-mode-enabled", .Bidirectional });
-        _ = core.connect(self.instance.sidebar, "notify::reveal-child", updateWords, .{self}, .{ .swapped = true }, .{ void, Gtk.Revealer, core.ParamSpec });
+        self.instance.settings.bind("transition", self.instance.stack.into(core.Object), self.instance.stack.callMethod("propertyTransitionType", .{}).name(), .Default);
+        self.instance.settings.bind("show-words", self.instance.sidebar.into(core.Object), self.instance.sidebar.callMethod("propertyRevealChild", .{}).name(), .Default);
+        _ = self.instance.search.callMethod("bindProperty", .{ self.instance.search.callMethod("propertyActive", .{}).name(), self.instance.searchbar.into(core.Object), self.instance.searchbar.callMethod("propertySearchModeEnabled", .{}).name(), .Bidirectional });
+        _ = self.instance.sidebar.callMethod("propertyRevealChild", .{}).connectNotify(updateWords, .{self}, .{ .swapped = true });
         var action1 = self.instance.settings.createAction("show-words");
-        defer core.unsafeCast(core.Object, action1).unref();
+        defer core.unsafeCast(core.Object, action1.instance).unref();
         self.callMethod("addAction", .{action1});
-        var action2 = core.PropertyAction.new("show-lines", core.upCast(core.Object, self.instance.lines), "visible");
+        var action2 = core.PropertyAction.new("show-lines", self.instance.lines.into(core.Object), self.instance.lines.callMethod("propertyVisible", .{}).name());
         defer action2.callMethod("unref", .{});
-        self.callMethod("addAction", .{core.upCast(core.Action, action2)});
-        _ = self.instance.lines.callMethod("bindProperty", .{ "visible", self.instance.lines_label.into(core.Object), "visible", .Default });
+        self.callMethod("addAction", .{action2.into(core.Action)});
+        _ = self.instance.lines.callMethod("bindProperty", .{ self.instance.lines.callMethod("propertyVisible", .{}).name(), self.instance.lines_label.into(core.Object), self.instance.lines_label.callMethod("propertyVisible", .{}).name(), .Default });
     }
 
     pub fn new(app: ExampleApp) ExampleAppWindow {
@@ -161,7 +158,7 @@ pub const ExampleAppWindow = packed struct {
         scrolled.setChild(view.into(Gtk.Widget).asSome());
         _ = self.instance.stack.addTitled(scrolled.into(Gtk.Widget), basename, basename);
         var buffer = view.getBuffer();
-        var result = file.loadContents(core.CancellableNullable.Nil);
+        var result = file.loadContents(.{.ptr = null});
         switch (result) {
             .Ok => |ok| {
                 defer core.free(ok.contents.ptr);
@@ -176,7 +173,7 @@ pub const ExampleAppWindow = packed struct {
         }
         var tag = Gtk.TextTag.new(null);
         _ = buffer.getTagTable().add(tag);
-        self.instance.settings.bind("font", core.upCast(core.Object, tag), "font", .Default);
+        self.instance.settings.bind("font", tag.into(core.Object), tag.callMethod("propertyFont", .{}).name(), .Default);
         var start_iter = buffer.getStartIter();
         var end_iter = buffer.getEndIter();
         buffer.applyTag(tag, &start_iter, &end_iter);
@@ -191,8 +188,8 @@ pub const ExampleAppWindow = packed struct {
     }
 
     pub fn updateWords(self: ExampleAppWindow) void {
-        var tab = if (self.instance.stack.getVisibleChild().tryInto()) |some| some.tryInto(Gtk.ScrolledWindow).? else return;
-        var view = tab.getChild().tryInto().?.tryInto(Gtk.TextView).?;
+        var tab = if (self.instance.stack.getVisibleChild().tryUnwrap()) |some| some.tryInto(Gtk.ScrolledWindow).? else return;
+        var view = tab.getChild().expect("child").tryInto(Gtk.TextView).?;
         var buffer = view.getBuffer();
         var start = buffer.getStartIter();
         var end: Gtk.TextIter = undefined;
@@ -209,12 +206,12 @@ pub const ExampleAppWindow = packed struct {
             }
             strings.deinit();
         }
-        outer: while (!start.isEnd().into()) {
-            while (!start.startsWord().into()) {
-                if (!start.forwardChar().into()) break :outer;
+        outer: while (!start.isEnd().toBool()) {
+            while (!start.startsWord().toBool()) {
+                if (!start.forwardChar().toBool()) break :outer;
             }
             end = start;
-            if (!end.forwardWordEnd().into()) break :outer;
+            if (!end.forwardWordEnd().toBool()) break :outer;
             var word = buffer.getText(&start, &end, core.Boolean.False);
             defer core.freeDiscardConst(word);
             strings.put(core.utf8Strdown(word, -1), {}) catch @panic("");
@@ -222,7 +219,7 @@ pub const ExampleAppWindow = packed struct {
         }
         while (true) {
             var child = self.instance.words.callMethod("getFirstChild", .{});
-            if (child.tryInto()) |some| {
+            if (child.tryUnwrap()) |some| {
                 self.instance.words.remove(some);
             } else {
                 break;
@@ -231,14 +228,14 @@ pub const ExampleAppWindow = packed struct {
         var iter = strings.keyIterator();
         while (iter.next()) |some| {
             var row = Gtk.Button.newWithLabel(some.*);
-            row.signalClicked().connect(findWord, .{self}, .{});
+            _ = row.signalClicked().connect(findWord, .{self}, .{});
             self.instance.words.insert(row.into(Gtk.Widget), -1);
         }
     }
 
     pub fn updateLines(self: ExampleAppWindow) void {
-        var tab = if (self.instance.stack.getVisibleChild().tryInto()) |some| some.tryInto(Gtk.ScrolledWindow).? else return;
-        var view = tab.getChild().tryInto().?.tryInto(Gtk.TextView).?;
+        var tab = if (self.instance.stack.getVisibleChild().tryUnwrap()) |some| some.tryInto(Gtk.ScrolledWindow).? else return;
+        var view = tab.getChild().expect("child").tryInto(Gtk.TextView).?;
         var buffer = view.getBuffer();
         var count = buffer.getLineCount();
         var buf: [22]u8 = undefined;
@@ -249,7 +246,7 @@ pub const ExampleAppWindow = packed struct {
     pub fn CallMethod(comptime method: []const u8) ?type {
         if (std.mem.eql(u8, method, "dispose")) return void;
         if (std.mem.eql(u8, method, "open")) return void;
-        if (Gtk.ApplicationWindow.CallMethod(method)) |some| return some;
+        if (Parent.CallMethod(method)) |some| return some;
         return null;
     }
 
@@ -264,8 +261,8 @@ pub const ExampleAppWindow = packed struct {
             return @call(.auto, dispose, .{self} ++ args);
         } else if (comptime std.mem.eql(u8, method, "open")) {
             return @call(.auto, open, .{self} ++ args);
-        } else if (Gtk.ApplicationWindow.CallMethod(method)) |_| {
-            return self.into(Gtk.ApplicationWindow).callMethod(method, args);
+        } else if (Parent.CallMethod(method)) |_| {
+            return self.into(Parent).callMethod(method, args);
         } else {
             @compileError("No such method");
         }
@@ -276,7 +273,7 @@ pub const ExampleAppWindow = packed struct {
     }
 
     pub fn gType() core.GType {
-        if (core.onceInitEnter(&Static.type_id).into()) {
+        if (core.onceInitEnter(&Static.type_id).toBool()) {
             // zig fmt: off
             var type_id = core.typeRegisterStaticSimple(
                 Gtk.ApplicationWindow.gType(),
