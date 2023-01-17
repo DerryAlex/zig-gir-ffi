@@ -1,0 +1,4 @@
+zig-cache/
+zig-out/
+resources.c
+gschemas.compiled

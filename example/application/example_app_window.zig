@@ -121,9 +121,9 @@ pub const ExampleAppWindow = packed struct {
         var menu = builder.getObject("menu").expect("menu").tryInto(core.MenuModel).?;
         self.instance.gears.setMenuModel(menu.asSome());
         self.instance.settings = core.Settings.new("org.gtk.exampleapp");
-        self.instance.settings.bind("transition", self.instance.stack.into(core.Object), self.instance.stack.callMethod("propertyTransitionType", .{}).name(), .Default);
+        self.instance.settings.bind("transition", self.instance.stack.into(core.Object), self.instance.stack.propertyTransitionType().name(), .Default);
         self.instance.settings.bind("show-words", self.instance.sidebar.into(core.Object), self.instance.sidebar.callMethod("propertyRevealChild", .{}).name(), .Default);
-        _ = self.instance.search.callMethod("bindProperty", .{ self.instance.search.callMethod("propertyActive", .{}).name(), self.instance.searchbar.into(core.Object), self.instance.searchbar.callMethod("propertySearchModeEnabled", .{}).name(), .Bidirectional });
+        _ = self.instance.search.callMethod("bindProperty", .{ self.instance.search.callMethod("propertyActive", .{}).name(), self.instance.searchbar.into(core.Object), self.instance.searchbar.propertySearchModeEnabled().name(), .Bidirectional });
         _ = self.instance.sidebar.callMethod("propertyRevealChild", .{}).connectNotify(updateWords, .{self}, .{ .swapped = true });
         var action1 = self.instance.settings.createAction("show-words");
         defer core.unsafeCast(core.Object, action1.instance).unref();
@@ -161,7 +161,7 @@ pub const ExampleAppWindow = packed struct {
         scrolled.setChild(view.into(Gtk.Widget).asSome());
         _ = self.instance.stack.addTitled(scrolled.into(Gtk.Widget), basename, basename);
         var buffer = view.getBuffer();
-        var result = file.loadContents(.{.ptr = null});
+        var result = file.loadContents(.{ .ptr = null });
         switch (result) {
             .Ok => |ok| {
                 defer core.free(ok.contents.ptr);
