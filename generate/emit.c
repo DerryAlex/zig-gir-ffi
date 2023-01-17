@@ -1130,6 +1130,8 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 	for (int i = 0; i < n; i++) param_is_slice_ptr[i] = 0;
 	int param_slice_len_ptr_pos[n];
 	for (int i = 0; i < n; i++) param_slice_len_ptr_pos[i] = -1;
+	int param_slice_len_eq[n];
+	for (int i = 0; i < n; i++) param_slice_len_eq[i] = -1;
 	int param_instance[n];
 	for (int i = 0; i < n; i++) param_instance[i] = 0;
 	for (int i = 0; i < n; i++)
@@ -1158,6 +1160,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 				if (array_length != -1)
 				{
 					param_is_slice_ptr[i] = 1;
+					param_slice_len_eq[i] = param_slice_len_ptr_pos[array_length];
 					param_slice_len_ptr_pos[array_length] = i;
 				}
 			}
@@ -1354,6 +1357,20 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		}
 	}
 	if (throw) printf("    var err: ?*core.Error = null;\n");
+	/* safety check */
+	for (int i = 0; i < n; i++)
+	{
+		if (param_slice_len_eq[i] != -1)
+		{
+			GIArgInfo *arg1_info = g_callable_info_get_arg(info, i);
+			GIArgInfo *arg2_info = g_callable_info_get_arg(info, param_slice_len_eq[i]);
+			const char *arg1_name = g_base_info_get_name(arg1_info);
+			const char *arg2_name = g_base_info_get_name(arg2_info);
+			if ((param_dir[i] & PARAM_IN) && (param_dir[param_slice_len_eq[i]] & PARAM_IN)) printf("    assert(arg_%s.len == arg_%s.len);\n", arg1_name, arg2_name);
+			g_base_info_unref(arg1_info);
+			g_base_info_unref(arg2_info);
+		}
+	}
 	/* call C API */
 	if (skip_return) printf("    _ = ");
 	else printf("    var ret = ");
