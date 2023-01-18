@@ -388,6 +388,16 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 		emit_property(property_info, name);
 		g_base_info_unref(property_info);
 	}
+	n = g_object_info_get_n_vfuncs(info);
+	for (int i = 0; i < n; i++)
+	{
+		printf("\n");
+		GIVFuncInfo *vfunc_info = g_object_info_get_vfunc(info, i);
+		GIStructInfo *class_info = g_object_info_get_class_struct(info);
+		emit_vfunc(vfunc_info, name, class_info);
+		g_base_info_unref(vfunc_info);
+		g_base_info_unref(class_info);
+	}
 	/* emit helper function */
 	printf("\n");
 	printf("    pub fn CallMethod(comptime method: []const u8) ?type {\n");
@@ -403,7 +413,7 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 		const char *method_name = g_base_info_get_name(method);
 		char *ziggy_name = snake_to_camel(method_name);
 		if (strcmp(ziggy_name, "break") == 0 || strcmp(ziggy_name, "continue") == 0 || strcmp(ziggy_name, "error") == 0 || strcmp(ziggy_name, "export") == 0 || strcmp(ziggy_name, "union") == 0) printf("        if (std.mem.eql(method, \"%s\")) return core.fnReturnType(@This().@\"%s\");", ziggy_name, ziggy_name);
-		else if (strcmp(ziggy_name, "self") == 0) printf("        if (std.mem.eql(u8, method, \"self\")) return core.FnReturnType(@TypeOf(@This.getSelf));\n");
+		else if (strcmp(ziggy_name, "self") == 0) printf("        if (std.mem.eql(u8, method, \"self\")) return core.FnReturnType(@TypeOf(@This().getSelf));\n");
 		else printf("        if (std.mem.eql(u8, method, \"%s\")) return core.FnReturnType(@TypeOf(@This().%s));\n", ziggy_name, ziggy_name);
 		free(ziggy_name);
 		g_base_info_unref(method);
@@ -427,6 +437,16 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 		printf("        if (std.mem.eql(u8, method, \"property%s\")) return core.FnReturnType(@TypeOf(@This().property%s));\n", ziggy_property_name, ziggy_property_name);
 		free(ziggy_property_name);
 		g_base_info_unref(property);
+	}
+	n = g_object_info_get_n_vfuncs(info);
+	for (int i = 0; i < n; i++)
+	{
+		GIVFuncInfo *vfunc = g_object_info_get_vfunc(info, i);
+		const char *vfunc_name = g_base_info_get_name(vfunc);
+		char *ziggy_vfunc_name = snake_to_camel(vfunc_name);
+		printf("        if (std.mem.eql(u8, method, \"%sV\")) return core.FnReturnType(@TypeOf(@This().%sV));\n", ziggy_vfunc_name, ziggy_vfunc_name);
+		free(ziggy_vfunc_name);
+		g_base_info_unref(vfunc);
 	}
 	n = g_object_info_get_n_interfaces(info);
 	for (int i = 0; i < n; i++)
@@ -471,7 +491,7 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 		char *ziggy_name = snake_to_camel(method_name);
 		printf("        else if (comptime std.mem.eql(u8, method, \"%s\")) {\n", ziggy_name);
 		if (strcmp(ziggy_name, "break") == 0 || strcmp(ziggy_name, "continue") == 0 || strcmp(ziggy_name, "error") == 0 || strcmp(ziggy_name, "export") == 0 || strcmp(ziggy_name, "union") == 0) printf("             return @call(.auto, @This().@\"%s\", .{self} ++ args);\n", ziggy_name);
-		else if (strcmp(ziggy_name, "self") == 0) printf("            return @call(.auto, @This.getSelf, .{self} ++ args);\n");
+		else if (strcmp(ziggy_name, "self") == 0) printf("            return @call(.auto, @This().getSelf, .{self} ++ args);\n");
 		else printf("            return @call(.auto, @This().%s, .{self} ++ args);\n", ziggy_name);
 		printf("        }\n");
 		free(ziggy_name);
@@ -500,6 +520,18 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 		printf("        }\n");
 		free(ziggy_property_name);
 		g_base_info_unref(property);
+	}
+	n = g_object_info_get_n_vfuncs(info);
+	for (int i = 0; i < n; i++)
+	{
+		GIVFuncInfo *vfunc = g_object_info_get_vfunc(info, i);
+		const char *vfunc_name = g_base_info_get_name(vfunc);
+		char *ziggy_vfunc_name = snake_to_camel(vfunc_name);
+		printf("        else if (comptime std.mem.eql(u8, method, \"%sV\")) {\n", ziggy_vfunc_name);
+		printf("            return @call(.auto, @This().%sV, .{self} ++ args);\n", ziggy_vfunc_name);
+		printf("        }\n");
+		free(ziggy_vfunc_name);
+		g_base_info_unref(vfunc);
 	}
 	n = g_object_info_get_n_interfaces(info);
 	for (int i = 0; i < n; i++)
@@ -593,6 +625,16 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 		emit_property(property_info, name);
 		g_base_info_unref(property_info);
 	}
+	n = g_interface_info_get_n_vfuncs(info);
+	for (int i = 0; i < n; i++)
+	{
+		printf("\n");
+		GIVFuncInfo *vfunc_info = g_interface_info_get_vfunc(info, i);
+		GIStructInfo *class_info = g_interface_info_get_iface_struct(info);
+		emit_vfunc(vfunc_info, name, class_info);
+		g_base_info_unref(vfunc_info);
+		g_base_info_unref(class_info);
+	}
 	
 	printf("\n");
 	printf("    pub fn CallMethod(comptime method: []const u8) ?type {\n");
@@ -609,7 +651,7 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 		const char *method_name = g_base_info_get_name(method);
 		char *ziggy_name = snake_to_camel(method_name);
 		if (strcmp(ziggy_name, "break") == 0 || strcmp(ziggy_name, "continue") == 0 || strcmp(ziggy_name, "error") == 0 || strcmp(ziggy_name, "export") == 0 || strcmp(ziggy_name, "union") == 0) printf("        if (std.mem.eql(method, \"%s\")) return core.fnReturnType(@This().@\"%s\");", ziggy_name, ziggy_name);
-		else if (strcmp(ziggy_name, "self") == 0) printf("        if (std.mem.eql(u8, method, \"self\")) return core.FnReturnType(@TypeOf(@This.getSelf));\n");
+		else if (strcmp(ziggy_name, "self") == 0) printf("        if (std.mem.eql(u8, method, \"self\")) return core.FnReturnType(@TypeOf(@This().getSelf));\n");
 		else printf("        if (std.mem.eql(u8, method, \"%s\")) return core.FnReturnType(@TypeOf(@This().%s));\n", ziggy_name, ziggy_name);
 		free(ziggy_name);
 		g_base_info_unref(method);
@@ -633,6 +675,16 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 		printf("        if (std.mem.eql(u8, method, \"property%s\")) return core.FnReturnType(@TypeOf(@This().property%s));\n", ziggy_property_name, ziggy_property_name);
 		free(ziggy_property_name);
 		g_base_info_unref(property);
+	}
+	n = g_interface_info_get_n_vfuncs(info);
+	for (int i = 0; i < n; i++)
+	{
+		GIVFuncInfo *vfunc = g_interface_info_get_vfunc(info, i);
+		const char *vfunc_name = g_base_info_get_name(vfunc);
+		char *ziggy_vfunc_name = snake_to_camel(vfunc_name);
+		printf("        if (std.mem.eql(u8, method, \"%sV\")) return core.FnReturnType(@TypeOf(@This().%sV));\n", ziggy_vfunc_name, ziggy_vfunc_name);
+		free(ziggy_vfunc_name);
+		g_base_info_unref(vfunc);
 	}
 	printf("        return null;\n");
 	printf("    }\n");
@@ -665,7 +717,7 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 		char *ziggy_name = snake_to_camel(method_name);
 		printf("        else if (comptime std.mem.eql(u8, method, \"%s\")) {\n", ziggy_name);
 		if (strcmp(ziggy_name, "break") == 0 || strcmp(ziggy_name, "continue") == 0 || strcmp(ziggy_name, "error") == 0 || strcmp(ziggy_name, "export") == 0 || strcmp(ziggy_name, "union") == 0) printf("             return @call(.auto, @This().@\"%s\", .{self} ++ args);\n", ziggy_name);
-		else if (strcmp(ziggy_name, "self") == 0) printf("            return @call(.auto, @This.getSelf, .{self} ++ args);\n");
+		else if (strcmp(ziggy_name, "self") == 0) printf("            return @call(.auto, @This().getSelf, .{self} ++ args);\n");
 		else printf("            return @call(.auto, @This().%s, .{self} ++ args);\n", ziggy_name);
 		printf("        }\n");
 		free(ziggy_name);
@@ -694,6 +746,18 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 		printf("        }\n");
 		free(ziggy_property_name);
 		g_base_info_unref(property);
+	}
+	n = g_interface_info_get_n_vfuncs(info);
+	for (int i = 0; i < n; i++)
+	{
+		GIVFuncInfo *vfunc = g_interface_info_get_vfunc(info, i);
+		const char *vfunc_name = g_base_info_get_name(vfunc);
+		char *ziggy_vfunc_name = snake_to_camel(vfunc_name);
+		printf("        else if (comptime std.mem.eql(u8, method, \"%sV\")) {\n", ziggy_vfunc_name);
+		printf("            return @call(.auto, @This().%sV, .{self} ++ args);\n", ziggy_vfunc_name);
+		printf("        }\n");
+		free(ziggy_vfunc_name);
+		g_base_info_unref(vfunc);
 	}
 	printf("        else {\n");
 	printf("            @compileError(\"No such method\");\n");
@@ -1357,7 +1421,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		}
 	}
 	if (throw) printf("    var err: ?*core.Error = null;\n");
-	/* safety check */
+	/* sanity check */
 	for (int i = 0; i < n; i++)
 	{
 		if (param_slice_len_eq[i] != -1)
@@ -1485,12 +1549,12 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 void emit_field(GIFieldInfo *field_info, int first_field)
 {
 	GITypeInfo *field_type_info = g_field_info_get_type(field_info);
-	GIFieldInfoFlags field_flags = g_field_info_get_flags(field_info);
+	// GIFieldInfoFlags field_flags = g_field_info_get_flags(field_info);
 	const char *field_name = g_base_info_get_name(field_info);
-	printf("    /// ");
-	if (field_flags & GI_FIELD_IS_READABLE) printf("read ");
-	if (field_flags & GI_FIELD_IS_WRITABLE) printf("write ");
-	printf("\n");
+	// printf("    /// ");
+	// if (field_flags & GI_FIELD_IS_READABLE) printf("read ");
+	// if (field_flags & GI_FIELD_IS_WRITABLE) printf("write ");
+	// printf("\n");
 	if (strcmp(field_name, "error") == 0 || strcmp(field_name, "var") == 0) printf("    @\"%s\": ", field_name);
 	else printf("    %s: ", field_name);
 	emit_type(field_type_info, g_type_info_is_pointer(field_type_info) || is_callback(field_type_info), 0, 0, 0);
@@ -1966,4 +2030,56 @@ void emit_value_set(const char *value_name, GITypeInfo *type_info, const char *v
 			fprintf(stderr, "Unsupported (value) type %s\n", g_type_tag_to_string(type));
 			break;
 	}
+}
+
+void emit_vfunc(GIVFuncInfo *info, const char *container_name, GIStructInfo *class_info)
+{
+	const char *vfunc_name = g_base_info_get_name(info);
+	char *ziggy_vfunc_name = snake_to_camel(vfunc_name);
+	printf("pub fn %sV(self: %s, g_type: core.GType", ziggy_vfunc_name, container_name);
+	assert(g_callable_info_is_method(info));
+	int n = g_callable_info_get_n_args(info);
+	for (int i = 0; i < n; i++)
+	{
+		printf(", ");
+		GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
+		const char *arg_name = g_base_info_get_name(arg_info);
+		printf("arg_%s: ", arg_name);
+		GIDirection direction = g_arg_info_get_direction(arg_info);
+		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
+		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT, 1);
+		g_base_info_unref(type_info);
+		g_base_info_unref(arg_info);
+	}
+	if (g_callable_info_can_throw_gerror(info))
+	{
+		printf(", ");
+		printf("err: *?*core.Error");
+	}
+	printf(") ");
+	int return_nullable = g_callable_info_may_return_null(info);
+	GITypeInfo *return_type_info = g_callable_info_get_return_type(info);
+	emit_type(return_type_info, return_nullable || patch_return_nullable(return_type_info), 0, 0, 1);
+	g_base_info_unref(return_type_info);
+	printf(" {\n");
+	printf("    const class = core.alignedCast(*%s.%s, core.typeClassPeek(g_type));\n", g_base_info_get_namespace(class_info), g_base_info_get_name(class_info));
+	printf("    const %s_fn = class.%s.?;\n", vfunc_name, vfunc_name);
+	printf("    return %s_fn(self", vfunc_name);
+	n = g_callable_info_get_n_args(info);
+	for (int i = 0; i < n; i++)
+	{
+		GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
+		const char *arg_name = g_base_info_get_name(arg_info);
+		printf(", ");
+		printf("arg_%s", arg_name);
+		g_base_info_unref(arg_info);
+	}
+	if (g_callable_info_can_throw_gerror(info))
+	{
+		printf(", ");
+		printf("err");
+	}
+	printf(");\n");
+	printf("}\n");
+	free(ziggy_vfunc_name);
 }

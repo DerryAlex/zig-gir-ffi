@@ -30,6 +30,7 @@ void emit_nullable(const char *name);
 void emit_into(const char *name);
 void emit_value_get(const char *value_name, GITypeInfo *type_info);
 void emit_value_set(const char *value_name, GITypeInfo *type_info, const char *value);
+void emit_vfunc(GIVFuncInfo *info, const char *container_name, GIStructInfo *class_info);
 
 #ifdef __cplusplus
 }

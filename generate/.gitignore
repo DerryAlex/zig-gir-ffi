@@ -1,0 +1,3 @@
+gir-zig
+output/
+!output/core.zig

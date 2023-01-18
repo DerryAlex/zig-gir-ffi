@@ -8,14 +8,12 @@ const ExampleAppWindow = @import("example_app_window.zig").ExampleAppWindow;
 
 const Static = struct {
     var type_id: core.GType = core.GType.Invalid;
-    var parent_class: ?*Gtk.DialogClass = null;
 };
 
 const ExampleAppPrefsClass = extern struct {
     parent: Gtk.DialogClass,
 
     pub fn init(self: *ExampleAppPrefsClass) callconv(.C) void {
-        Static.parent_class = @ptrCast(*Gtk.DialogClass, core.typeClassPeek(Gtk.Dialog.gType()));
         var object_class = @ptrCast(*core.ObjectClass, self);
         object_class.dispose = &dispose;
         var widget_class = @ptrCast(*Gtk.WidgetClass, self);
@@ -26,7 +24,7 @@ const ExampleAppPrefsClass = extern struct {
 
     pub fn dispose(object: core.Object) callconv(.C) void {
         var prefs = object.tryInto(ExampleAppPrefs).?;
-        prefs.callMethod("dispose", .{});
+        prefs.disposeOverride();
     }
 };
 
@@ -76,14 +74,12 @@ pub const ExampleAppPrefs = packed struct {
         return core.downCast(ExampleAppPrefs, core.newObject(gType(), property_names[0..], property_values[0..])).?;
     }
 
-    pub fn dispose(self: ExampleAppPrefs) void {
+    pub fn disposeOverride(self: ExampleAppPrefs) void {
         self.instance.settings.callMethod("unref", .{});
-        const dispose_fn = @ptrCast(*core.ObjectClass, Static.parent_class.?).dispose.?;
-        dispose_fn(self.into(core.Object));
+        self.callMethod("disposeV", .{Parent.gType()});
     }
 
     pub fn CallMethod(comptime method: []const u8) ?type {
-        if (std.mem.eql(u8, method, "dispose")) return void;
         if (Parent.CallMethod(method)) |some| return some;
         return null;
     }
@@ -95,9 +91,7 @@ pub const ExampleAppPrefs = packed struct {
             @compileError(std.fmt.comptimePrint("No such method {s}", .{method}));
         }
     } {
-        if (comptime std.mem.eql(u8, method, "dispose")) {
-            return @call(.auto, dispose, .{self} ++ args);
-        } else if (Parent.CallMethod(method)) |_| {
+        if (Parent.CallMethod(method)) |_| {
             return self.into(Parent).callMethod(method, args);
         } else {
             @compileError("No such method");

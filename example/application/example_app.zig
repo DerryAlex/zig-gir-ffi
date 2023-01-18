@@ -9,14 +9,12 @@ const ExampleAppPrefs = @import("example_app_prefs.zig").ExampleAppPrefs;
 
 const Static = struct {
     var type_id: core.GType = core.GType.Invalid;
-    var parent_class: ?*Gtk.ApplicationClass = null;
 };
 
 pub const ExampleAppClass = extern struct {
     parent: Gtk.ApplicationClass,
 
     pub fn init(self: *ExampleAppClass) callconv(.C) void {
-        Static.parent_class = @ptrCast(*Gtk.ApplicationClass, core.typeClassPeek(Gtk.Application.gType()));
         var application_class = @ptrCast(*core.ApplicationClass, self);
         application_class.activate = &activate;
         application_class.open = &open;
@@ -25,17 +23,17 @@ pub const ExampleAppClass = extern struct {
 
     pub fn activate(arg_app: core.Application) callconv(.C) void {
         var app = arg_app.tryInto(ExampleApp).?;
-        app.activate();
+        app.activateOverride();
     }
 
     pub fn open(arg_app: core.Application, files: [*]core.File, n_file: i32, hint: [*:0]const u8) callconv(.C) void {
         var app = arg_app.tryInto(ExampleApp).?;
-        app.open(files[0..@intCast(usize, n_file)], hint);
+        app.openOverride(files[0..@intCast(usize, n_file)], hint);
     }
 
     pub fn startup(arg_app: core.Application) callconv(.C) void {
         var app = arg_app.tryInto(ExampleApp).?;
-        app.startup();
+        app.startupOverride();
     }
 };
 
@@ -87,12 +85,12 @@ pub const ExampleApp = packed struct {
         return core.newObject(gType(), property_names[0..], property_values[0..]).tryInto(ExampleApp).?;
     }
 
-    pub fn activate(self: ExampleApp) void {
+    pub fn activateOverride(self: ExampleApp) void {
         var win = ExampleAppWindow.new(self);
         win.callMethod("present", .{});
     }
 
-    pub fn open(self: ExampleApp, files: []core.File, hint: [*:0]const u8) void {
+    pub fn openOverride(self: ExampleApp, files: []core.File, hint: [*:0]const u8) void {
         _ = hint;
         var windows = self.callMethod("getWindows", .{});
         var win = if (windows) |some| core.unsafeCast(ExampleAppWindow, some.data.?) else ExampleAppWindow.new(self);
@@ -102,7 +100,7 @@ pub const ExampleApp = packed struct {
         win.callMethod("present", .{});
     }
 
-    pub fn startup(self: ExampleApp) void {
+    pub fn startupOverride(self: ExampleApp) void {
         var action_preference = core.createClosure(preferenceActivate, .{self}, false, &[_]type{ void, core.SimpleAction, *core.Variant }); // Memery leak, we don't call `closure.deinit` or ask glib to destroy it
         var action_quit = core.createClosure(quitActivate, .{self}, false, &[_]type{ void, core.SimpleAction, *core.Variant });
         // zig fmt: off
@@ -111,8 +109,7 @@ pub const ExampleApp = packed struct {
             .{ .name = "quit", .activate = action_quit.invoke_fn(), .parameter_type = null, .state = null, .change_state = null, .padding = undefined },
         };
         // zig fmt: on
-        const startup_fn = @ptrCast(*core.ApplicationClass, Static.parent_class.?).startup.?;
-        startup_fn(self.into(core.Application));
+        self.callMethod("startupV", .{Parent.gType()});
         self.callMethod("addActionEntries", .{ app_entries[0..1], action_preference });
         self.callMethod("addActionEntries", .{ app_entries[1..2], action_quit });
         var quit_accels = [_:null]?[*:0]const u8{"<Ctrl>Q"};
@@ -120,9 +117,6 @@ pub const ExampleApp = packed struct {
     }
 
     pub fn CallMethod(comptime method: []const u8) ?type {
-        if (std.mem.eql(u8, method, "activate")) return void;
-        if (std.mem.eql(u8, method, "open")) return void;
-        if (std.mem.eql(u8, method, "startup")) return void;
         if (Parent.CallMethod(method)) |some| return some;
         return null;
     }
@@ -134,13 +128,7 @@ pub const ExampleApp = packed struct {
             @compileError(std.fmt.comptimePrint("No such method {s}", .{method}));
         }
     } {
-        if (comptime std.mem.eql(u8, method, "activate")) {
-            return @call(.auto, activate, .{self} ++ args);
-        } else if (comptime std.mem.eql(u8, method, "open")) {
-            return @call(.auto, open, .{self} ++ args);
-        } else if (comptime std.mem.eql(u8, method, "startup")) {
-            return @call(.auto, startup, .{self} ++ args);
-        } else if (Parent.CallMethod(method)) |_| {
+        if (Parent.CallMethod(method)) |_| {
             return self.into(Parent).callMethod(method, args);
         } else {
             @compileError("No such method");
