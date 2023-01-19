@@ -2,13 +2,10 @@ const std = @import("std");
 const root = @import("root");
 const Gtk = root.Gtk;
 const core = Gtk.core;
+const template = Gtk.template;
 const meta = std.meta;
 const assert = std.debug.assert;
 const ExampleAppWindow = @import("example_app_window.zig").ExampleAppWindow;
-
-const Static = struct {
-    var type_id: core.GType = core.GType.Invalid;
-};
 
 const ExampleAppPrefsClass = extern struct {
     parent: Gtk.DialogClass,
@@ -18,8 +15,7 @@ const ExampleAppPrefsClass = extern struct {
         object_class.dispose = &dispose;
         var widget_class = @ptrCast(*Gtk.WidgetClass, self);
         widget_class.setTemplateFromResource("/org/gtk/exampleapp/prefs.ui");
-        widget_class.bindTemplateChildFull("font", core.Boolean.False, @offsetOf(ExampleAppPrefsImpl, "font"));
-        widget_class.bindTemplateChildFull("transition", core.Boolean.False, @offsetOf(ExampleAppPrefsImpl, "transition"));
+        template.bindChild(widget_class, ExampleAppPrefsImpl);
     }
 
     pub fn dispose(object: core.Object) callconv(.C) void {
@@ -31,8 +27,8 @@ const ExampleAppPrefsClass = extern struct {
 const ExampleAppPrefsImpl = extern struct {
     parent: Gtk.Dialog.cType(),
     settings: core.Settings,
-    font: Gtk.FontButton,
-    transition: Gtk.ComboBoxText,
+    TCfont: Gtk.FontButton,
+    TCtransition: Gtk.ComboBoxText,
 };
 
 pub const ExampleAppPrefsNullable = packed struct {
@@ -44,7 +40,7 @@ pub const ExampleAppPrefsNullable = packed struct {
         } else @panic(message);
     }
 
-    pub fn tryUnwrap(self: ExampleAppPrefsNullable) ?ExampleAppPrefs {
+    pub fn wrap(self: ExampleAppPrefsNullable) ?ExampleAppPrefs {
         return if (self.ptr) |some| ExampleAppPrefs{ .instance = some } else null;
     }
 };
@@ -58,18 +54,18 @@ pub const ExampleAppPrefs = packed struct {
     pub fn init(self: ExampleAppPrefs) callconv(.C) void {
         self.callMethod("initTemplate", .{});
         self.instance.settings = core.Settings.new("org.gtk.exampleapp");
-        self.instance.settings.callMethod("bind", .{ "font", self.instance.font.into(core.Object), self.instance.font.callMethod("propertyFont", .{}).name(), .Default });
-        self.instance.settings.callMethod("bind", .{ "transition", self.instance.transition.into(core.Object), self.instance.transition.callMethod("propertyActiveId", .{}).name(), .Default });
+        self.instance.settings.callMethod("bind", .{ "font", self.instance.TCfont.into(core.Object), self.instance.TCfont.callMethod("propertyFont", .{}).name(), .Default });
+        self.instance.settings.callMethod("bind", .{ "transition", self.instance.TCtransition.into(core.Object), self.instance.TCtransition.callMethod("propertyActiveId", .{}).name(), .Default });
     }
 
     pub fn new(win: ExampleAppWindow) ExampleAppPrefs {
         var property_names = [_][*:0]const u8{ "transient-for", "use-header-bar" };
         var property_values = std.mem.zeroes([2]core.Value);
-        var transient_for = &property_values[0];
-        _ = transient_for.init(core.GType.Object);
+        var transient_for = property_values[0].init(core.GType.Object);
+        defer transient_for.unset();
         transient_for.setObject(win.into(core.Object).asSome());
-        var use_header_bar = &property_values[1];
-        _ = use_header_bar.init(core.GType.Boolean);
+        var use_header_bar = property_values[1].init(core.GType.Boolean);
+        defer use_header_bar.unset();
         use_header_bar.setBoolean(core.Boolean.True);
         return core.downCast(ExampleAppPrefs, core.newObject(gType(), property_names[0..], property_values[0..])).?;
     }
@@ -103,19 +99,7 @@ pub const ExampleAppPrefs = packed struct {
     }
 
     pub fn gType() core.GType {
-        if (core.onceInitEnter(&Static.type_id).toBool()) {
-            // zig fmt: off
-            var type_id = core.typeRegisterStaticSimple(
-                Gtk.Dialog.gType(),
-                "ExampleAppPrefs",
-                @sizeOf(ExampleAppPrefsClass), @ptrCast(core.ClassInitFunc, &ExampleAppPrefsClass.init),
-                @sizeOf(ExampleAppPrefsImpl), @ptrCast(core.InstanceInitFunc, &ExampleAppPrefs.init),
-                .None
-            );
-            // zig fmt: on
-            defer core.onceInitLeave(&Static.type_id, type_id.value);
-        }
-        return Static.type_id;
+        return core.registerType(ExampleAppPrefsClass, ExampleAppPrefs, "ExampleAppPrefs", .{});
     }
 
     pub fn isAImpl(comptime T: type) bool {

@@ -7,10 +7,6 @@ const assert = std.debug.assert;
 const ExampleAppWindow = @import("example_app_window.zig").ExampleAppWindow;
 const ExampleAppPrefs = @import("example_app_prefs.zig").ExampleAppPrefs;
 
-const Static = struct {
-    var type_id: core.GType = core.GType.Invalid;
-};
-
 pub const ExampleAppClass = extern struct {
     parent: Gtk.ApplicationClass,
 
@@ -50,7 +46,7 @@ pub const ExampleAppNullable = packed struct {
         } else @panic(message);
     }
 
-    pub fn tryUnwrap(self: ExampleAppNullable) ?ExampleApp {
+    pub fn wrap(self: ExampleAppNullable) ?ExampleApp {
         return if (self.ptr) |some| ExampleApp{ .instance = some } else null;
     }
 };
@@ -71,16 +67,14 @@ pub const ExampleApp = packed struct {
         self.callMethod("quit", .{});
     }
 
-    pub fn init() callconv(.C) void {}
-
     pub fn new() ExampleApp {
         var property_names = [_][*:0]const u8{ "application-id", "flags" };
         var property_values = std.mem.zeroes([2]core.Value);
-        var application_id = &property_values[0];
-        _ = application_id.init(core.GType.String);
+        var application_id = property_values[0].init(core.GType.String);
+        defer application_id.unset();
         application_id.setStaticString("org.gtk.example");
-        var flags = &property_values[1];
-        _ = flags.init(core.GType.Flags);
+        var flags = property_values[1].init(core.GType.Flags);
+        defer flags.unset();
         flags.setFlags(@enumToInt(core.ApplicationFlags.HandlesOpen));
         return core.newObject(gType(), property_names[0..], property_values[0..]).tryInto(ExampleApp).?;
     }
@@ -93,7 +87,7 @@ pub const ExampleApp = packed struct {
     pub fn openOverride(self: ExampleApp, files: []core.File, hint: [*:0]const u8) void {
         _ = hint;
         var windows = self.callMethod("getWindows", .{});
-        var win = if (windows) |some| core.unsafeCast(ExampleAppWindow, some.data.?) else ExampleAppWindow.new(self);
+        var win = if (windows) |some| core.dynamicCast(ExampleAppWindow, some.data.?).? else ExampleAppWindow.new(self);
         for (files) |file| {
             win.open(file);
         }
@@ -140,19 +134,7 @@ pub const ExampleApp = packed struct {
     }
 
     pub fn gType() core.GType {
-        if (core.onceInitEnter(&Static.type_id).toBool()) {
-            // zig fmt: off
-            var type_id = core.typeRegisterStaticSimple(
-                Gtk.Application.gType(),
-                "ExampleApp",
-                @sizeOf(ExampleAppClass), @ptrCast(core.ClassInitFunc, &ExampleAppClass.init),
-                @sizeOf(ExampleAppImpl), @ptrCast(core.InstanceInitFunc, &ExampleApp.init),
-                .None
-            );
-            // zig fmt: on
-            defer core.onceInitLeave(&Static.type_id, type_id.value);
-        }
-        return Static.type_id;
+        return core.registerType(ExampleAppClass, ExampleApp, "ExampleApp", .{});
     }
 
     pub fn isAImpl(comptime T: type) bool {

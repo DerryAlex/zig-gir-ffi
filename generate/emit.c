@@ -146,10 +146,10 @@ void emit_c_function(GIBaseInfo *info, const char *name, const char *container_n
 }
 
 // toplevel
-void emit_function(GIBaseInfo *info, const char *name, const char *container_name, int is_deprecated, int is_container_struct)
+void emit_function(GIBaseInfo *info, const char *name, const char *container_name, int is_deprecated, int is_container_struct, GIStructInfo *virt_class)
 {
 	if (is_deprecated && !config_enable_deprecated) return;
-	emit_function_wrapper(info, name, container_name, is_deprecated, is_container_struct);
+	emit_function_wrapper(info, name, container_name, is_deprecated, is_container_struct, virt_class);
 }
 
 // toplevel
@@ -207,7 +207,7 @@ void emit_struct(GIBaseInfo *info, const char *name, int is_deprecated)
 		printf("\n");
 		GIFunctionInfo *method = g_struct_info_get_method(info, i);
 		const char *method_name = g_base_info_get_name(method);
-		emit_function(method, method_name, name, g_base_info_is_deprecated(method), 1);
+		emit_function(method, method_name, name, g_base_info_is_deprecated(method), 1, NULL);
 		g_base_info_unref(method);
 	}
 	emit_registered_type(info, 0);
@@ -288,7 +288,7 @@ void emit_enum(GIBaseInfo *info, const char *name, int is_flags, int is_deprecat
 	{
 		GIFunctionInfo *method = g_enum_info_get_method(info, i);
 		const char *method_name = g_base_info_get_name(method);
-		emit_function(method, method_name, name, g_base_info_is_deprecated(method) || is_deprecated, 0);
+		emit_function(method, method_name, name, g_base_info_is_deprecated(method) || is_deprecated, 0, NULL);
 		g_base_info_unref(method);
 	}
 	emit_registered_type(info, 0);
@@ -369,7 +369,7 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 		printf("\n");
 		GIFunctionInfo *method = g_object_info_get_method(info, i);
 		const char *method_name = g_base_info_get_name(method);
-		emit_function(method, method_name, name, g_base_info_is_deprecated(method), 0);
+		emit_function(method, method_name, name, g_base_info_is_deprecated(method), 0, NULL);
 		g_base_info_unref(method);
 	}
 	n = g_object_info_get_n_signals(info);
@@ -606,7 +606,7 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 		printf("\n");
 		GIFunctionInfo *method = g_interface_info_get_method(info, i);
 		const char *method_name = g_base_info_get_name(method);
-		emit_function(method, method_name, name, g_base_info_is_deprecated(method), 0);
+		emit_function(method, method_name, name, g_base_info_is_deprecated(method), 0, NULL);
 		g_base_info_unref(method);
 	}
 	n = g_interface_info_get_n_signals(info);
@@ -858,7 +858,7 @@ void emit_union(GIBaseInfo *info, const char *name, int is_deprecated)
 		printf("\n");
 		GIFunctionInfo *method = g_union_info_get_method(info, i);
 		const char *method_name = g_base_info_get_name(method);
-		emit_function(method, method_name, name, g_base_info_is_deprecated(method), 1);
+		emit_function(method, method_name, name, g_base_info_is_deprecated(method), 1, NULL);
 		g_base_info_unref(method);
 	}
 	emit_registered_type(info, 0);
@@ -1171,13 +1171,14 @@ void emit_function_symbol(GIBaseInfo *info)
 	printf("%s", symbol);
 }
 
-void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *container_name, int is_deprecated, int is_container_struct)
+void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *container_name, int is_deprecated, int is_container_struct, GIStructInfo *virt_class)
 {
 	const int PARAM_IN = 1;
 	const int PARAM_OUT = 2;
 	const int PARAM_INOUT = 3;
 	if (is_deprecated && !config_enable_deprecated) return;
 	if (is_deprecated) printf("/// (deprecated)\n");
+	int is_vfunc = (virt_class != NULL);
 	char *ziggy_name = snake_to_camel(name);
 	emit_function_comment(info);
 	/* collect parameter infomation */
@@ -1244,7 +1245,8 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		g_base_info_unref(arg_info);
 	}
 	/* output prototype */
-	if (strcmp(ziggy_name, "break") == 0 || strcmp(ziggy_name, "continue") == 0 || strcmp(ziggy_name, "error") == 0 || strcmp(ziggy_name, "export") == 0 || strcmp(ziggy_name, "union") == 0) printf("pub fn @\"%s\"(", ziggy_name);
+	if (is_vfunc) printf("pub fn %sV(", ziggy_name);
+	else if (strcmp(ziggy_name, "break") == 0 || strcmp(ziggy_name, "continue") == 0 || strcmp(ziggy_name, "error") == 0 || strcmp(ziggy_name, "export") == 0 || strcmp(ziggy_name, "union") == 0) printf("pub fn @\"%s\"(", ziggy_name);
 	else if (strcmp(ziggy_name, "self") == 0) printf("pub fn getSelf(");
 	else printf("pub fn %s(", ziggy_name);
 	int first_input_param = 1;
@@ -1252,6 +1254,12 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 	if (is_method)
 	{
 		printf("self: %s%s", is_container_struct ? "*" : "", container_name);
+		first_input_param = 0;
+	}
+	if (is_vfunc)
+	{
+		if (!first_input_param) printf(", ");
+		printf("g_type: core.GType");
 		first_input_param = 0;
 	}
 	for (int i = 0; i < n; i++)
@@ -1288,17 +1296,13 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 	}
 	int boolean_error = 0;
 	/* override */
-	if (!skip_return && return_type == GI_TYPE_TAG_BOOLEAN && multiple_return > 1) boolean_error = 1;
-	int return_nullable = g_callable_info_may_return_null(info);
-	if (throw)
+	if (!skip_return && return_type == GI_TYPE_TAG_BOOLEAN && multiple_return > 1)
 	{
-		printf("union(enum) {\n");
-		printf("    Ok: Ok,\n");
-		printf("    Err: Err,\n");
-		printf("\n");
-		printf("    const Ok = ");
+		boolean_error = 1;
+		multiple_return--;
 	}
-	else if (boolean_error)
+	int return_nullable = g_callable_info_may_return_null(info);
+	if (throw || boolean_error)
 	{
 		printf("union(enum) {\n");
 		printf("    Ok: Ok,\n");
@@ -1332,16 +1336,10 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		}
 		if (multiple_return > 1) printf("}");
 	}
-	if (throw)
+	if (throw || boolean_error)
 	{
 		printf(";\n");
-		printf("    const Err = *core.Error;\n");
-		printf("}");
-	}
-	else if (boolean_error)
-	{
-		printf(";\n");
-		printf("    const Err = void;\n");
+		printf("    const Err = %s;\n", boolean_error ? "void" : "*core.Error");
 		printf("}");
 	}
 	printf(" {\n");
@@ -1436,14 +1434,25 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		}
 	}
 	/* call C API */
+	if (is_vfunc)
+	{
+		printf("    const class = core.alignedCast(*%s.%s, core.typeClassPeek(g_type));\n", g_base_info_get_namespace(virt_class), g_base_info_get_name(virt_class));
+		printf("    const %s_fn = class.%s.?;\n", name, name);
+	}
+
 	if (skip_return) printf("    _ = ");
 	else printf("    var ret = ");
-	printf("struct {\n");
-	printf("pub ");
-	emit_c_function(info, name, container_name, is_deprecated, is_container_struct);
-	printf("}.");
-	emit_function_symbol(info);
-	printf("(");
+
+	if (is_vfunc) printf("%s_fn(", name);
+	else
+	{
+		printf("struct {\n");
+		printf("pub ");
+		emit_c_function(info, name, container_name, is_deprecated, is_container_struct);
+		printf("}.");
+		emit_function_symbol(info);
+		printf("(");
+	}
 	int first_call_param = 1;
 	if (is_method)
 	{
@@ -1573,7 +1582,7 @@ void emit_signal(GISignalInfo *info, const char *container_name)
 	printf("const SignalProxy%s = struct {\n", ziggy_signal_name);
 	printf("    object: %s,\n", container_name);
 	printf("\n");
-	printf("    pub inline fn name(self: SignalProxy%s) [*:0]const u8 {\n", ziggy_signal_name);
+	printf("    pub fn name(self: SignalProxy%s) [*:0]const u8 {\n", ziggy_signal_name);
 	printf("        _ = self;\n");
 	printf("        return \"%s\";\n", signal_name);
 	printf("    }\n");
@@ -1596,8 +1605,8 @@ void emit_signal(GISignalInfo *info, const char *container_name)
 	GITypeInfo *return_type_info = g_callable_info_get_return_type(info);
 	emit_type(return_type_info, return_nullable, 0, 0, 1);
 	printf("\n");
-	printf("    pub fn connect(self: SignalProxy%s, comptime handler: anytype, args: anytype, comptime flags: core.ZigConnectFlags) usize {\n", ziggy_signal_name);
-	printf("        return core.connect(self.object, \"%s\", handler, args, flags, &[_]type{ ", signal_name);
+	printf("    pub fn connect(self: SignalProxy%s, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlagsZ) usize {\n", ziggy_signal_name);
+	printf("        return core.connect(self.object.into(core.Object), \"%s\", handler, args, flags, &[_]type{ ", signal_name);
 	emit_type(return_type_info, return_nullable, 0, 0, 1);
 	printf(", %s", container_name);
 	n = g_callable_info_get_n_args(info);
@@ -1632,13 +1641,13 @@ void emit_property(GIPropertyInfo *info, const char *container_name)
 	printf("const PropertyProxy%s = struct {\n", ziggy_property_name);
 	printf("    object: %s,\n", container_name);
 	printf("\n");
-	printf("    pub inline fn name(self: PropertyProxy%s) [*:0]const u8 {\n", ziggy_property_name);
+	printf("    pub fn name(self: PropertyProxy%s) [*:0]const u8 {\n", ziggy_property_name);
 	printf("        _ = self;\n");
 	printf("        return \"%s\";\n", property_name);
 	printf("    }\n");
 	printf("\n");
-	printf("    pub fn connectNotify(self: PropertyProxy%s, comptime handler: anytype, args: anytype, comptime flags: core.ZigConnectFlags) usize {\n", ziggy_property_name);
-	printf("        return core.connect(self.object, \"notify::%s\", handler, args, flags, &[_]type{ void, %s, core.ParamSpec });\n", property_name, container_name);
+	printf("    pub fn connectNotify(self: PropertyProxy%s, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlagsZ) usize {\n", ziggy_property_name);
+	printf("        return core.connect(self.object.into(core.Object), \"notify::%s\", handler, args, flags, &[_]type{ void, %s, core.ParamSpec });\n", property_name, container_name);
 	printf("    }\n");
 	GIFunctionInfo *getter = g_property_info_get_getter(info);
 	if (getter != NULL)
@@ -1665,6 +1674,7 @@ void emit_property(GIPropertyInfo *info, const char *container_name)
 		emit_type(type_info, 0, 0, 0, 1);
 		printf(" {\n");
 		printf("        var property_value = std.mem.zeroes(core.Value);\n");
+		printf("        defer property_value.unset();\n");
 		emit_value_set("property_value", type_info, NULL);
 		printf("        self.callMethod(\"getProperty\", .{ \"%s\", &property_value });\n", property_name);
 		printf("        return ");
@@ -1697,6 +1707,7 @@ void emit_property(GIPropertyInfo *info, const char *container_name)
 		emit_type(type_info, 0, 0, 0, 1);
 		printf(") void {\n");
 		printf("        var property_value = std.mem.zeroes(core.Value);\n");
+		printf("        defer property_value.unset();\n");
 		emit_value_set("property_value", type_info, "value");
 		printf("        self.callMethod(\"setProperty\", .{ \"%s\", &property_value });\n", property_name);
 		printf("    }\n");
@@ -1740,7 +1751,7 @@ void emit_nullable(const char *name)
 	printf("        if (self.ptr) |some| { return %s{ .instance = some }; } else @panic(message);\n", name);
 	printf("    }\n");
 	printf("\n");
-	printf("    pub fn tryUnwrap(self: %sNullable) ?%s {\n", name, name);
+	printf("    pub fn wrap(self: %sNullable) ?%s {\n", name, name);
 	printf("        return if (self.ptr) |some| %s{ .instance = some } else null;\n", name);
 	printf("    }\n");
 	printf("};\n");
@@ -2035,51 +2046,5 @@ void emit_value_set(const char *value_name, GITypeInfo *type_info, const char *v
 void emit_vfunc(GIVFuncInfo *info, const char *container_name, GIStructInfo *class_info)
 {
 	const char *vfunc_name = g_base_info_get_name(info);
-	char *ziggy_vfunc_name = snake_to_camel(vfunc_name);
-	printf("pub fn %sV(self: %s, g_type: core.GType", ziggy_vfunc_name, container_name);
-	assert(g_callable_info_is_method(info));
-	int n = g_callable_info_get_n_args(info);
-	for (int i = 0; i < n; i++)
-	{
-		printf(", ");
-		GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
-		const char *arg_name = g_base_info_get_name(arg_info);
-		printf("arg_%s: ", arg_name);
-		GIDirection direction = g_arg_info_get_direction(arg_info);
-		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT, 1);
-		g_base_info_unref(type_info);
-		g_base_info_unref(arg_info);
-	}
-	if (g_callable_info_can_throw_gerror(info))
-	{
-		printf(", ");
-		printf("err: *?*core.Error");
-	}
-	printf(") ");
-	int return_nullable = g_callable_info_may_return_null(info);
-	GITypeInfo *return_type_info = g_callable_info_get_return_type(info);
-	emit_type(return_type_info, return_nullable || patch_return_nullable(return_type_info), 0, 0, 1);
-	g_base_info_unref(return_type_info);
-	printf(" {\n");
-	printf("    const class = core.alignedCast(*%s.%s, core.typeClassPeek(g_type));\n", g_base_info_get_namespace(class_info), g_base_info_get_name(class_info));
-	printf("    const %s_fn = class.%s.?;\n", vfunc_name, vfunc_name);
-	printf("    return %s_fn(self", vfunc_name);
-	n = g_callable_info_get_n_args(info);
-	for (int i = 0; i < n; i++)
-	{
-		GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
-		const char *arg_name = g_base_info_get_name(arg_info);
-		printf(", ");
-		printf("arg_%s", arg_name);
-		g_base_info_unref(arg_info);
-	}
-	if (g_callable_info_can_throw_gerror(info))
-	{
-		printf(", ");
-		printf("err");
-	}
-	printf(");\n");
-	printf("}\n");
-	free(ziggy_vfunc_name);
+	emit_function(info, vfunc_name, container_name, g_base_info_is_deprecated(info), 0, class_info);
 }

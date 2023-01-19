@@ -2,6 +2,7 @@ const std = @import("std");
 const root = @import("root");
 const Gtk = root.Gtk;
 const core = Gtk.core;
+const template = Gtk.template;
 const meta = std.meta;
 const assert = std.debug.assert;
 const ExampleApp = @import("example_app.zig").ExampleApp;
@@ -18,30 +19,6 @@ pub const CstrContext = struct {
     }
 };
 
-const Static = struct {
-    var type_id: core.GType = core.GType.Invalid;
-};
-
-fn bindTemplateChild(class: *Gtk.WidgetClass, comptime Impl: type) void {
-    inline for (comptime meta.fieldNames(Impl)) |name| {
-        if (comptime name.len <= 2 or name[0] != 'T' or name[1] != 'C') continue;
-        comptime var name_c: [name.len - 2:0]u8 = undefined;
-        comptime std.mem.copy(u8, name_c[0..], name[2..]);
-        class.bindTemplateChildFull(&name_c, core.Boolean.False, @offsetOf(Impl, name));
-    }
-}
-
-fn bindTemplateCallback(class: *Gtk.WidgetClass, comptime Class: type) void {
-    inline for (comptime meta.declarations(Class)) |decl| {
-        if (comptime !decl.is_pub) continue;
-        const name = decl.name;
-        if (comptime name.len <= 2 or name[0] != 'T' or name[1] != 'C') continue;
-        comptime var name_c: [name.len - 2:0]u8 = undefined;
-        comptime std.mem.copy(u8, name_c[0..], name[2..]);
-        class.bindTemplateCallbackFull(&name_c, @ptrCast(core.Callback, &@field(Class, name)));
-    }
-}
-
 pub const ExampleAppWindowClass = extern struct {
     parent: Gtk.ApplicationWindowClass,
 
@@ -50,8 +27,8 @@ pub const ExampleAppWindowClass = extern struct {
         object_class.dispose = &dispose;
         var widget_class = @ptrCast(*Gtk.WidgetClass, self);
         widget_class.setTemplateFromResource("/org/gtk/exampleapp/window.ui");
-        bindTemplateChild(widget_class, ExampleAppWindowImpl);
-        bindTemplateCallback(widget_class, ExampleAppWindowClass);
+        template.bindChild(widget_class, ExampleAppWindowImpl);
+        template.bindCallback(widget_class, ExampleAppWindowClass);
     }
 
     pub fn dispose(object: core.Object) callconv(.C) void {
@@ -78,8 +55,7 @@ pub const ExampleAppWindowClass = extern struct {
         }
     }
 
-    pub fn TCvisible_child_changed(stack: Gtk.Stack, pspec: core.ParamSpec, win: ExampleAppWindow) callconv(.C) void {
-        _ = pspec;
+    pub fn TCvisible_child_changed(stack: Gtk.Stack, _: core.ParamSpec, win: ExampleAppWindow) callconv(.C) void {
         if (stack.callMethod("inDestruction", .{}).toBool()) return;
         win.instance.TCsearchbar.setSearchMode(core.Boolean.False);
         win.updateWords();
@@ -110,7 +86,7 @@ pub const ExampleAppWindowNullable = packed struct {
         } else @panic(message);
     }
 
-    pub fn tryUnwrap(self: ExampleAppWindowNullable) ?ExampleAppWindow {
+    pub fn wrap(self: ExampleAppWindowNullable) ?ExampleAppWindow {
         return if (self.ptr) |some| ExampleAppWindow{ .instance = some } else null;
     }
 };
@@ -152,8 +128,8 @@ pub const ExampleAppWindow = packed struct {
     pub fn new(app: ExampleApp) ExampleAppWindow {
         var property_names = [_][*:0]const u8{"application"};
         var property_values = std.mem.zeroes([1]core.Value);
-        var application = &property_values[0];
-        _ = application.init(core.GType.Object);
+        var application = property_values[0].init(core.GType.Object);
+        defer application.unset();
         application.setObject(app.into(core.Object).asSome());
         return core.newObject(gType(), property_names[0..], property_values[0..]).tryInto(ExampleAppWindow).?;
     }
@@ -205,7 +181,7 @@ pub const ExampleAppWindow = packed struct {
     }
 
     pub fn updateWords(self: ExampleAppWindow) void {
-        var tab = if (self.instance.TCstack.getVisibleChild().tryUnwrap()) |some| some.tryInto(Gtk.ScrolledWindow).? else return;
+        var tab = if (self.instance.TCstack.getVisibleChild().wrap()) |some| some.tryInto(Gtk.ScrolledWindow).? else return;
         var view = tab.getChild().expect("child").tryInto(Gtk.TextView).?;
         var buffer = view.getBuffer();
         var start = buffer.getStartIter();
@@ -236,7 +212,7 @@ pub const ExampleAppWindow = packed struct {
         }
         while (true) {
             var child = self.instance.TCwords.callMethod("getFirstChild", .{});
-            if (child.tryUnwrap()) |some| {
+            if (child.wrap()) |some| {
                 self.instance.TCwords.remove(some);
             } else {
                 break;
@@ -251,7 +227,7 @@ pub const ExampleAppWindow = packed struct {
     }
 
     pub fn updateLines(self: ExampleAppWindow) void {
-        var tab = if (self.instance.TCstack.getVisibleChild().tryUnwrap()) |some| some.tryInto(Gtk.ScrolledWindow).? else return;
+        var tab = if (self.instance.TCstack.getVisibleChild().wrap()) |some| some.tryInto(Gtk.ScrolledWindow).? else return;
         var view = tab.getChild().expect("child").tryInto(Gtk.TextView).?;
         var buffer = view.getBuffer();
         var count = buffer.getLineCount();
@@ -287,19 +263,7 @@ pub const ExampleAppWindow = packed struct {
     }
 
     pub fn gType() core.GType {
-        if (core.onceInitEnter(&Static.type_id).toBool()) {
-            // zig fmt: off
-            var type_id = core.typeRegisterStaticSimple(
-                Gtk.ApplicationWindow.gType(),
-                "ExampleAppWindow",
-                @sizeOf(ExampleAppWindowClass), @ptrCast(core.ClassInitFunc, &ExampleAppWindowClass.init),
-                @sizeOf(ExampleAppWindowImpl), @ptrCast(core.InstanceInitFunc, &ExampleAppWindow.init),
-                .None
-            );
-            // zig fmt: on
-            defer core.onceInitLeave(&Static.type_id, type_id.value);
-        }
-        return Static.type_id;
+        return core.registerType(ExampleAppWindowClass, ExampleAppWindow, "ExampleAppWindow", .{});
     }
 
     pub fn isAImpl(comptime T: type) bool {

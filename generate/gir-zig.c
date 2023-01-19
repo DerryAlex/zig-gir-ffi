@@ -46,9 +46,11 @@ int main(int argc, char *argv[])
 			for (sep = 0; dependency[sep] && dependency[sep] != '-'; sep++);
 			dependency[sep] = 0;
 			printf("pub const %s = @import(\"%s.zig\");\n", dependency, dependency);
+			if (strcmp(dependency, "Gtk") == 0) printf("pub const template = @import(\"template.zig\");\n");
 			free(dependency);
 		}
 		printf("pub const core = @import(\"core.zig\");\n");
+		if (strcmp(namespaces[namespace_idx], "Gtk") == 0) printf("pub const template = @import(\"template.zig\");\n");
 		printf("const std = @import(\"std\");\n");
 		printf("const meta = std.meta;\n");
 		printf("const assert = std.debug.assert;\n");
@@ -64,7 +66,7 @@ int main(int argc, char *argv[])
 			switch (type)
 			{
 				case GI_INFO_TYPE_FUNCTION:
-					emit_function(info, name, "", is_deprecated, 0);
+					emit_function(info, name, "", is_deprecated, 0, NULL);
 					break;
 				case GI_INFO_TYPE_CALLBACK:
 					emit_callback(info, name, is_deprecated, 0);
