@@ -134,7 +134,7 @@ pub const ExampleApp = packed struct {
     }
 
     pub fn gType() core.GType {
-        return core.registerType(ExampleAppClass, ExampleApp, "ExampleApp", .{});
+        return core.registerType(ExampleAppClass, ExampleApp, "ExampleApp", .{ .final = true });
     }
 
     pub fn isAImpl(comptime T: type) bool {

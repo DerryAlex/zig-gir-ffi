@@ -99,7 +99,7 @@ pub const ExampleAppPrefs = packed struct {
     }
 
     pub fn gType() core.GType {
-        return core.registerType(ExampleAppPrefsClass, ExampleAppPrefs, "ExampleAppPrefs", .{});
+        return core.registerType(ExampleAppPrefsClass, ExampleAppPrefs, "ExampleAppPrefs", .{ .final = true });
     }
 
     pub fn isAImpl(comptime T: type) bool {

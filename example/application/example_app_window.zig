@@ -135,7 +135,13 @@ pub const ExampleAppWindow = packed struct {
     }
 
     pub fn disposeOverride(self: ExampleAppWindow) void {
-        self.instance.settings.callMethod("unref", .{});
+        const Once = struct {
+            var done: bool = false;
+        };
+        if (!Once.done) {
+            Once.done = true;
+            self.instance.settings.callMethod("unref", .{}); // equivalent to g_clear_object
+        }
         self.callMethod("disposeV", .{Parent.gType()});
     }
 
@@ -263,7 +269,7 @@ pub const ExampleAppWindow = packed struct {
     }
 
     pub fn gType() core.GType {
-        return core.registerType(ExampleAppWindowClass, ExampleAppWindow, "ExampleAppWindow", .{});
+        return core.registerType(ExampleAppWindowClass, ExampleAppWindow, "ExampleAppWindow", .{ .final = true });
     }
 
     pub fn isAImpl(comptime T: type) bool {
