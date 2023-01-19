@@ -67,11 +67,12 @@ pub const ExampleAppPrefs = packed struct {
         var use_header_bar = property_values[1].init(core.GType.Boolean);
         defer use_header_bar.unset();
         use_header_bar.setBoolean(core.Boolean.True);
-        return core.newObject(gType(), property_names[0..], property_values[0..])).tryInto(ExampleAppPrefs).?;
+        return core.newObject(gType(), property_names[0..], property_values[0..]).tryInto(ExampleAppPrefs).?;
     }
 
     pub fn disposeOverride(self: ExampleAppPrefs) void {
         self.instance.settings.callMethod("unref", .{});
+        self.callMethod("disposeTemplate", .{gType()});
         self.callMethod("disposeV", .{Parent.gType()});
     }
 

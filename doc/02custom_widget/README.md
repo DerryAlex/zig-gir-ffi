@@ -6,7 +6,7 @@ const ExampleAppPrefsClass = extern struct {
 
     pub fn init(self: *ExampleAppPrefsClass) callconv(.C) void {
         var object_class = @ptrCast(*core.ObjectClass, self);
-        object_class.dispose = &dispose;
+        object_class.dispose = &dispose; // override
         // ...
     }
 
@@ -23,7 +23,7 @@ const ExampleAppPrefsImpl = extern struct {
 };
 
 pub const ExampleAppPrefsNullable = packed struct {
-    ptr: ?*ExampleAppPrefsImpl, // naming convention, should be called `ptr` do not break
+    ptr: ?*ExampleAppPrefsImpl,
 
     pub fn expect(self: ExampleAppPrefsNullable, message: []const u8) ExampleAppPrefs {
         if (self.ptr) |some| {
@@ -37,7 +37,7 @@ pub const ExampleAppPrefsNullable = packed struct {
 };
 
 pub const ExampleAppPrefs = packed struct {
-    instance: *ExampleAppPrefsImpl, // naming convention, should be called `instance`, do not break
+    instance: *ExampleAppPrefsImpl,
     traitExampleAppPrefs: void = {},
 
     pub const Parent = Gtk.Dialog;
@@ -48,11 +48,12 @@ pub const ExampleAppPrefs = packed struct {
 
     pub fn new(win: ExampleAppWindow) ExampleAppPrefs {
         // ...
-        return core.newObject(gType(), property_names[0..], property_values[0..])).tryInto(ExampleAppPrefs).?;
+        return core.newObject(gType(), property_names[0..], property_values[0..]).tryInto(ExampleAppPrefs).?;
     }
 
     pub fn disposeOverride(self: ExampleAppPrefs) void {
         self.instance.settings.callMethod("unref", .{});
+        self.callMethod("disposeTemplate", .{});
         self.callMethod("disposeV", .{Parent.gType()}); // chain up
     }
 
@@ -101,7 +102,7 @@ pub const ExampleAppPrefs = packed struct {
 };
 ```
 
-To define a custom widget, we need to define a `Class` for our widget. The layout should be `extern`. The members should be `parent_class` followed by class virtual functions. (Paddings may be used so that we can add new virtual functions without break ABI.) Define `init` function if virtual functions need to be initialized or overrided. For example, `object_class.dispose = &dispose` overrides inherited virtual function `dispose` . Virtual functions can be called with `V` suffix. `Parent.gType()` is passed so that `disposeV` dispatches to `dialog_dispose` runtime.
+To define a custom widget, we need to define a `Class` for our widget. The layout should be `extern`. The members should be `parent_class` followed by class virtual functions. (Paddings may be used so that we can add new virtual functions without breaking ABI.) Implement `init` function if virtual functions need to be initialized or overrided. Virtual functions can be called with `V` suffix. `Parent.gType()` is passed so that `disposeV` dispatches to `dialog_dispose` runtime.
 
 ```zig
 // defined in GObject.Object
@@ -118,8 +119,8 @@ Now we define `Instance` to wrap `Impl`. `Instance` should have the same memory 
 
 - `Parent` should be defined and should be a wrapped type.
 - Traits should be marked unless they can be inherited from parent. `isAImpl` should be defined.
-- `cType()` should be defined. `gType()` should be defined. (Convenience wrapper `registerType` can be used. Or you can turn to `GObject.registerType{Static, Dynamic}`.)
-- Define `init` function if instance needs to be initialized
-- (Recommended) Define `into`, `tryInto`.
-- (Recommended) Define `callMethod`.
-- (Recommended) Define signal proxies, property proxies and vfunc proxies.
+- `cType()` should be defined. `gType()` should be defined. (Convenience function `registerType` can be used. Or you can turn to `GObject.typeRegisterStatic`.)
+- Implement `init` function if instance needs to be initialized
+- (Recommended) Implement `into`, `tryInto`.
+- (Recommended) Implement `callMethod`.
+- (Recommended) Implement signal proxies, property proxies and vfunc proxies.
