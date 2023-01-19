@@ -1,21 +1,13 @@
-const std = @import("std");
-const root = @import("root");
-const Gtk = root.Gtk;
-const core = Gtk.core;
-const template = Gtk.template;
-const meta = std.meta;
-const assert = std.debug.assert;
-const ExampleAppWindow = @import("example_app_window.zig").ExampleAppWindow;
+### Custom Widget
 
+```zig
 const ExampleAppPrefsClass = extern struct {
     parent: Gtk.DialogClass,
 
     pub fn init(self: *ExampleAppPrefsClass) callconv(.C) void {
         var object_class = @ptrCast(*core.ObjectClass, self);
         object_class.dispose = &dispose;
-        var widget_class = @ptrCast(*Gtk.WidgetClass, self);
-        widget_class.setTemplateFromResource("/org/gtk/exampleapp/prefs.ui");
-        template.bindChild(widget_class, ExampleAppPrefsImpl);
+        // ...
     }
 
     pub fn dispose(object: core.Object) callconv(.C) void {
@@ -27,12 +19,11 @@ const ExampleAppPrefsClass = extern struct {
 const ExampleAppPrefsImpl = extern struct {
     parent: Gtk.Dialog.cType(),
     settings: core.Settings,
-    TCfont: Gtk.FontButton,
-    TCtransition: Gtk.ComboBoxText,
+    // ...
 };
 
 pub const ExampleAppPrefsNullable = packed struct {
-    ptr: ?*ExampleAppPrefsImpl,
+    ptr: ?*ExampleAppPrefsImpl, // naming convention, should be called `ptr` do not break
 
     pub fn expect(self: ExampleAppPrefsNullable, message: []const u8) ExampleAppPrefs {
         if (self.ptr) |some| {
@@ -46,33 +37,23 @@ pub const ExampleAppPrefsNullable = packed struct {
 };
 
 pub const ExampleAppPrefs = packed struct {
-    instance: *ExampleAppPrefsImpl,
+    instance: *ExampleAppPrefsImpl, // naming convention, should be called `instance`, do not break
     traitExampleAppPrefs: void = {},
 
     pub const Parent = Gtk.Dialog;
 
     pub fn init(self: ExampleAppPrefs) callconv(.C) void {
-        self.callMethod("initTemplate", .{});
-        self.instance.settings = core.Settings.new("org.gtk.exampleapp");
-        self.instance.settings.callMethod("bind", .{ "font", self.instance.TCfont.into(core.Object), self.instance.TCfont.callMethod("propertyFont", .{}).name(), .Default });
-        self.instance.settings.callMethod("bind", .{ "transition", self.instance.TCtransition.into(core.Object), self.instance.TCtransition.callMethod("propertyActiveId", .{}).name(), .Default });
+        // ...
     }
 
     pub fn new(win: ExampleAppWindow) ExampleAppPrefs {
-        var property_names = [_][*:0]const u8{ "transient-for", "use-header-bar" };
-        var property_values = std.mem.zeroes([2]core.Value);
-        var transient_for = property_values[0].init(core.GType.Object);
-        defer transient_for.unset();
-        transient_for.setObject(win.into(core.Object).asSome());
-        var use_header_bar = property_values[1].init(core.GType.Boolean);
-        defer use_header_bar.unset();
-        use_header_bar.setBoolean(core.Boolean.True);
+        // ...
         return core.newObject(gType(), property_names[0..], property_values[0..])).tryInto(ExampleAppPrefs).?;
     }
 
     pub fn disposeOverride(self: ExampleAppPrefs) void {
         self.instance.settings.callMethod("unref", .{});
-        self.callMethod("disposeV", .{Parent.gType()});
+        self.callMethod("disposeV", .{Parent.gType()}); // chain up
     }
 
     pub fn CallMethod(comptime method: []const u8) ?type {
@@ -118,3 +99,27 @@ pub const ExampleAppPrefs = packed struct {
         return .{ .ptr = self.instance };
     }
 };
+```
+
+To define a custom widget, we need to define a `Class` for our widget. The layout should be `extern`. The members should be `parent_class` followed by class virtual functions. (Paddings may be used so that we can add new virtual functions without break ABI.) Define `init` function if virtual functions need to be initialized or overrided. For example, `object_class.dispose = &dispose` overrides inherited virtual function `dispose` . Virtual functions can be called with `V` suffix. `Parent.gType()` is passed so that `disposeV` dispatches to `dialog_dispose` runtime.
+
+```zig
+// defined in GObject.Object
+pub fn disposeV(self: Object, g_type: core.GType) void {
+    const class = core.alignedCast(*ObjectClass, typeClassPeek(g_type));
+    const dispose_fn = class.dispose.?;
+    dispose_fn(self);
+}
+```
+
+We define an `Impl` for our widget. The layout should be `extern`. The first member should be `parent`. `Nullable` is just nice to have as `?Instance` is preferred.
+
+Now we define `Instance` to wrap `Impl`. `Instance` should have the same memory layout as `*anyopaque`.
+
+- `Parent` should be defined and should be a wrapped type.
+- Traits should be marked unless they can be inherited from parent. `isAImpl` should be defined.
+- `cType()` should be defined. `gType()` should be defined. (Convenience wrapper `registerType` can be used. Or you can turn to `GObject.registerType{Static, Dynamic}`.)
+- Define `init` function if instance needs to be initialized
+- (Recommended) Define `into`, `tryInto`.
+- (Recommended) Define `callMethod`.
+- (Recommended) Define signal proxies, property proxies and vfunc proxies.
