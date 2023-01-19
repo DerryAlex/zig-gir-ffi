@@ -9,3 +9,5 @@ This repo targets GTK4, but should work for any `.gir` file.
 [Examples](./example/)
 
 [Docs](./docs/)
+
+[GTK Documentation](https://docs.gtk.org/)

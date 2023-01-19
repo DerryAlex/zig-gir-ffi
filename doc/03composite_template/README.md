@@ -2,7 +2,7 @@
 
 Call `WidgetClass.setTemplateFromResource` from the class initialization. You can access widgets defined in the template using the `Widget.getTemplateChild` function, but you will typically declare a pointer in the instance private data structure of your type using the same name as the widget in the template definition, and call `WidgetClass.bindTemplateChildFull`.
 
->[warning] Convenience function `template.bindChild` does NOT support private or internal child currently. Template child should be named `"TC" ++ name` when using `template.bindChild`.
+> **WARNING**: `template.bindChild` does NOT support private or internal child currently. Template child should be named `"TC" ++ name` when using convenience function `template.bindChild`.
 
 ```zig
 const ExampleAppPrefsClass = extern struct {
