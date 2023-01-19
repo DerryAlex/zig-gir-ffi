@@ -22,12 +22,12 @@ pub const CstrContext = struct {
 pub const ExampleAppWindowClass = extern struct {
     parent: Gtk.ApplicationWindowClass,
 
-    pub fn init(self: *ExampleAppWindowClass) callconv(.C) void {
+    pub fn init(self: *ExampleAppWindowClass) void {
         var object_class = @ptrCast(*core.ObjectClass, self);
         object_class.dispose = &dispose;
         var widget_class = @ptrCast(*Gtk.WidgetClass, self);
         widget_class.setTemplateFromResource("/org/gtk/exampleapp/window.ui");
-        template.bindChild(widget_class, ExampleAppWindowImpl);
+        template.bindChild(widget_class, ExampleAppWindow);
         template.bindCallback(widget_class, ExampleAppWindowClass);
     }
 
@@ -97,7 +97,7 @@ pub const ExampleAppWindow = packed struct {
 
     pub const Parent = Gtk.ApplicationWindow;
 
-    pub fn init(self: ExampleAppWindow) callconv(.C) void {
+    pub fn init(self: ExampleAppWindow) void {
         self.callMethod("initTemplate", .{});
         var builder = Gtk.Builder.newFromResource("/org/gtk/exampleapp/gears-menu.ui");
         defer builder.callMethod("unref", .{});

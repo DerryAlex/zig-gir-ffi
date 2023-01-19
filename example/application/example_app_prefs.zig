@@ -10,12 +10,12 @@ const ExampleAppWindow = @import("example_app_window.zig").ExampleAppWindow;
 const ExampleAppPrefsClass = extern struct {
     parent: Gtk.DialogClass,
 
-    pub fn init(self: *ExampleAppPrefsClass) callconv(.C) void {
+    pub fn init(self: *ExampleAppPrefsClass) void {
         var object_class = @ptrCast(*core.ObjectClass, self);
         object_class.dispose = &dispose;
         var widget_class = @ptrCast(*Gtk.WidgetClass, self);
         widget_class.setTemplateFromResource("/org/gtk/exampleapp/prefs.ui");
-        template.bindChild(widget_class, ExampleAppPrefsImpl);
+        template.bindChild(widget_class, ExampleAppPrefs);
     }
 
     pub fn dispose(object: core.Object) callconv(.C) void {
@@ -26,6 +26,12 @@ const ExampleAppPrefsClass = extern struct {
 
 const ExampleAppPrefsImpl = extern struct {
     parent: Gtk.Dialog.cType(),
+    private: *Private,
+
+    pub const Private = ExampleAppPrefsPrivateImpl;
+};
+
+const ExampleAppPrefsPrivateImpl = extern struct {
     settings: core.Settings,
     TCfont: Gtk.FontButton,
     TCtransition: Gtk.ComboBoxText,
@@ -51,11 +57,11 @@ pub const ExampleAppPrefs = packed struct {
 
     pub const Parent = Gtk.Dialog;
 
-    pub fn init(self: ExampleAppPrefs) callconv(.C) void {
+    pub fn init(self: ExampleAppPrefs) void {
         self.callMethod("initTemplate", .{});
-        self.instance.settings = core.Settings.new("org.gtk.exampleapp");
-        self.instance.settings.callMethod("bind", .{ "font", self.instance.TCfont.into(core.Object), self.instance.TCfont.callMethod("propertyFont", .{}).name(), .Default });
-        self.instance.settings.callMethod("bind", .{ "transition", self.instance.TCtransition.into(core.Object), self.instance.TCtransition.callMethod("propertyActiveId", .{}).name(), .Default });
+        self.instance.private.settings = core.Settings.new("org.gtk.exampleapp");
+        self.instance.private.settings.callMethod("bind", .{ "font", self.instance.private.TCfont.into(core.Object), self.instance.private.TCfont.callMethod("propertyFont", .{}).name(), .Default });
+        self.instance.private.settings.callMethod("bind", .{ "transition", self.instance.private.TCtransition.into(core.Object), self.instance.private.TCtransition.callMethod("propertyActiveId", .{}).name(), .Default });
     }
 
     pub fn new(win: ExampleAppWindow) ExampleAppPrefs {
@@ -71,7 +77,13 @@ pub const ExampleAppPrefs = packed struct {
     }
 
     pub fn disposeOverride(self: ExampleAppPrefs) void {
-        self.instance.settings.callMethod("unref", .{});
+        const Once = struct {
+            var done: bool = false;
+        };
+        if (!Once.done) {
+            Once.done = true;
+            self.instance.private.settings.callMethod("unref", .{}); // equivalent to g_clear_object
+        }
         self.callMethod("disposeTemplate", .{gType()});
         self.callMethod("disposeV", .{Parent.gType()});
     }
@@ -100,7 +112,7 @@ pub const ExampleAppPrefs = packed struct {
     }
 
     pub fn gType() core.GType {
-        return core.registerType(ExampleAppPrefsClass, ExampleAppPrefs, "ExampleAppPrefs", .{ .final = true });
+        return core.registerType(ExampleAppPrefsClass, ExampleAppPrefs, "ExampleAppPrefs", .{});
     }
 
     pub fn isAImpl(comptime T: type) bool {

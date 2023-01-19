@@ -10,7 +10,7 @@ const ExampleAppPrefs = @import("example_app_prefs.zig").ExampleAppPrefs;
 pub const ExampleAppClass = extern struct {
     parent: Gtk.ApplicationClass,
 
-    pub fn init(self: *ExampleAppClass) callconv(.C) void {
+    pub fn init(self: *ExampleAppClass) void {
         var application_class = @ptrCast(*core.ApplicationClass, self);
         application_class.activate = &activate;
         application_class.open = &open;

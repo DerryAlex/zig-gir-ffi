@@ -290,44 +290,64 @@ pub fn typeRegisterStaticSimple(parent_type: GType, type_name: [*:0]const u8, cl
     }.g_type_register_static_simple(parent_type, type_name, @intCast(c_uint, class_size), class_init, @intCast(c_uint, instance_size), instance_init, flags);
 }
 
+const TypeTag = struct {
+    type_id: GType = GType.Invalid,
+    private_offset: c_int = 0,
+};
+
+pub fn typeTag(comptime Instance: type) *TypeTag {
+    _ = Instance;
+    const Static = struct {
+        var tag = TypeTag{};
+    };
+    return &Static.tag;
+}
+
 pub const TypeFlagsZ = struct {
     abstract: bool = false,
     value_abstract: bool = false,
     final: bool = false,
-    register_fn: ?*const fn(GType) void = null,
+    register_fn: ?*const fn (GType) void = null,
 };
 
 /// Convenience wrapper for Type implementations
 /// Instance should be a wrapped type
-/// Boilerplates for register_fn:
-/// (ADD_PRIVATE)         private_offset = core.typeAddInstancePrivate(instance_gtype, @sizeOf(PrivateImpl));
-/// (IMPLEMENT_INTERFACE) var interface_info: core.InterfaceInfo = .{ .interface_init = @ptrCast(InstanceInitFunc, &init_fn), .interface_finalize = null, .interface_data = null };
-///                       core.typeAddInterfaceStatic(instance_gtype, interface_gtype, &interface_info);
+/// Boilerplates for register_fn: (IMPLEMENT INTERFACE)
+/// var interface_info: core.InterfaceInfo = .{ .interface_init = @ptrCast(InstanceInitFunc, &init_fn), .interface_finalize = null, .interface_data = null };
+/// core.typeAddInterfaceStatic(instance_gtype, interface_gtype, &interface_info);
 pub fn registerType(comptime Class: type, comptime Instance: type, name: [*:0]const u8, comptime flags: TypeFlagsZ) GType {
-    comptime var class_init: ?GObject.ClassInitFunc = null;
-    comptime var instance_init: ?GObject.InstanceInitFunc = null;
-    comptime {
-        if (@hasDecl(Class, "init")) {
-            const init_fn: fn (*Class) callconv(.C) void = Class.init;
-            class_init = @ptrCast(GObject.ClassInitFunc, &init_fn);
+    const class_init = struct {
+        pub fn internInit(self: *Class) callconv(.C) void {
+            if (typeTag(Instance).private_offset != 0) {
+                _ = GObject.typeClassAdjustPrivateOffset(self, &typeTag(Instance).private_offset);
+            }
+            if (@hasDecl(Class, "init")) {
+                self.init();
+            }
         }
-        if (@hasDecl(Instance, "init")) {
-            const init_fn: fn (Instance) callconv(.C) void = Instance.init;
-            instance_init = @ptrCast(GObject.InstanceInitFunc, &init_fn);
+    }.internInit;
+    const instance_init = struct {
+        pub fn internInit(self: Instance) callconv(.C) void {
+            if (@hasDecl(Instance.cType(), "Private")) {
+                self.instance.private = @intToPtr(*Instance.cType().Private, @bitCast(usize, @bitCast(isize, @ptrToInt(self.instance)) + typeTag(Instance).private_offset));
+            }
+            if (@hasDecl(Instance, "init")) {
+                self.init();
+            }
         }
-    }
-    const Static = struct {
-        var type_id: GType = GType.Invalid;
-    };
-    if (GLib.onceInitEnter(&Static.type_id).toBool()) {
+    }.internInit;
+    if (GLib.onceInitEnter(&typeTag(Instance).type_id).toBool()) {
         const flag = (if (flags.abstract) @enumToInt(GObject.TypeFlags.Abstract) else 0) | (if (flags.value_abstract) @enumToInt(GObject.TypeFlags.ValueAbstrace) else 0) | (if (flags.final) @enumToInt(GObject.TypeFlags.Final) else 0);
-        var type_id = typeRegisterStaticSimple(Instance.Parent.gType(), name, @sizeOf(Class), class_init, @sizeOf(Instance.cType()), instance_init, @intToEnum(GObject.TypeFlags, flag));
+        var type_id = typeRegisterStaticSimple(Instance.Parent.gType(), name, @sizeOf(Class), @ptrCast(GObject.ClassInitFunc, &class_init), @sizeOf(Instance.cType()), @ptrCast(GObject.InstanceInitFunc, &instance_init), @intToEnum(GObject.TypeFlags, flag));
+        if (@hasDecl(Instance.cType(), "Private")) {
+            typeTag(Instance).private_offset = GObject.typeAddInstancePrivate(type_id, @sizeOf(Instance.cType().Private));
+        }
         if (flags.register_fn) |func| {
             func(type_id);
         }
-        defer GLib.onceInitLeave(&Static.type_id, type_id.value);
+        defer GLib.onceInitLeave(&typeTag(Instance).type_id, type_id.value);
     }
-    return Static.type_id;
+    return typeTag(Instance).type_id;
 }
 
 /// Convenience wrapper for Interface definitions
