@@ -1454,7 +1454,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 	/* call C API */
 	if (is_vfunc)
 	{
-		printf("    const class = core.alignedCast(*%s.%s, core.typeClassPeek(g_type));\n", g_base_info_get_namespace(virt_class), g_base_info_get_name(virt_class));
+		printf("    const class = core.alignedPtrCast(*%s.%s, core.typeClassPeek(g_type));\n", g_base_info_get_namespace(virt_class), g_base_info_get_name(virt_class));
 		printf("    const %s_fn = class.%s.?;\n", name, name);
 	}
 
@@ -1655,11 +1655,11 @@ void emit_signal(GISignalInfo *info, const char *container_name)
 	char *ziggy_signal_name = snake_to_title(signal_name); /* '-' is handled correctly */
 	printf("const SignalProxy%s = struct {\n", ziggy_signal_name);
 	printf("    object: %s,\n", container_name);
-	printf("\n");
-	printf("    pub fn name(self: SignalProxy%s) [*:0]const u8 {\n", ziggy_signal_name);
-	printf("        _ = self;\n");
-	printf("        return \"%s\";\n", signal_name);
-	printf("    }\n");
+	// printf("\n");
+	// printf("    pub fn name(self: SignalProxy%s) [*:0]const u8 {\n", ziggy_signal_name);
+	// printf("        _ = self;\n");
+	// printf("        return \"%s\";\n", signal_name);
+	// printf("    }\n");
 	printf("\n");
 	printf("    /// @handler: fn(%s", container_name);
 	int n = g_callable_info_get_n_args(info);
@@ -1714,11 +1714,11 @@ void emit_property(GIPropertyInfo *info, const char *container_name)
 	GITypeInfo *type_info = g_property_info_get_type(info);
 	printf("const PropertyProxy%s = struct {\n", ziggy_property_name);
 	printf("    object: %s,\n", container_name);
-	printf("\n");
-	printf("    pub fn name(self: PropertyProxy%s) [*:0]const u8 {\n", ziggy_property_name);
-	printf("        _ = self;\n");
-	printf("        return \"%s\";\n", property_name);
-	printf("    }\n");
+	// printf("\n");
+	// printf("    pub fn name(self: PropertyProxy%s) [*:0]const u8 {\n", ziggy_property_name);
+	// printf("        _ = self;\n");
+	// printf("        return \"%s\";\n", property_name);
+	// printf("    }\n");
 	printf("\n");
 	printf("    pub fn connectNotify(self: PropertyProxy%s, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlagsZ) usize {\n", ziggy_property_name);
 	printf("        return core.connect(self.object.into(core.Object), \"notify::%s\", handler, args, flags, &[_]type{ void, %s, core.ParamSpec });\n", property_name, container_name);
@@ -1937,7 +1937,7 @@ void emit_value_get(const char *value_name, GITypeInfo *type_info)
 				case GI_INFO_TYPE_STRUCT:
 				case GI_INFO_TYPE_UNION:
 				case GI_INFO_TYPE_BOXED:
-					printf("core.alignedCast(*");
+					printf("core.alignedPtrCast(*");
 					emit_type(type_info, 0, 0, 0, 1);
 					printf(", %s.getBoxed())", value_name);
 					break;

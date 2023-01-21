@@ -70,13 +70,13 @@ pub const ExampleApp = packed struct {
     pub fn new() ExampleApp {
         var property_names = [_][*:0]const u8{ "application-id", "flags" };
         var property_values = std.mem.zeroes([2]core.Value);
-        var application_id = property_values[0].init(core.GType.String);
-        defer application_id.unset();
+        var application_id = property_values[0].init(.String);
         application_id.setStaticString("org.gtk.example");
-        var flags = property_values[1].init(core.GType.Flags);
-        defer flags.unset();
+        defer application_id.unset();
+        var flags = property_values[1].init(.Flags);
         flags.setFlags(@enumToInt(core.ApplicationFlags.HandlesOpen));
-        return core.newObject(gType(), property_names[0..], property_values[0..]).tryInto(ExampleApp).?;
+        defer flags.unset();
+        return core.objectNewWithProperties(gType(), property_names[0..], property_values[0..]).tryInto(ExampleApp).?;
     }
 
     pub fn activateOverride(self: ExampleApp) void {
@@ -95,8 +95,12 @@ pub const ExampleApp = packed struct {
     }
 
     pub fn startupOverride(self: ExampleApp) void {
-        var action_preference = core.createClosure(preferenceActivate, .{self}, false, &[_]type{ void, core.SimpleAction, *core.Variant }); // Memery leak, we don't call `closure.deinit` or ask glib to destroy it
-        var action_quit = core.createClosure(quitActivate, .{self}, false, &[_]type{ void, core.SimpleAction, *core.Variant });
+        var action_preference = core.createClosure(&preferenceActivate, .{self}, false, &[_]type{ void, core.SimpleAction, *core.Variant });
+        var watched1 = action_preference.toWatchedClosure(self.into(core.Object));
+        watched1.sink(); // Takes over the initial ownership
+        var action_quit = core.createClosure(&quitActivate, .{self}, false, &[_]type{ void, core.SimpleAction, *core.Variant });
+        var watched2 = action_quit.toWatchedClosure(self.into(core.Object));
+        watched2.sink(); // Takes over the initial ownership
         // zig fmt: off
         var app_entries = [_]core.ActionEntry{
             .{ .name = "preferences", .activate = action_preference.invoke_fn(), .parameter_type = null, .state = null, .change_state = null, .padding = undefined },

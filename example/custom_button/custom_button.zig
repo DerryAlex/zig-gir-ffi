@@ -28,7 +28,7 @@ pub const CustomButtonClass = extern struct {
         object_class.installProperties(properties[0..]);
         // custom signals
         var flags = core.FlagsBuilder(core.SignalFlags){};
-        signals[@enumToInt(Signals.ZeroReached)] = core.newSignal("zero-reached", CustomButton.gType(), flags.set(.RunLast).set(.NoRecurse).set(.NoHooks).build(), null, null, null, null, .None, null);
+        signals[@enumToInt(Signals.ZeroReached)] = core.signalNewv("zero-reached", CustomButton.gType(), flags.set(.RunLast).set(.NoRecurse).set(.NoHooks).build(), core.signalTypeCclosureNew(CustomButton.gType(), @offsetOf(CustomButtonClass, "zeroReached")), null, null, null, .None, null);
         // overrides
         object_class.constructed = &constructed;
         var button_class = @ptrCast(*Gtk.ButtonClass, self);
@@ -81,16 +81,13 @@ pub const CustomButton = packed struct {
 
     pub const Parent = Gtk.Button;
 
-    pub fn init(self: CustomButton) void {
-        self.instance.private.number = 10;
-    }
-
     pub fn new() CustomButton {
-        return core.newObject(gType(), null, null).tryInto(CustomButton).?;
+        return core.objectNewWithProperties(gType(), null, null).tryInto(CustomButton).?;
     }
 
     pub fn constructedOverride(self: CustomButton) void {
         self.callMethod("constructedV", .{Parent.gType()});
+        self.instance.private.number = 10;
         _ = self.callMethod("bindProperty", .{ "number", self.into(core.Object), "label", .SyncCreate });
     }
 
@@ -106,7 +103,10 @@ pub const CustomButton = packed struct {
         }
         self.instance.private.number = number;
         if (number == 0) {
-            var params = [_]core.Value{(core.ValueZ{ .Object = self.into(core.Object).asSome() }).toValue()};
+            var params = std.mem.zeroes([1]core.Value);
+            _ = params[0].init(.Object);
+            params[0].setObject(self.into(core.Object).asSome());
+            defer params[0].unset();
             _ = core.signalEmitv(&params, signals[@enumToInt(Signals.ZeroReached)], 0, std.mem.zeroes(core.Value));
         }
         self.callMethod("notifyByPspec", .{properties[@enumToInt(Properties.Number)]});
@@ -118,10 +118,6 @@ pub const CustomButton = packed struct {
 
     const PropertyProxyNumber = struct {
         object: CustomButton,
-
-        pub fn name(_: PropertyProxyNumber) [*:0]const u8 {
-            return "number";
-        }
 
         pub fn connectNotify(self: PropertyProxyNumber, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlagsZ) usize {
             core.connect(self.object.into(core.Object), "notify::number", handler, args, flags, &[_]type{ void, CustomButton, core.ParamSpec });
@@ -142,10 +138,6 @@ pub const CustomButton = packed struct {
 
     const SignalProxyZeroReached = struct {
         object: CustomButton,
-
-        pub fn name(_: SignalProxyZeroReached) [*:0]u8 {
-            return "zero-reached";
-        }
 
         pub fn connect(self: SignalProxyZeroReached, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlagsZ) usize {
             return core.connect(self.object.into(core.Object), "zero-reached", handler, args, flags, &[_]type{ void, CustomButton });

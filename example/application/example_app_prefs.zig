@@ -60,20 +60,20 @@ pub const ExampleAppPrefs = packed struct {
     pub fn init(self: ExampleAppPrefs) void {
         self.callMethod("initTemplate", .{});
         self.instance.private.settings = core.Settings.new("org.gtk.exampleapp");
-        self.instance.private.settings.callMethod("bind", .{ "font", self.instance.private.TCfont.into(core.Object), self.instance.private.TCfont.callMethod("propertyFont", .{}).name(), .Default });
-        self.instance.private.settings.callMethod("bind", .{ "transition", self.instance.private.TCtransition.into(core.Object), self.instance.private.TCtransition.callMethod("propertyActiveId", .{}).name(), .Default });
+        self.instance.private.settings.callMethod("bind", .{ "font", self.instance.private.TCfont.into(core.Object), "font", .Default });
+        self.instance.private.settings.callMethod("bind", .{ "transition", self.instance.private.TCtransition.into(core.Object), "active-id", .Default });
     }
 
     pub fn new(win: ExampleAppWindow) ExampleAppPrefs {
         var property_names = [_][*:0]const u8{ "transient-for", "use-header-bar" };
         var property_values = std.mem.zeroes([2]core.Value);
-        var transient_for = property_values[0].init(core.GType.Object);
-        defer transient_for.unset();
+        var transient_for = property_values[0].init(.Object);
         transient_for.setObject(win.into(core.Object).asSome());
-        var use_header_bar = property_values[1].init(core.GType.Boolean);
+        defer transient_for.unset();
+        var use_header_bar = property_values[1].init(.Boolean);
+        use_header_bar.setBoolean(.True);
         defer use_header_bar.unset();
-        use_header_bar.setBoolean(core.Boolean.True);
-        return core.newObject(gType(), property_names[0..], property_values[0..]).tryInto(ExampleAppPrefs).?;
+        return core.objectNewWithProperties(gType(), property_names[0..], property_values[0..]).tryInto(ExampleAppPrefs).?;
     }
 
     pub fn disposeOverride(self: ExampleAppPrefs) void {

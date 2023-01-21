@@ -107,31 +107,31 @@ pub const ExampleAppWindow = packed struct {
         self.instance.settings = core.Settings.new("org.gtk.exampleapp");
         var settings = self.instance.settings;
         var stack = self.instance.TCstack;
-        settings.bind("transition", stack.into(core.Object), stack.propertyTransitionType().name(), .Default);
+        settings.bind("transition", stack.into(core.Object), "transition-type", .Default);
         var sidebar = self.instance.TCsidebar;
-        settings.bind("show-words", sidebar.into(core.Object), sidebar.callMethod("propertyRevealChild", .{}).name(), .Default);
+        settings.bind("show-words", sidebar.into(core.Object), "reveal-child", .Default);
         var search = self.instance.TCsearch;
         var searchbar = self.instance.TCsearchbar;
-        _ = search.callMethod("bindProperty", .{ search.callMethod("propertyActive", .{}).name(), searchbar.into(core.Object), searchbar.propertySearchModeEnabled().name(), .Bidirectional });
+        _ = search.callMethod("bindProperty", .{ "active", searchbar.into(core.Object), "search-mode-enabled", .Bidirectional });
         _ = sidebar.callMethod("propertyRevealChild", .{}).connectNotify(updateWords, .{self}, .{ .swapped = true });
         var action1 = settings.createAction("show-words");
         defer core.unsafeCast(core.Object, action1.instance).unref();
         self.callMethod("addAction", .{action1});
         var lines = self.instance.TClines;
-        var action2 = core.PropertyAction.new("show-lines", lines.into(core.Object), lines.callMethod("propertyVisible", .{}).name());
+        var action2 = core.PropertyAction.new("show-lines", lines.into(core.Object), "visible");
         defer action2.callMethod("unref", .{});
         self.callMethod("addAction", .{action2.into(core.Action)});
         var lines_label = self.instance.TClines_label;
-        _ = lines.callMethod("bindProperty", .{ lines.callMethod("propertyVisible", .{}).name(), lines_label.into(core.Object), lines_label.callMethod("propertyVisible", .{}).name(), .Default });
+        _ = lines.callMethod("bindProperty", .{ "visible", lines_label.into(core.Object), "visible", .Default });
     }
 
     pub fn new(app: ExampleApp) ExampleAppWindow {
         var property_names = [_][*:0]const u8{"application"};
         var property_values = std.mem.zeroes([1]core.Value);
-        var application = property_values[0].init(core.GType.Object);
-        defer application.unset();
+        var application = property_values[0].init(.Object);
         application.setObject(app.into(core.Object).asSome());
-        return core.newObject(gType(), property_names[0..], property_values[0..]).tryInto(ExampleAppWindow).?;
+        defer application.unset();
+        return core.objectNewWithProperties(gType(), property_names[0..], property_values[0..]).tryInto(ExampleAppWindow).?;
     }
 
     pub fn disposeOverride(self: ExampleAppWindow) void {
@@ -173,7 +173,7 @@ pub const ExampleAppWindow = packed struct {
         }
         var tag = Gtk.TextTag.new(null);
         _ = buffer.getTagTable().add(tag);
-        self.instance.settings.bind("font", tag.into(core.Object), tag.callMethod("propertyFont", .{}).name(), .Default);
+        self.instance.settings.bind("font", tag.into(core.Object), "font", .Default);
         var start_iter = buffer.getStartIter();
         var end_iter = buffer.getEndIter();
         buffer.applyTag(tag, &start_iter, &end_iter);
