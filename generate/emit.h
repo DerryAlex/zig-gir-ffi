@@ -22,6 +22,8 @@ void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, in
 void emit_function_comment(GIBaseInfo *info);
 void emit_function_symbol(GIBaseInfo *info);
 void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *container_name, int is_deprecated, int is_container_struct, GIStructInfo *virt_class);
+void emit_field_begin();
+void emit_field_end();
 void emit_field(GIFieldInfo *field_info, int first_field);
 void emit_signal(GISignalInfo *info, const char *container_name);
 void emit_property(GIPropertyInfo *info, const char *container_name);

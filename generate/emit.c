@@ -109,6 +109,18 @@ static inline int patch_return_nullable(GITypeInfo *type_info)
 	return 0;
 }
 
+static inline int is_cint(GITypeInfo *type_info)
+{
+	GITypeTag type = g_type_info_get_tag(type_info);
+	return (sizeof(int) == 2 && type == GI_TYPE_TAG_INT16) || (sizeof(int) == 4 && type == GI_TYPE_TAG_INT32) || (sizeof(int) == 8 && type == GI_TYPE_TAG_INT64);
+}
+
+static inline int is_cuint(GITypeInfo *type_info)
+{
+	GITypeTag type = g_type_info_get_tag(type_info);
+	return (sizeof(int) == 2 && type == GI_TYPE_TAG_UINT16) || (sizeof(int) == 4 && type == GI_TYPE_TAG_UINT32) || (sizeof(int) == 8 && type == GI_TYPE_TAG_UINT64);
+}
+
 void emit_c_function(GIBaseInfo *info, const char *name, const char *container_name, int is_deprecated, int is_container_struct)
 {
 	printf("extern fn ");
@@ -195,11 +207,13 @@ void emit_struct(GIBaseInfo *info, const char *name, int is_deprecated)
 	else
 	{
 		printf("pub const %s = extern struct {\n", name);
+		emit_field_begin();
 		for (int i = 0; i < n; i++)
 		{
 			GIFieldInfo *field_info = g_struct_info_get_field(info, i);
 			emit_field(field_info, i == 0);
 		}
+		emit_field_end();
 	}
 	n = g_struct_info_get_n_methods(info);
 	for (int i = 0; i < n; i++)
@@ -331,11 +345,13 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 	else
 	{
 		printf("pub const %sImpl = extern struct {\n", name);
+		emit_field_begin();
 		for (int i = 0; i < n; i++)
 		{
 			GIFieldInfo *field_info = g_object_info_get_field(info, i);
 			emit_field(field_info, i == 0);
 		}
+		emit_field_end();
 		printf("};\n");
 	}
 	emit_nullable(name);
@@ -846,11 +862,13 @@ void emit_union(GIBaseInfo *info, const char *name, int is_deprecated)
 	else
 	{
 		printf("pub const %s = extern union {\n", name);
+		emit_field_begin();
 		for (int i = 0; i < n; i++)
 		{
 			GIFieldInfo *field_info = g_union_info_get_field(info, i);
 			emit_field(field_info, 0);
 		}
+		emit_field_end();
 	}
 	n = g_union_info_get_n_methods(info);
 	for (int i = 0; i < n; i++)
@@ -1555,6 +1573,25 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 	free(ziggy_name);
 }
 
+static int bitfield_padding = 0;
+
+void emit_padding(int size)
+{
+	if (size <= 0) return;
+	printf("    padding%c%c%c%c: u%d,\n", rand() % 26 + 'A', rand() % 26 + 'A', rand() % 26 + 'A', rand() % 26 + 'A', size);
+}
+
+void emit_field_begin()
+{
+	bitfield_padding = 0;
+}
+
+void emit_field_end()
+{
+	emit_padding(bitfield_padding);
+	bitfield_padding = 0;
+}
+
 void emit_field(GIFieldInfo *field_info, int first_field)
 {
 	GITypeInfo *field_type_info = g_field_info_get_type(field_info);
@@ -1564,9 +1601,46 @@ void emit_field(GIFieldInfo *field_info, int first_field)
 	// if (field_flags & GI_FIELD_IS_READABLE) printf("read ");
 	// if (field_flags & GI_FIELD_IS_WRITABLE) printf("write ");
 	// printf("\n");
+	if (is_cuint(field_type_info) || is_cint(field_type_info)) {
+		int size = g_field_info_get_size(field_info);
+		if (bitfield_padding < size) {
+			emit_padding(bitfield_padding);
+			bitfield_padding = sizeof(int) * 8;
+		}
+	}
+	else {
+		if (bitfield_padding) {
+			emit_padding(bitfield_padding);
+			bitfield_padding = 0;
+		}
+	}
 	if (strcmp(field_name, "error") == 0 || strcmp(field_name, "var") == 0) printf("    @\"%s\": ", field_name);
 	else printf("    %s: ", field_name);
-	emit_type(field_type_info, g_type_info_is_pointer(field_type_info) || is_callback(field_type_info), 0, 0, 0);
+	if (is_cuint(field_type_info)) {
+		int size = g_field_info_get_size(field_info);
+		if (size == 0)
+		{
+			// GIBaseInfo *container = g_base_info_get_container(field_info);
+			// fprintf(stderr, "Unsupport(%s): bitfield %s has size 0\n", g_base_info_get_name(container), field_name);
+			size = sizeof(int) * 8;
+		}
+		printf("u%d", size);
+		bitfield_padding -= size;
+	}
+	else if (is_cint(field_type_info)) {
+		int size = g_field_info_get_size(field_info);
+		if (size == 0)
+		{
+			// GIBaseInfo *container = g_base_info_get_container(field_info);
+			// fprintf(stderr, "Unsupport(%s): bitfield %s has size 0\n", g_base_info_get_name(container), field_name);
+			size = sizeof(int) * 8;
+		}
+		printf("i%d", size);
+		bitfield_padding -= size;
+	}
+	else {
+		emit_type(field_type_info, g_type_info_is_pointer(field_type_info) || is_callback(field_type_info), 0, 0, 0);
+	}
 	if (first_field && is_instance(field_type_info) && !g_type_info_is_pointer(field_type_info)) printf(".cType()");
 	printf(",\n");
 	g_base_info_unref(field_type_info);
