@@ -119,7 +119,7 @@ pub const CustomButton = packed struct {
     const PropertyProxyNumber = struct {
         object: CustomButton,
 
-        pub fn name() [*:0]const u8 {
+        pub fn name(_: PropertyProxyNumber) [*:0]const u8 {
             return "number";
         }
 
@@ -142,6 +142,10 @@ pub const CustomButton = packed struct {
 
     const SignalProxyZeroReached = struct {
         object: CustomButton,
+
+        pub fn name(_: SignalProxyZeroReached) [*:0]u8 {
+            return "zero-reached";
+        }
 
         pub fn connect(self: SignalProxyZeroReached, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlagsZ) usize {
             return core.connect(self.object.into(core.Object), "zero-reached", handler, args, flags, &[_]type{ void, CustomButton });
