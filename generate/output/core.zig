@@ -13,47 +13,48 @@ const assert = std.debug.assert;
 
 pub const Unsupported = @compileError("Unsupported");
 
-pub const Boolean = packed struct {
-    value: c_int,
+pub const Boolean = enum(c_int) {
+    False = 0,
+    True = 1,
 
-    pub const True = Boolean{ .value = 1 };
-    pub const False = Boolean{ .value = 0 };
+    pub fn fromBool(self: bool) Boolean {
+        return @intToEnum(Boolean, @boolToInt(self));
+    }
 
     pub fn toBool(self: Boolean) bool {
-        return self.value != 0;
+        return @enumToInt(self) != 0;
     }
 
     pub fn format(self: Boolean, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
-        try writer.writeAll(if (self.value == 0) "false" else "true");
+        try writer.writeAll(if (self.toBool()) "true" else "false");
     }
 };
 
-pub const GType = packed struct {
-    value: usize,
-
-    pub const Invalid = GType{ .value = 0 };
-    pub const None = GType{ .value = 4 };
-    pub const Interface = GType{ .value = 8 };
-    pub const Char = GType{ .value = 12 };
-    pub const UChar = GType{ .value = 16 };
-    pub const Boolean = GType{ .value = 20 };
-    pub const Int = GType{ .value = 24 };
-    pub const Uint = GType{ .value = 28 };
-    pub const Long = GType{ .value = 32 };
-    pub const Ulong = GType{ .value = 36 };
-    pub const Int64 = GType{ .value = 40 };
-    pub const Uint64 = GType{ .value = 44 };
-    pub const Enum = GType{ .value = 48 };
-    pub const Flags = GType{ .value = 52 };
-    pub const Float = GType{ .value = 56 };
-    pub const Double = GType{ .value = 60 };
-    pub const String = GType{ .value = 64 };
-    pub const Pointer = GType{ .value = 68 };
-    pub const Boxed = GType{ .value = 72 };
-    pub const Object = GType{ .value = 80 };
-    pub const Variant = GType{ .value = 84 };
+pub const GType = enum(usize) {
+    Invalid = 0,
+    None = 4,
+    Interface = 8,
+    Char = 12,
+    Uchar = 16,
+    Boolean = 20,
+    Int = 24,
+    Uint = 28,
+    Long = 32,
+    Ulong = 36,
+    Int64 = 40,
+    Uint64 = 44,
+    Enum = 48,
+    Flags = 52,
+    Float = 56,
+    Double = 60,
+    String = 64,
+    Pointer = 68,
+    Boxed = 72,
+    Object = 80,
+    Variant = 84,
+    _,
 };
 
 /// UCS-4
@@ -115,7 +116,7 @@ pub fn unsafeCast(comptime T: type, ptr: *anyopaque) T {
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
-fn ZigClosure(comptime T: type, comptime U: type, comptime swapped: bool, comptime signature: []const type) type {
+fn ClosureZ(comptime T: type, comptime U: type, comptime swapped: bool, comptime signature: []const type) type {
     comptime assert(meta.trait.isPtrTo(.Fn)(T));
     comptime assert(signature.len <= 7);
 
@@ -178,14 +179,24 @@ fn ZigClosure(comptime T: type, comptime U: type, comptime swapped: bool, compti
             allocator.destroy(self);
         }
 
-        pub fn invoke_fn(self: *Self) @TypeOf(&(@This().invoke)) {
-            _ = self;
+        pub fn invoke_fn(_: *Self) @TypeOf(&(@This().invoke)) {
             return &(@This().invoke);
         }
 
-        pub fn deinit_fn(self: *Self) @TypeOf(&(@This().deinit)) {
-            _ = self;
+        pub fn deinit_fn(_: *Self) @TypeOf(&(@This().deinit)) {
             return &(@This().deinit);
+        }
+
+        pub fn toClosure(self: *Self) *GObject.Closure {
+            if (swapped) {
+                return struct {
+                    pub extern fn g_cclosure_new_swapped(GObject.Callback, ?*anyopaque, GObject.ClosureNotify) *GObject.Closure;
+                }.g_cclosure_new_swapped(@ptrCast(GObject.Callback, self.invoke_fn()), self, self.deinit_fn());
+            } else {
+                return struct {
+                    pub extern fn g_cclosure_new(GObject.Callback, ?*anyopaque, GObject.ClosureNotify) *GObject.Closure;
+                }.g_cclosure_new(@ptrCast(GObject.Callback, self.invoke_fn()), self, self.deinit_fn());
+            }
         }
     };
 }
@@ -198,9 +209,9 @@ fn ZigClosure(comptime T: type, comptime U: type, comptime swapped: bool, compti
 ///             e.g. `.{void, Object}` for `*const fn(Object, ?*anyopaque) callconv(.C) void`
 /// Use `closure.invoke_fn()` to get C callback
 /// Call `closure.deinit()` to destroy closure, or pass `closure.deinit_fn()` as destroy function
-pub fn createClosure(comptime func: anytype, args: anytype, comptime swapped: bool, comptime signature: []const type) *ZigClosure(@TypeOf(&func), @TypeOf(args), swapped, signature) {
+pub fn createClosure(comptime func: anytype, args: anytype, comptime swapped: bool, comptime signature: []const type) *ClosureZ(@TypeOf(&func), @TypeOf(args), swapped, signature) {
     const allocator = gpa.allocator();
-    const closure = allocator.create(ZigClosure(@TypeOf(&func), @TypeOf(args), swapped, signature)) catch @panic("Out Of Memory");
+    const closure = allocator.create(ClosureZ(@TypeOf(&func), @TypeOf(args), swapped, signature)) catch @panic("Out Of Memory");
     closure.func = &func;
     closure.args = args;
     return closure;
@@ -208,6 +219,140 @@ pub fn createClosure(comptime func: anytype, args: anytype, comptime swapped: bo
 
 // closure end
 // -----------
+
+// -----------
+// value begin
+
+pub const ValueZ = union(enum) {
+    Schar: i8,
+    Uchar: u8,
+    Boolean: bool,
+    Int: c_int,
+    Uint: c_uint,
+    Long: c_long,
+    Ulong: c_ulong,
+    Int64: i64,
+    Uint64: u64,
+    Enum: c_int,
+    Flags: c_uint,
+    Float: f32,
+    Double: f64,
+    String: ?[*:0]const u8,
+    Pointer: ?*anyopaque,
+    Boxed: ?*anyopaque,
+    Object: GObject.ObjectNullable,
+    Variant: ?*GLib.Variant,
+
+    pub fn toValue(self: ValueZ) GObject.Value {
+        var value = std.mem.zeroes(GObject.Value);
+        switch (self) {
+            .Schar => |val| {
+                _ = value.init(.Char);
+                value.setSchar(val);
+            },
+            .Uchar => |val| {
+                _ = value.init(.Uchar);
+                value.setUchar(val);
+            },
+            .Boolean => |val| {
+                _ = value.init(.Boolean);
+                value.setBoolean(Boolean.fromBool(val));
+            },
+            .Int => |val| {
+                _ = value.init(.Int);
+                value.setInt(val);
+            },
+            .Uint => |val| {
+                _ = value.init(.Uint);
+                value.setUint(val);
+            },
+            .Long => |val| {
+                _ = value.init(.Long);
+                value.setLong(val);
+            },
+            .Ulong => |val| {
+                _ = value.init(.Ulong);
+                value.setUlong(val);
+            },
+            .Int64 => |val| {
+                _ = value.init(.Int64);
+                value.setInt64(val);
+            },
+            .Uint64 => |val| {
+                _ = value.init(.Uint64);
+                value.setUint64(val);
+            },
+            .Enum => |val| {
+                _ = value.init(.Enum);
+                value.setEnum(val);
+            },
+            .Flags => |val| {
+                _ = value.init(.Flags);
+                value.setFlags(val);
+            },
+            .Float => |val| {
+                _ = value.init(.Float);
+                value.setFloat(val);
+            },
+            .Double => |val| {
+                _ = value.init(.Double);
+                value.setDouble(val);
+            },
+            .String => |val| {
+                _ = value.init(.String);
+                value.setString(val);
+            },
+            .Pointer => |val| {
+                _ = value.init(.Pointer);
+                value.setPointer(val);
+            },
+            .Boxed => |val| {
+                _ = value.init(.Boxed);
+                value.setBoxed(val);
+            },
+            .Object => |val| {
+                _ = value.init(.Object);
+                value.setObject(val);
+            },
+            .Variant => |val| {
+                _ = value.init(.Variant);
+                value.setVariant(val);
+            },
+        }
+        return value;
+    }
+};
+
+// value end
+// ---------
+
+// -------------------
+// flags builder begin
+
+pub fn FlagsBuilder(comptime T: type) type {
+    return struct {
+        value: c_uint = 0,
+
+        const Self = @This();
+
+        pub fn set(self: *Self, bit: T) *Self {
+            self.value |= @enumToInt(bit);
+            return self;
+        }
+
+        pub fn unset(self: *Self, bit: T) *Self {
+            self.value &= ~@enumToInt(bit);
+            return self;
+        }
+
+        pub fn build(self: Self) T {
+            return @intToEnum(T, self.value);
+        }
+    };
+}
+
+// flags builder end
+// -----------------
 
 // ----------
 // misc begin
@@ -251,10 +396,16 @@ pub fn connect(object: GObject.Object, comptime signal: [*:0]const u8, comptime 
     const closure = createClosure(handler, args, flags.swapped, signature);
     const closure_invoke = @ptrCast(GObject.Callback, closure.invoke_fn());
     const closure_deinit = @ptrCast(GObject.ClosureNotify, closure.deinit_fn());
-    const flag = (if (flags.after) @enumToInt(GObject.ConnectFlags.After) else 0) | (if (flags.swapped) @enumToInt(GObject.ConnectFlags.Swapped) else 0);
+    var builder = FlagsBuilder(GObject.ConnectFlags){};
+    if (flags.after) {
+        _ = builder.set(.After);
+    }
+    if (flags.swapped) {
+        _ = builder.set(.Swapped);
+    }
     return struct {
         pub extern fn g_signal_connect_data(GObject.Object, [*:0]const u8, GObject.Callback, ?*anyopaque, GObject.ClosureNotify, GObject.ConnectFlags) c_ulong;
-    }.g_signal_connect_data(object, signal, closure_invoke, closure, closure_deinit, @intToEnum(GObject.ConnectFlags, flag));
+    }.g_signal_connect_data(object, signal, closure_invoke, closure, closure_deinit, builder.build());
 }
 
 /// Creates a new instance of a GObject subtype and sets its properties using the provided arrays.
@@ -291,7 +442,7 @@ pub fn typeRegisterStaticSimple(parent_type: GType, type_name: [*:0]const u8, cl
 }
 
 const TypeTag = struct {
-    type_id: GType = GType.Invalid,
+    type_id: GType = .Invalid,
     private_offset: c_int = 0,
 };
 
@@ -312,12 +463,12 @@ pub const TypeFlagsZ = struct {
 
 /// Convenience wrapper for Type implementations
 /// Instance should be a wrapped type
-/// Boilerplates for register_fn: (IMPLEMENT INTERFACE)
+/// Boilerplates for register_fn:
 /// var interface_info: core.InterfaceInfo = .{ .interface_init = @ptrCast(InstanceInitFunc, &init_fn), .interface_finalize = null, .interface_data = null };
 /// core.typeAddInterfaceStatic(instance_gtype, interface_gtype, &interface_info);
 pub fn registerType(comptime Class: type, comptime Instance: type, name: [*:0]const u8, comptime flags: TypeFlagsZ) GType {
     const class_init = struct {
-        pub fn internInit(self: *Class) callconv(.C) void {
+        pub fn trampoline(self: *Class) callconv(.C) void {
             if (typeTag(Instance).private_offset != 0) {
                 _ = GObject.typeClassAdjustPrivateOffset(self, &typeTag(Instance).private_offset);
             }
@@ -325,9 +476,9 @@ pub fn registerType(comptime Class: type, comptime Instance: type, name: [*:0]co
                 self.init();
             }
         }
-    }.internInit;
+    }.trampoline;
     const instance_init = struct {
-        pub fn internInit(self: Instance) callconv(.C) void {
+        pub fn trampoline(self: Instance) callconv(.C) void {
             if (@hasDecl(Instance.cType(), "Private")) {
                 self.instance.private = @intToPtr(*Instance.cType().Private, @bitCast(usize, @bitCast(isize, @ptrToInt(self.instance)) + typeTag(Instance).private_offset));
             }
@@ -335,17 +486,26 @@ pub fn registerType(comptime Class: type, comptime Instance: type, name: [*:0]co
                 self.init();
             }
         }
-    }.internInit;
+    }.trampoline;
     if (GLib.onceInitEnter(&typeTag(Instance).type_id).toBool()) {
-        const flag = (if (flags.abstract) @enumToInt(GObject.TypeFlags.Abstract) else 0) | (if (flags.value_abstract) @enumToInt(GObject.TypeFlags.ValueAbstrace) else 0) | (if (flags.final) @enumToInt(GObject.TypeFlags.Final) else 0);
-        var type_id = typeRegisterStaticSimple(Instance.Parent.gType(), name, @sizeOf(Class), @ptrCast(GObject.ClassInitFunc, &class_init), @sizeOf(Instance.cType()), @ptrCast(GObject.InstanceInitFunc, &instance_init), @intToEnum(GObject.TypeFlags, flag));
+        var builder = FlagsBuilder(GObject.TypeFlags){};
+        if (flags.abstract) {
+            _ = builder.set(.Abstract);
+        }
+        if (flags.value_abstract) {
+            _ = builder.set(.ValueAbstract);
+        }
+        if (flags.final) {
+            _ = builder.set(.Final);
+        }
+        var type_id = typeRegisterStaticSimple(Instance.Parent.gType(), name, @sizeOf(Class), @ptrCast(GObject.ClassInitFunc, &class_init), @sizeOf(Instance.cType()), @ptrCast(GObject.InstanceInitFunc, &instance_init), builder.build());
         if (@hasDecl(Instance.cType(), "Private")) {
             typeTag(Instance).private_offset = GObject.typeAddInstancePrivate(type_id, @sizeOf(Instance.cType().Private));
         }
         if (flags.register_fn) |func| {
             func(type_id);
         }
-        defer GLib.onceInitLeave(&typeTag(Instance).type_id, type_id.value);
+        defer GLib.onceInitLeave(&typeTag(Instance).type_id, @enumToInt(type_id));
     }
     return typeTag(Instance).type_id;
 }
@@ -372,4 +532,28 @@ pub fn registerInterface(comptime Interface: type, name: [*:0]const u8, comptime
         defer GLib.onceInitLeave(&Static.type_id, type_id.value);
     }
     return Static.type_id;
+}
+
+/// Creates a new signal. (This is usually done in the class initializer.)
+/// A signal name consists of segments consisting of ASCII letters and digits, separated by either the - or _ character.
+/// The first character of a signal name must be a letter. Names which violate these rules lead to undefined behaviour.
+/// These are the same rules as for property naming (see g_param_spec_internal()).
+/// When registering a signal and looking up a signal, either separator can be used, but they cannot be mixed.
+/// Using - is considerably more efficient. Using _ is discouraged.
+/// If c_marshaller is NULL, g_cclosure_marshal_generic() will be used as the marshaller for this signal.
+/// @signal_name:   The name for the signal.
+/// @itype:         The type this signal pertains to. It will also pertain to types which are derived from this type.
+/// @signal_flags:  A combination of GSignalFlags specifying detail of when the default handler is to be invoked.
+///                 You should at least specify G_SIGNAL_RUN_FIRST or G_SIGNAL_RUN_LAST.
+/// @class_clousre: The closure to invoke on signal emission; may be NULL.
+/// @accumulator:   The accumulator for this signal; may be NULL.
+/// @accu_data:     User data for the accumulator.
+/// @c_marshaller:  The function to translate arrays of parameter values to signal emissions into C language callback invocations or NULL.
+/// @return_type:   The type of return value, or G_TYPE_NONE for a signal without a return value.
+/// @n_params:      The length of param_types.
+/// @param_types:   An array of types, one for each parameter (may be NULL if n_params is zero)
+pub fn newSignal(signal_name: [*:0]const u8, itype: GType, signal_flags: GObject.SignalFlags, class_closure: ?*GObject.Closure, accumulator: ?GObject.SignalAccumulator, accu_data: ?*anyopaque, c_marshaller: ?GObject.ClosureMarshal, return_type: GType, param_types: ?[]GType) u32 {
+    return struct {
+        pub extern fn g_signal_newv([*:0]const u8, GType, GObject.SignalFlags, ?*GObject.Closure, ?GObject.SignalAccumulator, ?*anyopaque, ?GObject.ClosureMarshal, GType, c_uint, ?[*]GType) c_uint;
+    }.g_signal_newv(signal_name, itype, signal_flags, class_closure, accumulator, accu_data, c_marshaller, return_type, if (param_types) |some| @intCast(c_uint, some.len) else 0, if (param_types) |some| some.ptr else null);
 }
