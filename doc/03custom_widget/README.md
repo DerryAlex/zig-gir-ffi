@@ -14,7 +14,7 @@ pub fn disposeV(self: Object, g_type: core.GType) void {
 }
 ```
 
-We define an `Impl` for our widget. The layout should be `extern`. The first member should be `parent`. (For derivable type, `PrivateImpl` may be used to attain a stable ABI for `Impl`. If so, the member `private` should be defined and `Private` should be declared. All fields of `Impl` and `PrivateImpl` will be initialized as 0.)
+We define an `Impl` for our widget. The layout should be `extern`. The first member should be `parent`. (For derivable type, `PrivateImpl` may be used to attain a stable ABI for `Impl`. If so, the member `private` should be defined and `Private` should be declared. All fields of `Impl` and `PrivateImpl` except `parent` will be zero-initialized.)
 
 Now we define `Instance` to wrap `Impl`. `Instance` should have the same memory layout as `*anyopaque`.
 
