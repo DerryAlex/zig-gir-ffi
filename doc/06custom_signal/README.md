@@ -1,12 +1,14 @@
 ### Custom Signal
 
-[custom_button.zig](../../../example/custom_buttoncustom_button.zig)
-
 #### non-GTK Signal
 
-> gtkmm uses libsigc++ to implement its proxy wrappers for the GTK signal system, but for new, non-GTK signals, you can create pure C++ signals, using the sigc::signal<> template.
+[custom_button2.zig](../../../example/custom_button/custom_button2.zig)
+
+Use `core.signalZ(Types...).init` to register signal in `instance_init`. Call `signalZ.overrideDefault` to set default handler. Call `signalZ.connect` to connect slots. Call `signalZ.emit` to emit signal. You need to call `signalZ.deinit` from the dispose function.
 
 #### GTK Signal
+
+[custom_button1.zig](../../../example/custom_button/custom_button1.zig)
 
 Use `core.signalNewv` to register signal in `class_init`. (GObject provides two built-in accumulators `signalAccumulatorFirstWins` and `signalAccumulatorTrueHandled`)
 
@@ -15,4 +17,4 @@ var flags = core.FlagsBuilder(core.SignalFlags){};
 signals[@enumToInt(Signals.ZeroReached)] = core.signalNewv("zero-reached", CustomButton.gType(), flags.set(.RunLast).set(.NoRecurse).set(.NoHooks).build(), core.signalTypeCclosureNew(CustomButton.gType(), @offsetOf(CustomButtonClass, "zeroReached")), null, null, null, .None, null);
 ```
 
-And use `GObject.signalEmitv` to emit signal.
+And call `GObject.signalEmitv` to emit signal.
