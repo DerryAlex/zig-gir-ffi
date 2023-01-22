@@ -1,10 +1,10 @@
 ### Custom Signal
 
-#### non-GTK Signal
+#### Non-GTK Signal
 
 [custom_button2.zig](../../../example/custom_button/custom_button2.zig)
 
-Use `core.signalZ(Types...).init` to register signal in `instance_init`. Call `signalZ.overrideDefault` to set default handler. Call `signalZ.connect` to connect slots. Call `signalZ.emit` to emit signal. You need to call `signalZ.deinit` from the dispose function.
+Use `core.Signal(Types...).init` to register signal in `instance_init`. Call `Signal.overrideDefault` to set default handler. Call `Signal.connect` to connect slots. Call `Signal.emit` to emit signal. You need to call `Signal.deinit` from the dispose function.
 
 #### GTK Signal
 
