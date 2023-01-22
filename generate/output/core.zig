@@ -340,7 +340,8 @@ pub fn SignalZ(comptime signature: []const type) type {
             var closure = createClosure(&handler, args, flags.swapped, signature);
             const ExtraArgs = meta.Child(@TypeOf(closure));
             var connection = allocator.create(Connection) catch @panic("Out Of Memory");
-            connection.* = .{ .swapped = flags.swapped, .slot = closure.invoke_fn(), .extra_args = closure, .extra_args_size = @sizeOf(ExtraArgs) };
+            const slot = if (!flags.swapped) closure.invoke_fn() else @ptrCast(ConnectionSlotZ(signature), closure.invoke_fn());
+            connection.* = .{ .swapped = flags.swapped, .slot = slot, .extra_args = closure, .extra_args_size = @sizeOf(ExtraArgs) };
             return connection;
         }
 
@@ -380,7 +381,7 @@ pub fn SignalZ(comptime signature: []const type) type {
                 const allocator = gpa.allocator();
                 allocator.destroy(some);
             }
-            self.default_handler = connection;
+            self.default_connection = connection;
             return connection;
         }
 
@@ -406,6 +407,7 @@ pub fn SignalZ(comptime signature: []const type) type {
             Ok: ReturnType,
             Err: void,
         } {
+            if (self.disabled) return .{ .Err = {} };
             self.acc_value = null;
             for (self.connections.items) |connection| {
                 if (self.notifySlot(connection, args)) return .{ .Ok = self.acc_value.? };

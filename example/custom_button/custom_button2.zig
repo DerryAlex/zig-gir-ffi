@@ -11,6 +11,11 @@ const Properties = enum(u32) {
 var properties: [@enumToInt(Properties.Number) + 1]core.ParamSpec = undefined;
 
 const SignalZeroReached = core.SignalZ(&[_]type{ void, CustomButton });
+const SignalDebug = core.SignalZ(&[_]type{ void, CustomButton });
+
+fn printStr(str: []const u8) void {
+    std.log.info("{s}", .{str});
+}
 
 pub const CustomButtonClass = extern struct {
     parent: Gtk.ButtonClass,
@@ -72,6 +77,7 @@ pub const CustomButtonImpl = extern struct {
 
 pub const CustomButtonPrivateImpl = struct {
     zeroReached: SignalZeroReached, // custom signal
+    debug: SignalDebug, // test default handler, test connect flags, test disable
     number: i32,
     cleared: bool,
 };
@@ -91,6 +97,9 @@ pub const CustomButton = packed struct {
         self.instance.private.number = 10;
         _ = self.callMethod("bindProperty", .{ "number", self.into(core.Object), "label", .SyncCreate });
         self.instance.private.zeroReached = SignalZeroReached.init();
+        _ = self.instance.private.zeroReached.overrideDefault(emitDebug, .{}, .{});
+        self.instance.private.debug = SignalDebug.init();
+        _ = self.instance.private.debug.connect(printStr, .{"Oops..."}, .{.swapped = true, .after = true});
     }
 
     pub fn disposeOverride(self: CustomButton) void {
@@ -106,6 +115,10 @@ pub const CustomButton = packed struct {
         self.setNumber(decremented_number);
     }
 
+    fn emitDebug(self: CustomButton) void {
+        _ = self.signalDebug().emit(.{self});
+    }
+
     pub fn setNumber(self: CustomButton, number: i32) void {
         if (number < 0 or number > 10) {
             std.log.warn("{} is out of range for property number", .{number});
@@ -119,6 +132,7 @@ pub const CustomButton = packed struct {
                     std.log.warn("No default handler for signal zero-reached", .{});
                 },
             }
+            self.signalDebug().disable();
         }
         self.callMethod("notifyByPspec", .{properties[@enumToInt(Properties.Number)]});
     }
@@ -151,11 +165,16 @@ pub const CustomButton = packed struct {
         return &self.instance.private.zeroReached;
     }
 
+    pub fn signalDebug(self: CustomButton) *SignalDebug {
+        return &self.instance.private.debug;
+    }
+
     pub fn CallMethod(comptime method: []const u8) ?type {
         if (comptime std.mem.eql(u8, method, "setNumber")) return void;
         if (comptime std.mem.eql(u8, method, "getNumber")) return i32;
         if (comptime std.mem.eql(u8, method, "propertyNumber")) return PropertyProxyNumber;
         if (comptime std.mem.eql(u8, method, "signalZeroReached")) return SignalZeroReached;
+        if (comptime std.mem.eql(u8, method, "signalDebug")) return SignalDebug;
         if (Parent.CallMethod(method)) |some| return some;
         return null;
     }
