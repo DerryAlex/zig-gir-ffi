@@ -151,7 +151,7 @@ fn ClosureZ(comptime T: type, comptime U: type, comptime swapped: bool, comptime
 
         const Self = @This();
 
-        pub usingnamespace if (swapped) struct {
+        pub usingnamespace if (swapped or (!swapped and signature.len == 1)) struct {
             pub fn invoke(self: *Self) callconv(.C) signature[0] {
                 return @call(.auto, self.func, self.args);
             }
@@ -247,6 +247,183 @@ pub fn createClosure(comptime func: anytype, args: anytype, comptime swapped: bo
 // closure end
 // -----------
 
+// ------------
+// signal begin
+
+fn ConnectionSlotZ(comptime signature: []const type) type {
+    if (signature.len == 1) return *const fn (?*anyopaque) callconv(.C) signature[0];
+    if (signature.len == 2) return *const fn (signature[1], ?*anyopaque) callconv(.C) signature[0];
+    if (signature.len == 3) return *const fn (signature[1], signature[2], ?*anyopaque) callconv(.C) signature[0];
+    if (signature.len == 4) return *const fn (signature[1], signature[2], signature[3], ?*anyopaque) callconv(.C) signature[0];
+    if (signature.len == 5) return *const fn (signature[1], signature[2], signature[3], signature[4], ?*anyopaque) callconv(.C) signature[0];
+    if (signature.len == 6) return *const fn (signature[1], signature[2], signature[3], signature[4], signature[5], ?*anyopaque) callconv(.C) signature[0];
+    if (signature.len == 7) return *const fn (signature[1], signature[2], signature[3], signature[4], signature[5], signature[6], ?*anyopaque) callconv(.C) signature[0];
+    @compileError("Unsuppoted signature for connection");
+}
+
+fn ConnectionZ(comptime signature: []const type) type {
+    comptime assert(signature.len <= 7);
+    const ReturnType = signature[0];
+    const Slot = ConnectionSlotZ(signature);
+    const ClosureSlot = ConnectionSlotZ(&[_]type{ReturnType});
+
+    return struct {
+        disabled: bool = false,
+        swapped: bool,
+        slot: Slot,
+        extra_args: *anyopaque,
+        extra_args_size: usize,
+
+        const Self = @This();
+
+        pub fn disable(self: *Self) void {
+            self.disabled = true;
+        }
+
+        pub fn enable(self: *Self) void {
+            self.disabled = false;
+        }
+
+        pub fn onEmit(self: *Self, args: anytype) union(enum) {
+            Ok: ReturnType,
+            Err: void,
+        } {
+            if (self.disabled) return .{ .Err = {} };
+            return if (self.swapped) .{ .Ok = @ptrCast(ClosureSlot, self.slot)(self.extra_args) } else .{ .Ok = @call(.auto, self.slot, args ++ .{self.extra_args}) };
+        }
+    };
+}
+
+pub fn SignalZ(comptime signature: []const type) type {
+    const ReturnType = signature[0];
+    const Connection = ConnectionZ(signature);
+    const Accumulator = *const fn (ReturnType, ReturnType) struct {
+        stop: bool,
+        value: ReturnType,
+    };
+
+    return struct {
+        disabled: bool = false,
+        default_connection: ?*ConnectionZ(signature) = null,
+        connections: std.ArrayList(*Connection),
+        connections_after: std.ArrayList(*Connection),
+        accumulator: ?Accumulator = null,
+        acc_value: ?ReturnType = null,
+
+        const Self = @This();
+
+        pub fn init() Self {
+            return Self{ .connections = std.ArrayList(*Connection).init(gpa.allocator()), .connections_after = std.ArrayList(*Connection).init(gpa.allocator()) };
+        }
+
+        pub fn initAccumulator(accumulator: *Accumulator) Self {
+            return Self{ .connections = std.ArrayList(*Connection).init(gpa.allocator()), .connections_after = std.ArrayList(*Connection).init(gpa.allocator()), .accumulator = accumulator };
+        }
+
+        pub fn deinit(self: *Self) void {
+            if (self.default_connection) |connection| {
+                destroyConnection(connection);
+            }
+            for (self.connections.items) |connection| {
+                destroyConnection(connection);
+            }
+            self.connections.deinit();
+            for (self.connections_after.items) |connection| {
+                destroyConnection(connection);
+            }
+            self.connections_after.deinit();
+            self.disabled = true;
+        }
+
+        fn createConnection(comptime handler: anytype, args: anytype, comptime flags: ConnectFlagsZ) *Connection {
+            const allocator = gpa.allocator();
+            var closure = createClosure(&handler, args, flags.swapped, signature);
+            const ExtraArgs = meta.Child(@TypeOf(closure));
+            var connection = allocator.create(Connection) catch @panic("Out Of Memory");
+            connection.* = .{ .swapped = flags.swapped, .slot = closure.invoke_fn(), .extra_args = closure, .extra_args_size = @sizeOf(ExtraArgs) };
+            return connection;
+        }
+
+        fn destroyConnection(conncetion: *Connection) void {
+            const allocator = gpa.allocator();
+            allocator.free(@ptrCast([*]u8, conncetion.extra_args)[0..conncetion.extra_args_size]);
+            allocator.destroy(conncetion);
+        }
+
+        fn notifySlot(self: *Self, connection: *Connection, args: anytype) bool {
+            var ret = connection.onEmit(args);
+            return switch (ret) {
+                .Ok => |return_value| gen_ret: {
+                    if (self.accumulator) |accumulator| {
+                        if (self.acc_value) |_| {
+                            var tmp = accumulator(self.acc_value.?, return_value);
+                            self.acc_value = tmp.value;
+                            break :gen_ret tmp.stop;
+                        } else {
+                            self.acc_value = return_value;
+                            break :gen_ret false;
+                        }
+                    } else {
+                        if (connection == self.default_connection) {
+                            self.acc_value = return_value;
+                        }
+                        break :gen_ret false;
+                    }
+                },
+                .Err => false,
+            };
+        }
+
+        pub fn overrideDefault(self: *Self, comptime handler: anytype, args: anytype, comptime flags: ConnectFlagsZ) *Connection {
+            var connection = createConnection(handler, args, flags);
+            if (self.default_connection) |some| {
+                const allocator = gpa.allocator();
+                allocator.destroy(some);
+            }
+            self.default_handler = connection;
+            return connection;
+        }
+
+        pub fn connect(self: *Self, comptime handler: anytype, args: anytype, comptime flags: ConnectFlagsZ) *Connection {
+            var connection = createConnection(handler, args, flags);
+            if (flags.after) {
+                self.connections_after.append(connection) catch @panic("Out Of Memory");
+            } else {
+                self.connections.append(connection) catch @panic("Out Of Memory");
+            }
+            return connection;
+        }
+
+        pub fn disable(self: *Self) void {
+            self.disabled = true;
+        }
+
+        pub fn enable(self: *Self) void {
+            self.disabled = false;
+        }
+
+        pub fn emit(self: *Self, args: anytype) union(enum) {
+            Ok: ReturnType,
+            Err: void,
+        } {
+            self.acc_value = null;
+            for (self.connections.items) |connection| {
+                if (self.notifySlot(connection, args)) return .{ .Ok = self.acc_value.? };
+            }
+            if (self.default_connection) |connection| {
+                if (self.notifySlot(connection, args)) return .{ .Ok = self.acc_value.? };
+            }
+            for (self.connections_after.items) |connection| {
+                if (self.notifySlot(connection, args)) return .{ .Ok = self.acc_value.? };
+            }
+            return if (self.acc_value) |some| .{ .Ok = some } else .{ .Err = {} };
+        }
+    };
+}
+
+// signal end
+// ----------
+
 // -------------
 // connect begin
 
@@ -255,7 +432,7 @@ pub const ConnectFlagsZ = struct {
     swapped: bool = false,
 };
 
-pub fn connect(object: GObject.Object, comptime signal: [*:0]const u8, comptime handler: anytype, args: anytype, comptime flags: ConnectFlagsZ, comptime signature: []const type) usize {
+pub fn connectZ(object: GObject.Object, comptime signal: [*:0]const u8, comptime handler: anytype, args: anytype, comptime flags: ConnectFlagsZ, comptime signature: []const type) usize {
     const closure = createClosure(&handler, args, flags.swapped, signature);
     const closure_invoke = @ptrCast(GObject.Callback, closure.invoke_fn());
     const closure_deinit = @ptrCast(GObject.ClosureNotify, closure.deinit_fn());

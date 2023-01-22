@@ -31,7 +31,7 @@ const ExampleAppPrefsImpl = extern struct {
     pub const Private = ExampleAppPrefsPrivateImpl;
 };
 
-const ExampleAppPrefsPrivateImpl = extern struct {
+const ExampleAppPrefsPrivateImpl = struct {
     settings: core.Settings,
     TCfont: Gtk.FontButton,
     TCtransition: Gtk.ComboBoxText,
@@ -77,13 +77,7 @@ pub const ExampleAppPrefs = packed struct {
     }
 
     pub fn disposeOverride(self: ExampleAppPrefs) void {
-        const Once = struct {
-            var done: bool = false;
-        };
-        if (!Once.done) {
-            Once.done = true;
-            self.instance.private.settings.callMethod("unref", .{}); // equivalent to g_clear_object
-        }
+        self.instance.private.settings.callMethod("unref", .{}); // TODO: g_clear_object
         self.callMethod("disposeTemplate", .{gType()});
         self.callMethod("disposeV", .{Parent.gType()});
     }

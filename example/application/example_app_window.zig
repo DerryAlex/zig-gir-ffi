@@ -135,13 +135,7 @@ pub const ExampleAppWindow = packed struct {
     }
 
     pub fn disposeOverride(self: ExampleAppWindow) void {
-        const Once = struct {
-            var done: bool = false;
-        };
-        if (!Once.done) {
-            Once.done = true;
-            self.instance.settings.callMethod("unref", .{}); // equivalent to g_clear_object
-        }
+        self.instance.settings.callMethod("unref", .{}); // TODO: g_clear_object
         self.callMethod("disposeTemplate", .{gType()});
         self.callMethod("disposeV", .{Parent.gType()});
     }

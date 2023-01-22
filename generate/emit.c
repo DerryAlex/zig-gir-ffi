@@ -1680,7 +1680,7 @@ void emit_signal(GISignalInfo *info, const char *container_name)
 	emit_type(return_type_info, return_nullable, 0, 0, 1);
 	printf("\n");
 	printf("    pub fn connect(self: SignalProxy%s, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlagsZ) usize {\n", ziggy_signal_name);
-	printf("        return core.connect(self.object.into(core.Object), \"%s\", handler, args, flags, &[_]type{ ", signal_name);
+	printf("        return core.connectZ(self.object.into(core.Object), \"%s\", handler, args, flags, &[_]type{ ", signal_name);
 	emit_type(return_type_info, return_nullable, 0, 0, 1);
 	printf(", %s", container_name);
 	n = g_callable_info_get_n_args(info);
@@ -1721,7 +1721,7 @@ void emit_property(GIPropertyInfo *info, const char *container_name)
 	// printf("    }\n");
 	printf("\n");
 	printf("    pub fn connectNotify(self: PropertyProxy%s, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlagsZ) usize {\n", ziggy_property_name);
-	printf("        return core.connect(self.object.into(core.Object), \"notify::%s\", handler, args, flags, &[_]type{ void, %s, core.ParamSpec });\n", property_name, container_name);
+	printf("        return core.connectZ(self.object.into(core.Object), \"notify::%s\", handler, args, flags, &[_]type{ void, %s, core.ParamSpec });\n", property_name, container_name);
 	printf("    }\n");
 	GIFunctionInfo *getter = g_property_info_get_getter(info);
 	if (getter != NULL)
