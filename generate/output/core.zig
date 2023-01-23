@@ -153,49 +153,49 @@ fn ClosureZ(comptime T: type, comptime U: type, comptime swapped: bool, comptime
 
         pub usingnamespace if (swapped or (!swapped and signature.len == 1)) struct {
             pub fn invoke(data: ?*anyopaque) callconv(.C) signature[0] {
-                var self = alignedPtrCast(*Self, data.?);
+                const self = alignedPtrCast(*Self, data.?);
                 return @call(.auto, self.func, self.args);
             }
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 2) struct {
             pub fn invoke(object: signature[1], data: ?*anyopaque) callconv(.C) signature[0] {
-                var self = alignedPtrCast(*Self, data.?);
+                const self = alignedPtrCast(*Self, data.?);
                 return @call(.auto, self.func, .{object} ++ self.args);
             }
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 3) struct {
             pub fn invoke(object: signature[1], arg2: signature[2], data: ?*anyopaque) callconv(.C) signature[0] {
-                var self = alignedPtrCast(*Self, data.?);
+                const self = alignedPtrCast(*Self, data.?);
                 return @call(.auto, self.func, .{ object, arg2 } ++ self.args);
             }
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 4) struct {
             pub fn invoke(object: signature[1], arg2: signature[2], arg3: signature[3], data: ?*anyopaque) callconv(.C) signature[0] {
-                var self = alignedPtrCast(*Self, data.?);
+                const self = alignedPtrCast(*Self, data.?);
                 return @call(.auto, self.func, .{ object, arg2, arg3 } ++ self.args);
             }
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 5) struct {
             pub fn invoke(object: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], data: ?*anyopaque) callconv(.C) signature[0] {
-                var self = alignedPtrCast(*Self, data.?);
+                const self = alignedPtrCast(*Self, data.?);
                 return @call(.auto, self.func, .{ object, arg2, arg3, arg4 } ++ self.args);
             }
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 6) struct {
             pub fn invoke(object: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], arg5: signature[5], data: ?*anyopaque) callconv(.C) signature[0] {
-                var self = alignedPtrCast(*Self, data.?);
+                const self = alignedPtrCast(*Self, data.?);
                 return @call(.auto, self.func, .{ object, arg2, arg3, arg4, arg5 } ++ self.args);
             }
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 7) struct {
             pub fn invoke(object: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], arg5: signature[5], arg6: signature[6], data: ?*anyopaque) callconv(.C) signature[0] {
-                var self = alignedPtrCast(*Self, data.?);
+                const self = alignedPtrCast(*Self, data.?);
                 return @call(.auto, self.func, .{ object, arg2, arg3, arg4, arg5, arg6 } ++ self.args);
             }
         } else struct {};
@@ -239,7 +239,7 @@ fn ClosureZ(comptime T: type, comptime U: type, comptime swapped: bool, comptime
 /// Call `closure.deinit()` to destroy closure, or pass `closure.deinit_fn()` as destroy function
 pub fn createClosure(comptime func: anytype, args: anytype, comptime swapped: bool, comptime signature: []const type) *ClosureZ(@TypeOf(func), @TypeOf(args), swapped, signature) {
     const allocator = gpa.allocator();
-    const closure = allocator.create(ClosureZ(@TypeOf(func), @TypeOf(args), swapped, signature)) catch @panic("Out Of Memory");
+    var closure = allocator.create(ClosureZ(@TypeOf(func), @TypeOf(args), swapped, signature)) catch @panic("Out Of Memory");
     closure.func = func;
     closure.args = args;
     return closure;
@@ -274,26 +274,26 @@ pub fn Connection(comptime signature: []const type) type {
     };
 
     return struct {
-        disabled: bool = false,
+        block_count: u16 = 0,
         slot: SlotType,
         extra_args: *anyopaque,
         extra_args_size: usize,
 
         const Self = @This();
 
-        pub fn disable(self: *Self) void {
-            self.disabled = true;
+        pub fn block(self: *Self) void {
+            self.block_count += 1;
         }
 
-        pub fn enable(self: *Self) void {
-            self.disabled = false;
+        pub fn unblock(self: *Self) void {
+            self.block_count -= 1;
         }
 
         pub fn onEmit(self: *Self, args: anytype) union(enum) {
             Ok: ReturnType,
             Err: void,
         } {
-            if (self.disabled) return .{ .Err = {} };
+            if (self.block_count > 0) return .{ .Err = {} };
             return .{ .Ok = switch (self.slot) {
                 .Normal => |slot| @call(.auto, slot, args ++ .{self.extra_args}),
                 .Swapped => |slot| @call(.auto, slot, .{self.extra_args}),
@@ -332,7 +332,7 @@ pub fn Signal(comptime signature: []const type) type {
     const AccumulatorType = Accumulator(ReturnType);
 
     return struct {
-        disabled: bool = false,
+        block_count: u16 = 0,
         default_connection: ?*ConnectionType = null,
         connections: std.ArrayList(*ConnectionType),
         connections_after: std.ArrayList(*ConnectionType),
@@ -361,12 +361,12 @@ pub fn Signal(comptime signature: []const type) type {
                 destroyConnection(connection);
             }
             self.connections_after.deinit();
-            self.disabled = true;
+            self.block_count = std.math.maxInt(@TypeOf(self.block_count));
         }
 
         fn createConnection(comptime handler: anytype, args: anytype, comptime flags: ConnectFlagsZ) *ConnectionType {
             const allocator = gpa.allocator();
-            var closure = createClosure(&handler, args, flags.swapped, signature);
+            const closure = createClosure(&handler, args, flags.swapped, signature);
             const ExtraArgs = meta.Child(@TypeOf(closure));
             var connection = allocator.create(ConnectionType) catch @panic("Out Of Memory");
             const slot = closure.invoke_fn();
@@ -381,11 +381,11 @@ pub fn Signal(comptime signature: []const type) type {
         }
 
         fn notifySlot(self: *Self, connection: *ConnectionType, args: anytype) bool {
-            var ret = connection.onEmit(args);
+            const ret = connection.onEmit(args);
             return switch (ret) {
                 .Ok => |return_value| gen_ret: {
                     if (self.accumulator) |accumulator| {
-                        var acc_ret = accumulator(self.acc_value, return_value);
+                        const acc_ret = accumulator(self.acc_value, return_value);
                         self.acc_value = acc_ret.value;
                         break :gen_ret acc_ret.stop;
                     } else {
@@ -419,18 +419,19 @@ pub fn Signal(comptime signature: []const type) type {
             return connection;
         }
 
-        pub fn disable(self: *Self) void {
-            self.disabled = true;
+        pub fn block(self: *Self) void {
+            self.block_count += 1;
         }
 
-        pub fn enable(self: *Self) void {
-            self.disabled = false;
+        pub fn unblock(self: *Self) void {
+            self.block_count -= 1;
         }
 
         pub fn emit(self: *Self, args: anytype) union(enum) {
             Ok: ReturnType,
             Err: void,
         } {
+            comptime assert(args.len == signature.len - 1);
             if (self.disabled) return .{ .Err = {} };
             self.acc_value = null;
             for (self.connections.items) |connection| {
@@ -476,7 +477,7 @@ pub fn connectZ(object: GObject.Object, comptime signal: [*:0]const u8, comptime
 // -----------
 
 // --------------
-// type tag begin
+// subclass begin
 
 const TypeTag = struct {
     type_id: GType = .Invalid,
@@ -491,24 +492,14 @@ pub fn typeTag(comptime Instance: type) *TypeTag {
     return &Static.tag;
 }
 
-// type tag end
-// ------------
-
-// -------------------
-// register type begin
-
 pub const TypeFlagsZ = struct {
     abstract: bool = false,
     value_abstract: bool = false,
     final: bool = false,
-    register_fn: ?*const fn (GType) void = null,
+    extra_register_fn: ?*const fn (GType) void = null,
 };
 
 /// Convenience wrapper for Type implementations
-/// Instance should be a wrapped type
-/// Boilerplates for register_fn:
-/// var interface_info: core.InterfaceInfo = .{ .interface_init = @ptrCast(InstanceInitFunc, &init_fn), .interface_finalize = null, .interface_data = null };
-/// core.typeAddInterfaceStatic(instance_gtype, interface_gtype, &interface_info);
 pub fn registerType(comptime Class: type, comptime Instance: type, name: [*:0]const u8, comptime flags: TypeFlagsZ) GType {
     const class_init = struct {
         pub fn trampoline(self: *Class) callconv(.C) void {
@@ -541,44 +532,60 @@ pub fn registerType(comptime Class: type, comptime Instance: type, name: [*:0]co
         if (flags.final) {
             _ = builder.set(.Final);
         }
-        var type_id = typeRegisterStaticSimple(Instance.Parent.gType(), name, @sizeOf(Class), @ptrCast(GObject.ClassInitFunc, &class_init), @sizeOf(Instance.cType()), @ptrCast(GObject.InstanceInitFunc, &instance_init), builder.build());
+        const type_id = typeRegisterStaticSimple(Instance.Parent.gType(), name, @sizeOf(Class), @ptrCast(GObject.ClassInitFunc, &class_init), @sizeOf(Instance.cType()), @ptrCast(GObject.InstanceInitFunc, &instance_init), builder.build());
         if (@hasDecl(Instance.cType(), "Private")) {
             typeTag(Instance).private_offset = GObject.typeAddInstancePrivate(type_id, @sizeOf(Instance.cType().Private));
         }
-        if (flags.register_fn) |func| {
-            func(type_id);
+        if (flags.extra_register_fn) |register| {
+            register(type_id);
         }
-        defer GLib.onceInitLeave(&typeTag(Instance).type_id, @enumToInt(type_id));
+        GLib.onceInitLeave(&typeTag(Instance).type_id, @enumToInt(type_id));
     }
     return typeTag(Instance).type_id;
 }
 
+/// Convenience wrapper for Interface implementations
+pub fn registerInterfaceImplementation(type_id: GType, comptime Interface: type, init_fn: *const fn(Interface) callconv(.C) void) void {
+    var implement_info: GObject.InterfaceInfo = .{ .interface_init = @ptrCast(GObject.InterfaceInitFunc, init_fn), .interface_finalize = null, .interface_data = null };
+    GObject.typeAddInterfaceStatic(type_id, Interface.gType(), &implement_info);
+}
+
 /// Convenience wrapper for Interface definitions
-/// Boliterplates for register_fn:
-/// core.typeInterfaceAddPrerequisite(interface_gtype, prerequisite_gtype);
-pub fn registerInterface(comptime Interface: type, name: [*:0]const u8, comptime flags: TypeFlagsZ) GType {
-    comptime var class_init: ?GObject.ClassInitFunc = null;
-    comptime {
-        if (@hasDecl(Interface, "init")) {
-            const init_fn: fn (*Interface) callconv(.C) void = Interface.init;
-            class_init = @ptrCast(GObject.ClassInitFunc, &init_fn);
+pub fn registerInterface(comptime Interface: type, comptime Prerequisite: ?type, name: [*:0]const u8, comptime flags: TypeFlagsZ) GType {
+    const class_init = struct {
+        pub fn trampoline(self: Interface) callconv(.C) void {
+            if (@hasDecl(Interface, "init")) {
+                self.init();
+            }
         }
-    }
+    }.trampoline;
     const Static = struct {
-        var type_id: GType = GType.Invalid;
+        var type_id: GType = .Invalid;
     };
     if (GLib.onceInitEnter(&Static.type_id).toBool()) {
-        var type_id = typeRegisterStaticSimple(GType.Interface, name, @sizeOf(Interface), class_init, 0, null, .None);
-        if (flags.register_fn) |func| {
-            func(type_id);
+        const type_id = typeRegisterStaticSimple(.Interface, name, @sizeOf(Interface.cType()), @ptrCast(GObject.ClassInitFunc, &class_init), 0, null, .None);
+        if (Prerequisite) |some| {
+            GObject.typeInterfaceAddPrerequisite(type_id, some.gType());
         }
-        defer GLib.onceInitLeave(&Static.type_id, type_id.value);
+        if (flags.extra_register_fn) |register| {
+            register(type_id);
+        }
+        GLib.onceInitLeave(&Static.type_id, @enumToInt(type_id));
     }
     return Static.type_id;
 }
 
-// register type end
-// -----------------
+pub fn typeInstanceGetClass(instance: *GObject.TypeInstance) *GObject.TypeClass {
+    return instance.g_class.?;
+}
+
+pub fn typeInstanceGetInterface(comptime Interface: type, self: Interface) *Interface.cType() {
+    const class = typeInstanceGetClass(alignedPtrCast(*GObject.TypeInstance, self.instance));
+    return alignedPtrCast(*Interface.cType(), GObject.typeInterfacePeek(class, Interface.gType()));
+}
+
+// subclass end
+// ------------
 
 // ----------
 // misc begin
