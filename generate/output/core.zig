@@ -17,8 +17,8 @@ pub const Boolean = enum(c_int) {
     False = 0,
     True = 1,
 
-    pub fn fromBool(self: bool) Boolean {
-        return @intToEnum(Boolean, @boolToInt(self));
+    pub fn fromBool(value: bool) Boolean {
+        return @intToEnum(Boolean, @boolToInt(value));
     }
 
     pub fn toBool(self: Boolean) bool {
@@ -65,6 +65,14 @@ pub fn FlagsBuilder(comptime T: type) type {
         value: meta.Tag(T) = 0,
 
         const Self = @This();
+
+        pub fn new() Self {
+            return Self{};
+        }
+
+        pub fn newWithValue(value: T) Self {
+            return Self{ .value = @enumToInt(value) };
+        }
 
         pub fn set(self: *Self, bit: T) *Self {
             self.value |= @enumToInt(bit);
@@ -159,49 +167,50 @@ fn ClosureZ(comptime T: type, comptime U: type, comptime swapped: bool, comptime
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 2) struct {
-            pub fn invoke(object: signature[1], data: ?*anyopaque) callconv(.C) signature[0] {
+            pub fn invoke(arg1: signature[1], data: ?*anyopaque) callconv(.C) signature[0] {
                 const self = alignedPtrCast(*Self, data.?);
-                return @call(.auto, self.func, .{object} ++ self.args);
+                return @call(.auto, self.func, .{arg1} ++ self.args);
             }
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 3) struct {
-            pub fn invoke(object: signature[1], arg2: signature[2], data: ?*anyopaque) callconv(.C) signature[0] {
+            pub fn invoke(arg1: signature[1], arg2: signature[2], data: ?*anyopaque) callconv(.C) signature[0] {
                 const self = alignedPtrCast(*Self, data.?);
-                return @call(.auto, self.func, .{ object, arg2 } ++ self.args);
+                return @call(.auto, self.func, .{ arg1, arg2 } ++ self.args);
             }
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 4) struct {
-            pub fn invoke(object: signature[1], arg2: signature[2], arg3: signature[3], data: ?*anyopaque) callconv(.C) signature[0] {
+            pub fn invoke(arg1: signature[1], arg2: signature[2], arg3: signature[3], data: ?*anyopaque) callconv(.C) signature[0] {
                 const self = alignedPtrCast(*Self, data.?);
-                return @call(.auto, self.func, .{ object, arg2, arg3 } ++ self.args);
+                return @call(.auto, self.func, .{ arg1, arg2, arg3 } ++ self.args);
             }
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 5) struct {
-            pub fn invoke(object: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], data: ?*anyopaque) callconv(.C) signature[0] {
+            pub fn invoke(arg1: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], data: ?*anyopaque) callconv(.C) signature[0] {
                 const self = alignedPtrCast(*Self, data.?);
-                return @call(.auto, self.func, .{ object, arg2, arg3, arg4 } ++ self.args);
+                return @call(.auto, self.func, .{ arg1, arg2, arg3, arg4 } ++ self.args);
             }
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 6) struct {
-            pub fn invoke(object: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], arg5: signature[5], data: ?*anyopaque) callconv(.C) signature[0] {
+            pub fn invoke(arg1: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], arg5: signature[5], data: ?*anyopaque) callconv(.C) signature[0] {
                 const self = alignedPtrCast(*Self, data.?);
-                return @call(.auto, self.func, .{ object, arg2, arg3, arg4, arg5 } ++ self.args);
+                return @call(.auto, self.func, .{ arg1, arg2, arg3, arg4, arg5 } ++ self.args);
             }
         } else struct {};
 
         pub usingnamespace if (!swapped and signature.len == 7) struct {
-            pub fn invoke(object: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], arg5: signature[5], arg6: signature[6], data: ?*anyopaque) callconv(.C) signature[0] {
+            pub fn invoke(arg1: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], arg5: signature[5], arg6: signature[6], data: ?*anyopaque) callconv(.C) signature[0] {
                 const self = alignedPtrCast(*Self, data.?);
-                return @call(.auto, self.func, .{ object, arg2, arg3, arg4, arg5, arg6 } ++ self.args);
+                return @call(.auto, self.func, .{ arg1, arg2, arg3, arg4, arg5, arg6 } ++ self.args);
             }
         } else struct {};
 
-        pub fn deinit(self: *Self) callconv(.C) void {
+        pub fn deinit(data: ?*anyopaque) callconv(.C) void {
             const allocator = gpa.allocator();
+            const self = alignedPtrCast(*Self, data.?);
             allocator.destroy(self);
         }
 
@@ -213,18 +222,13 @@ fn ClosureZ(comptime T: type, comptime U: type, comptime swapped: bool, comptime
             return &(@This().deinit);
         }
 
+        /// Create a GClosure which will destroy this Closure if finalized
         pub fn toClosure(self: *Self) *GObject.Closure {
             if (swapped) {
                 return cclosureNewSwap(@ptrCast(GObject.Callback, self.invoke_fn()), self, @ptrCast(GObject.ClosureNotify, self.deinit_fn()));
             } else {
                 return cclosureNew(@ptrCast(GObject.Callback, self.invoke_fn()), self, @ptrCast(GObject.ClosureNotify, self.deinit_fn()));
             }
-        }
-
-        pub fn toWatchedClosure(self: *Self, object: GObject.Object) *GObject.Closure {
-            var closure = self.toClosure();
-            object.watchClosure(closure);
-            return closure;
         }
     };
 }
@@ -302,34 +306,26 @@ pub fn Connection(comptime signature: []const type) type {
     };
 }
 
-pub fn AccumulatorReturnType(comptime T: type) type {
-    return struct {
-        stop: bool,
-        value: T,
-    };
-}
-
-pub fn Accumulator(comptime T: type) type {
-    return *const fn (?T, T) AccumulatorReturnType(T);
-}
-
-pub fn accumulatorFirstWins(comptime T: type) meta.Child(Accumulator(T)) {
+pub fn accumulatorFirstWins(comptime T: type) fn(*T, *const T, Boolean) callconv(.C) Boolean {
     const Closure = struct {
-        pub fn accumulator(_: ?T, return_value: T) AccumulatorReturnType(T) {
-            return .{ .stop = true, .value = return_value };
+        pub fn accumulator(acc_value: *T, return_value: *const T, first: Boolean) callconv(.C) Boolean {
+            assert(first == .True);
+            acc_value.* = return_value.*;
+            return .True;
         }
     };
     return Closure.accumulator;
 }
 
-pub fn accumulatorTrueHandled(_: ?bool, return_value: bool) AccumulatorReturnType(bool) {
-    return .{ .stop = return_value, .value = return_value };
+pub fn accumulatorTrueHandled(acc_value: *bool, return_value: *const bool, _: Boolean) callconv(.C) Boolean {
+    acc_value.* = return_value.*;
+    return Boolean.fromBool(return_value.*);
 }
 
 pub fn Signal(comptime signature: []const type) type {
     const ReturnType = signature[0];
     const ConnectionType = Connection(signature);
-    const AccumulatorType = Accumulator(ReturnType);
+    const AccumulatorType = *const fn(*ReturnType, *const ReturnType, Boolean, ?*anyopaque) callconv(.C) Boolean;
 
     return struct {
         block_count: u16 = 0,
@@ -337,7 +333,8 @@ pub fn Signal(comptime signature: []const type) type {
         connections: std.ArrayList(*ConnectionType),
         connections_after: std.ArrayList(*ConnectionType),
         accumulator: ?AccumulatorType = null,
-        acc_value: ?ReturnType = null,
+        accumulator_extra_args: ?*anyopaque = null,
+        accumulator_extra_args_size: usize = 0,
 
         const Self = @This();
 
@@ -345,11 +342,19 @@ pub fn Signal(comptime signature: []const type) type {
             return Self{ .connections = std.ArrayList(*ConnectionType).init(gpa.allocator()), .connections_after = std.ArrayList(*ConnectionType).init(gpa.allocator()) };
         }
 
-        pub fn initAccumulator(accumulator: AccumulatorType) Self {
-            return Self{ .connections = std.ArrayList(*ConnectionType).init(gpa.allocator()), .connections_after = std.ArrayList(*ConnectionType).init(gpa.allocator()), .accumulator = accumulator };
+        pub fn initAccumulator(comptime accumulator: anytype, args: anytype) Self {
+            var closure = createClosure(&accumulator, args, false, &[_]type{Boolean, *ReturnType, *const ReturnType, Boolean});
+            const ExtraArgs = meta.Child(@TypeOf(closure));
+            return Self{ .connections = std.ArrayList(*ConnectionType).init(gpa.allocator()), .connections_after = std.ArrayList(*ConnectionType).init(gpa.allocator()), .accumulator = closure.invoke_fn(), .accumulator_extra_args = closure, .accumulator_extra_args_size = @sizeOf(ExtraArgs) };
         }
 
         pub fn deinit(self: *Self) void {
+            if (self.accumulator) |_| {
+                const allocator = gpa.allocator();
+                allocator.free(@ptrCast([*]u8, self.accumulator_extra_args.?)[0..self.accumulator_extra_args_size]);
+                self.accumulator = null;
+                self.accumulator_extra_args = null;
+            }
             if (self.default_connection) |connection| {
                 destroyConnection(connection);
             }
@@ -380,19 +385,19 @@ pub fn Signal(comptime signature: []const type) type {
             allocator.destroy(conncetion);
         }
 
-        fn notifySlot(self: *Self, connection: *ConnectionType, args: anytype) bool {
+        fn notifySlot(self: *Self, connection: *ConnectionType, args: anytype, acc_value: *ReturnType, unhandled: *Boolean) bool {
             const ret = connection.onEmit(args);
             return switch (ret) {
-                .Ok => |return_value| gen_ret: {
+                .Ok => |return_value| gen_stop: {
                     if (self.accumulator) |accumulator| {
-                        const acc_ret = accumulator(self.acc_value, return_value);
-                        self.acc_value = acc_ret.value;
-                        break :gen_ret acc_ret.stop;
+                        const stop = accumulator(acc_value, &return_value, unhandled.*, self.accumulator_extra_args);
+                        unhandled.* = .False;
+                        break :gen_stop stop.toBool();
                     } else {
                         if (connection == self.default_connection) {
-                            self.acc_value = return_value;
+                            unhandled.* = .False;
                         }
-                        break :gen_ret false;
+                        break :gen_stop false;
                     }
                 },
                 .Err => false,
@@ -432,18 +437,20 @@ pub fn Signal(comptime signature: []const type) type {
             Err: void,
         } {
             comptime assert(args.len == signature.len - 1);
-            if (self.disabled) return .{ .Err = {} };
-            self.acc_value = null;
+            if (self.block_count > 0) return .{ .Err = {} };
+            var acc_value: ReturnType = undefined;
+            var unhandled: Boolean = .True;
             for (self.connections.items) |connection| {
-                if (self.notifySlot(connection, args)) return .{ .Ok = self.acc_value.? };
+                if (self.notifySlot(connection, args, &acc_value, &unhandled)) return .{ .Ok = acc_value };
             }
             if (self.default_connection) |connection| {
-                if (self.notifySlot(connection, args)) return .{ .Ok = self.acc_value.? };
+                if (self.notifySlot(connection, args, &acc_value, &unhandled)) return .{ .Ok = acc_value };
             }
             for (self.connections_after.items) |connection| {
-                if (self.notifySlot(connection, args)) return .{ .Ok = self.acc_value.? };
+                if (self.notifySlot(connection, args, &acc_value, &unhandled)) return .{ .Ok = acc_value };
             }
-            return if (self.acc_value) |some| .{ .Ok = some } else .{ .Err = {} };
+            if (unhandled.toBool()) return .{ .Err = {} };
+            return .{ .Ok = acc_value };
         }
     };
 }
@@ -463,7 +470,7 @@ pub fn connectZ(object: GObject.Object, comptime signal: [*:0]const u8, comptime
     const closure = createClosure(&handler, args, flags.swapped, signature);
     const closure_invoke = @ptrCast(GObject.Callback, closure.invoke_fn());
     const closure_deinit = @ptrCast(GObject.ClosureNotify, closure.deinit_fn());
-    var flags_builder = FlagsBuilder(GObject.ConnectFlags){};
+    var flags_builder = FlagsBuilder(GObject.ConnectFlags).new();
     if (flags.after) {
         _ = flags_builder.set(.After);
     }
@@ -522,7 +529,7 @@ pub fn registerType(comptime Class: type, comptime Instance: type, name: [*:0]co
         }
     }.trampoline;
     if (GLib.onceInitEnter(&typeTag(Instance).type_id).toBool()) {
-        var builder = FlagsBuilder(GObject.TypeFlags){};
+        var builder = FlagsBuilder(GObject.TypeFlags).new();
         if (flags.abstract) {
             _ = builder.set(.Abstract);
         }

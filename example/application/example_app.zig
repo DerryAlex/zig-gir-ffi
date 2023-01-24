@@ -96,17 +96,18 @@ pub const ExampleApp = packed struct {
 
     pub fn startupOverride(self: ExampleApp) void {
         var action_preference = core.createClosure(&preferenceActivate, .{self}, false, &[_]type{ void, core.SimpleAction, *core.Variant });
-        var watched1 = action_preference.toWatchedClosure(self.into(core.Object));
-        watched1.sink(); // Takes over the initial ownership
         var action_quit = core.createClosure(&quitActivate, .{self}, false, &[_]type{ void, core.SimpleAction, *core.Variant });
-        var watched2 = action_quit.toWatchedClosure(self.into(core.Object));
-        watched2.sink(); // Takes over the initial ownership
-        // zig fmt: off
+        // ask glib to destroy the closure
+        var closure1 = action_preference.toClosure();
+        self.callMethod("watchClosure", .{closure1});
+        closure1.sink(); // Takes over the initial ownership
+        var closure2 = action_quit.toClosure();
+        self.callMethod("watchClosure", .{closure2});
+        closure2.sink();
         var app_entries = [_]core.ActionEntry{
             .{ .name = "preferences", .activate = action_preference.invoke_fn(), .parameter_type = null, .state = null, .change_state = null, .padding = undefined },
             .{ .name = "quit", .activate = action_quit.invoke_fn(), .parameter_type = null, .state = null, .change_state = null, .padding = undefined },
         };
-        // zig fmt: on
         self.callMethod("startupV", .{Parent.gType()});
         self.callMethod("addActionEntries", .{ app_entries[0..1], action_preference });
         self.callMethod("addActionEntries", .{ app_entries[1..2], action_quit });

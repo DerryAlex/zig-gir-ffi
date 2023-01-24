@@ -27,7 +27,7 @@ pub const CustomButtonClass = extern struct {
         properties[@enumToInt(Properties.Number)] = core.paramSpecInt("number", null, null, 0, 10, 10, .Readwrite);
         object_class.installProperties(properties[0..]);
         // custom signals
-        var flags = core.FlagsBuilder(core.SignalFlags){};
+        var flags = core.FlagsBuilder(core.SignalFlags).new();
         signals[@enumToInt(Signals.ZeroReached)] = core.signalNewv("zero-reached", CustomButton.gType(), flags.set(.RunLast).set(.NoRecurse).set(.NoHooks).build(), core.signalTypeCclosureNew(CustomButton.gType(), @offsetOf(CustomButtonClass, "zeroReached")), null, null, null, .None, null);
         // overrides
         object_class.constructed = &constructed;

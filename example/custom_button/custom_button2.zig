@@ -11,7 +11,7 @@ const Properties = enum(u32) {
 var properties: [@enumToInt(Properties.Number) + 1]core.ParamSpec = undefined;
 
 const SignalZeroReached = core.Signal(&[_]type{ void, CustomButton });
-const SignalDebug = core.Signal(&[_]type{ void });
+const SignalDebug = core.Signal(&[_]type{ bool });
 
 pub const CustomButtonClass = extern struct {
     parent: Gtk.ButtonClass,
@@ -94,7 +94,7 @@ pub const CustomButton = packed struct {
         _ = self.callMethod("bindProperty", .{ "number", self.into(core.Object), "label", .SyncCreate });
         self.instance.private.zeroReached = SignalZeroReached.init();
         _ = self.instance.private.zeroReached.overrideDefault(emitDebug, .{}, .{});
-        self.instance.private.debug = SignalDebug.init();
+        self.instance.private.debug = SignalDebug.initAccumulator(core.accumulatorTrueHandled, .{});
     }
 
     pub fn disposeOverride(self: CustomButton) void {
@@ -127,7 +127,6 @@ pub const CustomButton = packed struct {
                     std.log.warn("No default handler for signal zero-reached", .{});
                 },
             }
-            self.signalDebug().disable();
         }
         self.callMethod("notifyByPspec", .{properties[@enumToInt(Properties.Number)]});
     }
