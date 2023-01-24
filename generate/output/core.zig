@@ -222,7 +222,7 @@ fn ClosureZ(comptime T: type, comptime U: type, comptime swapped: bool, comptime
             return &(@This().deinit);
         }
 
-        /// Create a GClosure which will destroy this Closure if finalized
+        /// Create a GClosure which will destroy this Closure on finalize
         pub fn toClosure(self: *Self) *GObject.Closure {
             if (swapped) {
                 return cclosureNewSwap(@ptrCast(GObject.Callback, self.invoke_fn()), self, @ptrCast(GObject.ClosureNotify, self.deinit_fn()));
@@ -306,7 +306,7 @@ pub fn Connection(comptime signature: []const type) type {
     };
 }
 
-pub fn accumulatorFirstWins(comptime T: type) fn(*T, *const T, Boolean) callconv(.C) Boolean {
+pub fn accumulatorFirstWins(comptime T: type) fn (*T, *const T, Boolean) callconv(.C) Boolean {
     const Closure = struct {
         pub fn accumulator(acc_value: *T, return_value: *const T, first: Boolean) callconv(.C) Boolean {
             assert(first == .True);
@@ -325,7 +325,7 @@ pub fn accumulatorTrueHandled(acc_value: *bool, return_value: *const bool, _: Bo
 pub fn Signal(comptime signature: []const type) type {
     const ReturnType = signature[0];
     const ConnectionType = Connection(signature);
-    const AccumulatorType = *const fn(*ReturnType, *const ReturnType, Boolean, ?*anyopaque) callconv(.C) Boolean;
+    const AccumulatorType = *const fn (*ReturnType, *const ReturnType, Boolean, ?*anyopaque) callconv(.C) Boolean;
 
     return struct {
         block_count: u16 = 0,
@@ -343,7 +343,7 @@ pub fn Signal(comptime signature: []const type) type {
         }
 
         pub fn initAccumulator(comptime accumulator: anytype, args: anytype) Self {
-            var closure = createClosure(&accumulator, args, false, &[_]type{Boolean, *ReturnType, *const ReturnType, Boolean});
+            var closure = createClosure(&accumulator, args, false, &[_]type{ Boolean, *ReturnType, *const ReturnType, Boolean });
             const ExtraArgs = meta.Child(@TypeOf(closure));
             return Self{ .connections = std.ArrayList(*ConnectionType).init(gpa.allocator()), .connections_after = std.ArrayList(*ConnectionType).init(gpa.allocator()), .accumulator = closure.invoke_fn(), .accumulator_extra_args = closure, .accumulator_extra_args_size = @sizeOf(ExtraArgs) };
         }
@@ -552,7 +552,7 @@ pub fn registerType(comptime Class: type, comptime Instance: type, name: [*:0]co
 }
 
 /// Convenience wrapper for Interface implementations
-pub fn registerInterfaceImplementation(type_id: GType, comptime Interface: type, init_fn: *const fn(Interface) callconv(.C) void) void {
+pub fn registerInterfaceImplementation(type_id: GType, comptime Interface: type, init_fn: *const fn (Interface) callconv(.C) void) void {
     var implement_info: GObject.InterfaceInfo = .{ .interface_init = @ptrCast(GObject.InterfaceInitFunc, init_fn), .interface_finalize = null, .interface_data = null };
     GObject.typeAddInterfaceStatic(type_id, Interface.gType(), &implement_info);
 }

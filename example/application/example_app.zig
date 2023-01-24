@@ -97,7 +97,7 @@ pub const ExampleApp = packed struct {
     pub fn startupOverride(self: ExampleApp) void {
         var action_preference = core.createClosure(&preferenceActivate, .{self}, false, &[_]type{ void, core.SimpleAction, *core.Variant });
         var action_quit = core.createClosure(&quitActivate, .{self}, false, &[_]type{ void, core.SimpleAction, *core.Variant });
-        // ask glib to destroy the closure
+        // ask glib to destroy the closure automatically
         var closure1 = action_preference.toClosure();
         self.callMethod("watchClosure", .{closure1});
         closure1.sink(); // Takes over the initial ownership

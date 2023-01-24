@@ -109,18 +109,6 @@ static inline int patch_return_nullable(GITypeInfo *type_info)
 	return 0;
 }
 
-static inline int is_cint(GITypeInfo *type_info)
-{
-	GITypeTag type = g_type_info_get_tag(type_info);
-	return (sizeof(int) == 2 && type == GI_TYPE_TAG_INT16) || (sizeof(int) == 4 && type == GI_TYPE_TAG_INT32) || (sizeof(int) == 8 && type == GI_TYPE_TAG_INT64);
-}
-
-static inline int is_cuint(GITypeInfo *type_info)
-{
-	GITypeTag type = g_type_info_get_tag(type_info);
-	return (sizeof(int) == 2 && type == GI_TYPE_TAG_UINT16) || (sizeof(int) == 4 && type == GI_TYPE_TAG_UINT32) || (sizeof(int) == 8 && type == GI_TYPE_TAG_UINT64);
-}
-
 void emit_c_function(GIBaseInfo *info, const char *name, const char *container_name, int is_deprecated, int is_container_struct)
 {
 	printf("extern fn ");
@@ -207,13 +195,11 @@ void emit_struct(GIBaseInfo *info, const char *name, int is_deprecated)
 	else
 	{
 		printf("pub const %s = extern struct {\n", name);
-		emit_field_begin();
 		for (int i = 0; i < n; i++)
 		{
 			GIFieldInfo *field_info = g_struct_info_get_field(info, i);
 			emit_field(field_info, i == 0);
 		}
-		emit_field_end();
 	}
 	n = g_struct_info_get_n_methods(info);
 	for (int i = 0; i < n; i++)
@@ -345,13 +331,11 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 	else
 	{
 		printf("pub const %sImpl = extern struct {\n", name);
-		emit_field_begin();
 		for (int i = 0; i < n; i++)
 		{
 			GIFieldInfo *field_info = g_object_info_get_field(info, i);
 			emit_field(field_info, i == 0);
 		}
-		emit_field_end();
 		printf("};\n");
 	}
 	emit_nullable(name);
@@ -862,13 +846,11 @@ void emit_union(GIBaseInfo *info, const char *name, int is_deprecated)
 	else
 	{
 		printf("pub const %s = extern union {\n", name);
-		emit_field_begin();
 		for (int i = 0; i < n; i++)
 		{
 			GIFieldInfo *field_info = g_union_info_get_field(info, i);
 			emit_field(field_info, 0);
 		}
-		emit_field_end();
 	}
 	n = g_union_info_get_n_methods(info);
 	for (int i = 0; i < n; i++)
@@ -1573,25 +1555,6 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 	free(ziggy_name);
 }
 
-static int bitfield_padding = 0;
-
-void emit_padding(int size)
-{
-	if (size <= 0) return;
-	printf("    padding%c%c%c%c: u%d,\n", rand() % 26 + 'A', rand() % 26 + 'A', rand() % 26 + 'A', rand() % 26 + 'A', size);
-}
-
-void emit_field_begin()
-{
-	bitfield_padding = 0;
-}
-
-void emit_field_end()
-{
-	emit_padding(bitfield_padding);
-	bitfield_padding = 0;
-}
-
 void emit_field(GIFieldInfo *field_info, int first_field)
 {
 	GITypeInfo *field_type_info = g_field_info_get_type(field_info);
@@ -1601,46 +1564,9 @@ void emit_field(GIFieldInfo *field_info, int first_field)
 	// if (field_flags & GI_FIELD_IS_READABLE) printf("read ");
 	// if (field_flags & GI_FIELD_IS_WRITABLE) printf("write ");
 	// printf("\n");
-	if (is_cuint(field_type_info) || is_cint(field_type_info)) {
-		int size = g_field_info_get_size(field_info);
-		if (bitfield_padding < size) {
-			emit_padding(bitfield_padding);
-			bitfield_padding = sizeof(int) * 8;
-		}
-	}
-	else {
-		if (bitfield_padding) {
-			emit_padding(bitfield_padding);
-			bitfield_padding = 0;
-		}
-	}
 	if (strcmp(field_name, "error") == 0 || strcmp(field_name, "var") == 0) printf("    @\"%s\": ", field_name);
 	else printf("    %s: ", field_name);
-	if (is_cuint(field_type_info)) {
-		int size = g_field_info_get_size(field_info);
-		if (size == 0)
-		{
-			// GIBaseInfo *container = g_base_info_get_container(field_info);
-			// fprintf(stderr, "Unsupport(%s): bitfield %s has size 0\n", g_base_info_get_name(container), field_name);
-			size = sizeof(int) * 8;
-		}
-		printf("u%d", size);
-		bitfield_padding -= size;
-	}
-	else if (is_cint(field_type_info)) {
-		int size = g_field_info_get_size(field_info);
-		if (size == 0)
-		{
-			// GIBaseInfo *container = g_base_info_get_container(field_info);
-			// fprintf(stderr, "Unsupport(%s): bitfield %s has size 0\n", g_base_info_get_name(container), field_name);
-			size = sizeof(int) * 8;
-		}
-		printf("i%d", size);
-		bitfield_padding -= size;
-	}
-	else {
-		emit_type(field_type_info, g_type_info_is_pointer(field_type_info) || is_callback(field_type_info), 0, 0, 0);
-	}
+	emit_type(field_type_info, g_type_info_is_pointer(field_type_info) || is_callback(field_type_info), 0, 0, 0);
 	if (first_field && is_instance(field_type_info) && !g_type_info_is_pointer(field_type_info)) printf(".cType()");
 	printf(",\n");
 	g_base_info_unref(field_type_info);
@@ -1866,28 +1792,22 @@ void emit_value_get(const char *value_name, GITypeInfo *type_info)
 			printf("%s.getUchar()", value_name);
 			break;
 		case GI_TYPE_TAG_INT16:
-			// fprintf(stderr, "Warning: i16 value\n");
-			printf("%s.getInt()", value_name);
+			printf("@intCast(i16, %s.getInt())", value_name);
 			break;
 		case GI_TYPE_TAG_UINT16:
-			// fprintf(stderr, "Warning: u16 value\n");
-			printf("%s.getUInt()", value_name);
+			printf("@intCast(u16, %s.getUInt())", value_name);
 			break;
 		case GI_TYPE_TAG_INT32:
-			// fprintf(stderr, "Warning: i32 value\n");
-			printf("if (%s.g_type == core.GType.Int) %s.getInt() else %s.getLong()", value_name, value_name, value_name);
+			printf("if (%s.g_type == .Int) @intCast(i32, %s.getInt()) else @intCast(i32, %s.getLong())", value_name, value_name, value_name);
 			break;
 		case GI_TYPE_TAG_UINT32:
-			// fprintf(stderr, "Warning: u32 value\n");
-			printf("if (%s.g_type == core.GType.Uint) %s.getUint() else %s.getUlong()", value_name, value_name, value_name);
+			printf("if (%s.g_type == .Uint) @intCast(u32, %s.getUint()) else @intCast(u32, %s.getUlong())", value_name, value_name, value_name);
 			break;
 		case GI_TYPE_TAG_INT64:
-			// fprintf(stderr, "Warning: i64 value\n");
-			printf("if (%s.g_type == core.GType.Int64) %s.getInt64() else %s.getLong()", value_name, value_name, value_name);
+			printf("if (%s.g_type == .Int64) %s.getInt64() else @intCast(i64, %s.getLong())", value_name, value_name, value_name);
 			break;
 		case GI_TYPE_TAG_UINT64:
-			// fprintf(stderr, "Warning: u64 value\n");
-			printf("if (%s.g_type == core.GType.UInt64) %s.getInt() else %s.getUlong()", value_name, value_name, value_name);
+			printf("if (%s.g_type == .UInt64) %s.getUint64() else @intCast(u64, %s.getUlong())", value_name, value_name, value_name);
 			break;
 		case GI_TYPE_TAG_FLOAT:
 			printf("%s.getFloat()", value_name);
@@ -1907,17 +1827,17 @@ void emit_value_get(const char *value_name, GITypeInfo *type_info)
 			switch (array_type)
 			{
 				case GI_ARRAY_TYPE_ARRAY:
-					printf("@ptrCast(*core.Array, %s.getBoxed())\n", value_name);
+					printf("core.alignedPtrCast(*core.Array, %s.getBoxed())\n", value_name);
 					break;
 				case GI_ARRAY_TYPE_PTR_ARRAY:
-					printf("@ptrCast(*core.PtrArray, %s.getBoxed())\n", value_name);
+					printf("core.alignedPtrCast(*core.PtrArray, %s.getBoxed())\n", value_name);
 					break;
 				case GI_ARRAY_TYPE_BYTE_ARRAY:
-					printf("@ptrCast(*core.ByteArray, %s.getBoxed())\n", value_name);
+					printf("core.alignedPtrCast(*core.ByteArray, %s.getBoxed())\n", value_name);
 					break;
 				default:
 					/* C array */
-					printf("@ptrCast(");
+					printf("core.alignedPtrCast(");
 					emit_type(type_info, 0, 0, 0, 1);
 					printf(", %s.getPointer())", value_name);
 					break;
@@ -1978,73 +1898,67 @@ void emit_value_set(const char *value_name, GITypeInfo *type_info, const char *v
 	{
 		case GI_TYPE_TAG_VOID:
 			assert(g_type_info_is_pointer(type_info));
-			printf("_ = %s.init(core.GType.Pointer);\n", value_name);
+			printf("_ = %s.init(.Pointer);\n", value_name);
 			if (value != NULL) printf("%s.setPointer(%s);\n", value_name, value);
 			break;
 		case GI_TYPE_TAG_BOOLEAN:
-			printf("_ = %s.init(core.GType.Boolean);\n", value_name);
+			printf("_ = %s.init(.Boolean);\n", value_name);
 			if (value != NULL) printf("%s.setBoolean(%s);\n", value_name, value);
 			break;
 		case GI_TYPE_TAG_INT8:
-			printf("_ = %s.init(core.GType.Char);\n", value_name);
+			printf("_ = %s.init(.Char);\n", value_name);
 			if (value != NULL) printf("%s.setSchar(%s);\n", value_name, value);
 			break;
 		case GI_TYPE_TAG_UINT8:
-			printf("_ = %s.init(core.GType.Uchar);\n", value_name);
+			printf("_ = %s.init(.Uchar);\n", value_name);
 			if (value != NULL) printf("%s.setUchar(%s);\n", value_name, value);
 			break;
 		case GI_TYPE_TAG_INT16:
-			// fprintf(stderr, "Warning: i16 value\n");
-			printf("_ = %s.init(core.GType.Int);\n", value_name);
+			printf("_ = %s.init(.Int);\n", value_name);
 			if (value != NULL) printf("%s.setInt(%s);\n", value_name, value);
 			break;
 		case GI_TYPE_TAG_UINT16:
-			// fprintf(stderr, "Warning: u16 value\n");
-			printf("_ = %s.init(core.GType.Uint);\n", value_name);
+			printf("_ = %s.init(.Uint);\n", value_name);
 			if (value != NULL) printf("%s.setUInt(%s);\n", value_name, value);
 			break;
 		case GI_TYPE_TAG_INT32:
-			// fprintf(stderr, "Warning: i32 value\n");
 			if (sizeof(int) == 4)
 			{
-				printf("_ = %s.init(core.GType.Int);\n", value_name);
+				printf("_ = %s.init(.Int);\n", value_name);
 				if (value != NULL) printf("%s.setInt(%s);\n", value_name, value);
 			}
 			else
 			{
-				printf("_ = %s.init(core.GType.Long);\n", value_name);
+				printf("_ = %s.init(.Long);\n", value_name);
 				if (value != NULL) printf("%s.setLong(%s);\n", value_name, value);
 			}
 			break;
 		case GI_TYPE_TAG_UINT32:
-			// fprintf(stderr, "Warning: u32 value\n");
 			if (sizeof(int) == 4)
 			{
-				printf("_ = %s.init(core.GType.Uint);\n", value_name);
+				printf("_ = %s.init(.Uint);\n", value_name);
 				if (value != NULL) printf("%s.setUint(%s);\n", value_name, value);
 			}
 			else
 			{
-				printf("_ = %s.init(core.GType.Ulong);\n", value_name);
+				printf("_ = %s.init(.Ulong);\n", value_name);
 				if (value != NULL) printf("%s.setUlong(%s);\n", value_name, value);
 			}
 			break;
 		case GI_TYPE_TAG_INT64:
-			// fprintf(stderr, "Warning: i64 value\n");
-			printf("_ = %s.init(core.GType.Int64);\n", value_name);
+			printf("_ = %s.init(.Int64);\n", value_name);
 			if (value != NULL) printf("%s.setInt64(%s);\n", value_name, value);
 			break;
 		case GI_TYPE_TAG_UINT64:
-			// fprintf(stderr, "Warning: u64 value\n");
-			printf("_ = %s.init(core.GType.Uint64);\n", value_name);
+			printf("_ = %s.init(.Uint64);\n", value_name);
 			if (value != NULL) printf("%s.setUint64(%s);\n", value_name, value);
 			break;
 		case GI_TYPE_TAG_FLOAT:
-			printf("_ = %s.init(core.GType.Float);\n", value_name);
+			printf("_ = %s.init(.Float);\n", value_name);
 			if (value != NULL) printf("%s.setFloat(%s);\n", value_name, value);
 			break;
 		case GI_TYPE_TAG_DOUBLE:
-			printf("_ = %s.init(core.GType.Double);\n", value_name);
+			printf("_ = %s.init(.Double);\n", value_name);
 			if (value != NULL) printf("%s.setDouble(%s);\n", value_name, value);
 			break;
 		case GI_TYPE_TAG_GTYPE:
@@ -2053,7 +1967,7 @@ void emit_value_set(const char *value_name, GITypeInfo *type_info, const char *v
 			break;
 		case GI_TYPE_TAG_UTF8:
 		case GI_TYPE_TAG_FILENAME:
-			printf("_ = %s.init(core.GType.String);\n", value_name);
+			printf("_ = %s.init(.String);\n", value_name);
 			if (value != NULL) printf("%s.setString(%s);\n", value_name, value);
 			break;
 		case GI_TYPE_TAG_ARRAY:
@@ -2063,12 +1977,12 @@ void emit_value_set(const char *value_name, GITypeInfo *type_info, const char *v
 				case GI_ARRAY_TYPE_ARRAY:
 				case GI_ARRAY_TYPE_PTR_ARRAY:
 				case GI_ARRAY_TYPE_BYTE_ARRAY:
-					printf("_ = %s.init(core.GType.Boxed);\n", value_name);
+					printf("_ = %s.init(.Boxed);\n", value_name);
 					if (value != NULL) printf("%s.setBoxed(%s);\n\n", value_name, value);
 					break;
 				default:
 					/* C array */
-					printf("_ = %s.init(core.GType.Pointer);\n", value_name);
+					printf("_ = %s.init(.Pointer);\n", value_name);
 					if (value != NULL) printf("%s.setObject(%s);\n", value_name, value);
 					break;
 			}
@@ -2080,21 +1994,21 @@ void emit_value_set(const char *value_name, GITypeInfo *type_info, const char *v
 			{
 				case GI_INFO_TYPE_OBJECT:
 				case GI_INFO_TYPE_INTERFACE:
-					printf("_ = %s.init(core.GType.Object);", value_name);
+					printf("_ = %s.init(.Object);", value_name);
 					if (value != NULL) printf("%s.setObject(%s.into(core.Object));\n", value_name, value);
 					break;
 				case GI_INFO_TYPE_STRUCT:
 				case GI_INFO_TYPE_UNION:
 				case GI_INFO_TYPE_BOXED:
-					printf("_ = %s.init(core.GType.Boxed);\n", value_name);
+					printf("_ = %s.init(.Boxed);\n", value_name);
 					if (value != NULL) printf("%s.setBoxed(%s);\n", value_name, value);
 					break;
 				case GI_INFO_TYPE_ENUM:
-					printf("_ = %s.init(core.GType.Enum);\n", value_name);
+					printf("_ = %s.init(.Enum);\n", value_name);
 					if (value != NULL) printf("%s.setEnum(@enumToInt(%s));\n", value_name, value);
 					break;
 				case GI_INFO_TYPE_FLAGS:
-					printf("_ = %s.init(core.GType.Flags);\n", value_name);
+					printf("_ = %s.init(.Flags);\n", value_name);
 					if (value != NULL) printf("%s.setFlags(@enumToInt(%s));\n", value_name, value);
 					break;
 				case GI_INFO_TYPE_CALLBACK:
