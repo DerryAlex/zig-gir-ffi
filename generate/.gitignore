@@ -1,4 +1,4 @@
 gir-zig
-output/*
-!output/core.zig
-!output/template.zig
+publish/*
+!publish/core.zig
+!publish/template.zig

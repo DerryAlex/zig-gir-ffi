@@ -575,7 +575,14 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 {
 	if (is_deprecated && !config_enable_deprecated) return;
-	printf("pub const %sImpl = opaque {};\n", name);
+	GIStructInfo *iface_struct_info = g_interface_info_get_iface_struct(info);
+	if (iface_struct_info) {
+		printf("pub const %sImpl = %s;\n", name, g_base_info_get_name(iface_struct_info));
+		g_base_info_unref(iface_struct_info);
+	}
+	else {
+		printf("pub const %sImpl = opaque {};\n", name);
+	}
 	emit_nullable(name);
 	if (is_deprecated) printf("/// (deprecated)\n");
 	printf("pub const %s = packed struct{\n", name);
@@ -838,8 +845,6 @@ void emit_constant(GIBaseInfo *info, const char *name, int is_deprecated)
 void emit_union(GIBaseInfo *info, const char *name, int is_deprecated)
 {
 	if (is_deprecated && !config_enable_deprecated) return;
-	// unsigned long size = g_union_info_get_size(info);
-	// unsigned long align = g_union_info_get_alignment(info);
 	if (is_deprecated) printf("/// (deprecated)\n");
 	int n = g_union_info_get_n_fields(info);
 	if (n == 0) printf("pub const %s = opaque {\n", name);
@@ -1558,11 +1563,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 void emit_field(GIFieldInfo *field_info, int first_field)
 {
 	GITypeInfo *field_type_info = g_field_info_get_type(field_info);
-	// GIFieldInfoFlags field_flags = g_field_info_get_flags(field_info);
 	const char *field_name = g_base_info_get_name(field_info);
-	// printf("    /// ");
-	// if (field_flags & GI_FIELD_IS_READABLE) printf("read ");
-	// if (field_flags & GI_FIELD_IS_WRITABLE) printf("write ");
 	// printf("\n");
 	if (strcmp(field_name, "error") == 0 || strcmp(field_name, "var") == 0) printf("    @\"%s\": ", field_name);
 	else printf("    %s: ", field_name);
@@ -1581,11 +1582,6 @@ void emit_signal(GISignalInfo *info, const char *container_name)
 	char *ziggy_signal_name = snake_to_title(signal_name); /* '-' is handled correctly */
 	printf("const SignalProxy%s = struct {\n", ziggy_signal_name);
 	printf("    object: %s,\n", container_name);
-	// printf("\n");
-	// printf("    pub fn name(self: SignalProxy%s) [*:0]const u8 {\n", ziggy_signal_name);
-	// printf("        _ = self;\n");
-	// printf("        return \"%s\";\n", signal_name);
-	// printf("    }\n");
 	printf("\n");
 	printf("    /// @handler: fn(%s", container_name);
 	int n = g_callable_info_get_n_args(info);
@@ -1640,11 +1636,6 @@ void emit_property(GIPropertyInfo *info, const char *container_name)
 	GITypeInfo *type_info = g_property_info_get_type(info);
 	printf("const PropertyProxy%s = struct {\n", ziggy_property_name);
 	printf("    object: %s,\n", container_name);
-	// printf("\n");
-	// printf("    pub fn name(self: PropertyProxy%s) [*:0]const u8 {\n", ziggy_property_name);
-	// printf("        _ = self;\n");
-	// printf("        return \"%s\";\n", property_name);
-	// printf("    }\n");
 	printf("\n");
 	printf("    pub fn connectNotify(self: PropertyProxy%s, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlagsZ) usize {\n", ziggy_property_name);
 	printf("        return core.connectZ(self.object.into(core.Object), \"notify::%s\", handler, args, flags, &[_]type{ void, %s, core.ParamSpec });\n", property_name, container_name);

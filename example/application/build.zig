@@ -25,7 +25,7 @@ pub fn build(b: *Builder) !void {
         std.debug.assert(std.os.waitpid(pid, 0).status == 0);
     }
     exe.addCSourceFile("resources.c", &[_][]const u8{""});
-    exe.addPackagePath("Gtk", "../../generate/output/Gtk.zig");
+    exe.addPackagePath("Gtk", "../../generate/publish/Gtk.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.linkLibC();
