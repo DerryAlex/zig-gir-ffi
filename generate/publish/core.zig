@@ -7,6 +7,7 @@ pub usingnamespace Gio;
 const std = @import("std");
 const meta = std.meta;
 const assert = std.debug.assert;
+const Atomic = std.atomic.Atomic;
 
 // ----------
 // type begin
@@ -278,7 +279,7 @@ pub fn Connection(comptime signature: []const type) type {
     };
 
     return struct {
-        block_count: u16 = 0,
+        block_count: Atomic(u16) = Atomic(u16).init(0),
         slot: SlotType,
         extra_args: *anyopaque,
         extra_args_size: usize,
@@ -286,18 +287,20 @@ pub fn Connection(comptime signature: []const type) type {
         const Self = @This();
 
         pub fn block(self: *Self) void {
-            self.block_count += 1;
+            _ = self.block_count.fetchAdd(1, .Monotonic);
         }
 
         pub fn unblock(self: *Self) void {
-            self.block_count -= 1;
+            if (self.block_count.fetchSub(1, .Release) == 0) {
+                self.block_count.fence(.Acquire);
+            }
         }
 
         pub fn onEmit(self: *Self, args: anytype) union(enum) {
             Ok: ReturnType,
             Err: void,
         } {
-            if (self.block_count > 0) return .{ .Err = {} };
+            if (self.block_count.load(.Acquire) > 0) return .{ .Err = {} };
             return .{ .Ok = switch (self.slot) {
                 .Normal => |slot| @call(.auto, slot, args ++ .{self.extra_args}),
                 .Swapped => |slot| @call(.auto, slot, .{self.extra_args}),
@@ -328,7 +331,7 @@ pub fn Signal(comptime signature: []const type) type {
     const AccumulatorType = *const fn (*ReturnType, *const ReturnType, Boolean, ?*anyopaque) callconv(.C) Boolean;
 
     return struct {
-        block_count: u16 = 0,
+        block_count: Atomic(u16) = Atomic(u16).init(0),
         default_connection: ?*ConnectionType = null,
         connections: std.ArrayList(*ConnectionType),
         connections_after: std.ArrayList(*ConnectionType),
@@ -366,7 +369,7 @@ pub fn Signal(comptime signature: []const type) type {
                 destroyConnection(connection);
             }
             self.connections_after.deinit();
-            self.block_count = std.math.maxInt(@TypeOf(self.block_count));
+            self.block_count.store(std.math.maxInt(u16), .Release);
         }
 
         fn createConnection(comptime handler: anytype, args: anytype, comptime flags: ConnectFlagsZ) *ConnectionType {
@@ -425,11 +428,13 @@ pub fn Signal(comptime signature: []const type) type {
         }
 
         pub fn block(self: *Self) void {
-            self.block_count += 1;
+            self.block_count.fetchAdd(1, .Monotonic);
         }
 
         pub fn unblock(self: *Self) void {
-            self.block_count -= 1;
+            if (self.block_count.fetchSub(1, .Release) == 0) {
+                self.block_count.fence(.Acquire);
+            }
         }
 
         pub fn emit(self: *Self, args: anytype) union(enum) {
@@ -437,7 +442,7 @@ pub fn Signal(comptime signature: []const type) type {
             Err: void,
         } {
             comptime assert(args.len == signature.len - 1);
-            if (self.block_count > 0) return .{ .Err = {} };
+            if (self.block_count.load(.Acquire) > 0) return .{ .Err = {} };
             var acc_value: ReturnType = undefined;
             var unhandled: Boolean = .True;
             for (self.connections.items) |connection| {
