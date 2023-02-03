@@ -249,11 +249,12 @@ fn ClosureZ(comptime T: type, comptime U: type, comptime swapped: bool, comptime
 }
 
 /// Create a closure
-/// @func:      Function to be called
-/// @args:      Extra custom arguments(by value)
+/// @func:      Function pointer of callback
+/// @args:      Custom arguments (by value)
 /// @swapped:   Whether to only take custom arguments
 /// @signature: A tuple describing callback, `signature[0]` for return type, `signature[1..]` for argument types
-///             e.g. `.{void, Object}` for `*const fn(Object, ?*anyopaque) callconv(.C) void`
+///             e.g. `.{void, Object}` for `fn(Object, ?*anyopaque) void`
+/// @call_abi:  Calling convention
 /// Use `closure.invoke_fn()` to get C callback
 /// Call `closure.deinit()` to destroy closure, or pass `closure.deinit_fn()` as destroy function
 pub fn createClosure(comptime func: anytype, args: anytype, comptime swapped: bool, comptime signature: []const type, comptime call_abi: CallingConvention) *ClosureZ(@TypeOf(func), @TypeOf(args), swapped, signature, call_abi) {
@@ -308,7 +309,7 @@ fn Connection(comptime signature: []const type) type {
         const Self = @This();
 
         pub fn block(self: *Self) void {
-            _ = self.block_count.fetchAdd(1, .Release);
+            _ = self.block_count.fetchAdd(1, .Monotonic);
         }
 
         pub fn unblock(self: *Self) void {
