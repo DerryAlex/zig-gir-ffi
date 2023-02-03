@@ -7,7 +7,6 @@ pub usingnamespace Gio;
 const std = @import("std");
 const meta = std.meta;
 const assert = std.debug.assert;
-const Atomic = std.atomic.Atomic;
 const CallingConvention = std.builtin.CallingConvention;
 
 // ----------
@@ -94,10 +93,44 @@ pub fn Flags(comptime T: type) type {
     };
 }
 
-pub fn Result(comptime Ok: type, comptime Err: type) type {
+pub fn Nullable(comptime T: type) type {
+    return packed struct {
+        ptr: ?*T.cType(),
+
+        const Self = @This();
+
+        pub fn expect(self: Self, message: []const u8) T {
+            if (self.ptr) |some| {
+                return T{ .instance = some };
+            } else @panic(message);
+        }
+
+        pub fn wrap(self: Self) ?T {
+            return if (self.ptr) |some| T{ .instance = some } else null;
+        }
+    };
+}
+
+pub fn Expected(comptime T: type, comptime E: type) type {
     return union(enum) {
-        Ok: Ok,
-        Err: Err,
+        Ok: T,
+        Err: E,
+
+        const Self = @This();
+
+        pub fn expect(self: Self, message: []const u8) T {
+            switch (self) {
+                .Ok => |ok| return ok,
+                .Err => |_| @panic(message),
+            }
+        }
+
+        pub fn expectErr(self: Self, message: []const u8) E {
+            switch (self) {
+                .Ok => |_| @panic(message),
+                .Err => |err| return err,
+            }
+        }
     };
 }
 
@@ -301,7 +334,7 @@ fn Connection(comptime signature: []const type) type {
     };
 
     return struct {
-        block_count: Atomic(u16) = Atomic(u16).init(0),
+        block_count: u16 = 0,
         slot: SlotType,
         extra_args: *anyopaque,
         extra_args_size: usize,
@@ -309,17 +342,15 @@ fn Connection(comptime signature: []const type) type {
         const Self = @This();
 
         pub fn block(self: *Self) void {
-            _ = self.block_count.fetchAdd(1, .Monotonic);
+            self.block_count += 1;
         }
 
         pub fn unblock(self: *Self) void {
-            if (self.block_count.fetchSub(1, .Release) == 0) {
-                self.block_count.fence(.Acquire);
-            }
+            self.block_count -= 1;
         }
 
-        pub fn onEmit(self: *Self, args: anytype) Result(ReturnType, void) {
-            if (self.block_count.load(.Acquire) > 0) return .{ .Err = {} };
+        pub fn onEmit(self: *Self, args: anytype) Expected(ReturnType, void) {
+            if (self.block_count > 0) return .{ .Err = {} };
             return .{ .Ok = switch (self.slot) {
                 .Normal => |slot| @call(.auto, slot, args ++ .{self.extra_args}),
                 .Swapped => |slot| @call(.auto, slot, .{self.extra_args}),
@@ -350,7 +381,7 @@ pub fn Signal(comptime signature: []const type) type {
     const AccumulatorType = *const fn (*ReturnType, *const ReturnType, bool, ?*anyopaque) bool;
 
     return struct {
-        block_count: Atomic(u16) = Atomic(u16).init(0),
+        block_count: u16 = 0,
         default_connection: ?*ConnectionType = null,
         connections: std.ArrayList(*ConnectionType),
         connections_after: std.ArrayList(*ConnectionType),
@@ -388,7 +419,6 @@ pub fn Signal(comptime signature: []const type) type {
                 destroyConnection(connection);
             }
             self.connections_after.deinit();
-            self.block_count.store(std.math.maxInt(u16), .Release);
         }
 
         const _ConnectFlags = struct {
@@ -453,18 +483,16 @@ pub fn Signal(comptime signature: []const type) type {
         }
 
         pub fn block(self: *Self) void {
-            self.block_count.fetchAdd(1, .Monotonic);
+            self.block_count += 1;
         }
 
         pub fn unblock(self: *Self) void {
-            if (self.block_count.fetchSub(1, .Release) == 0) {
-                self.block_count.fence(.Acquire);
-            }
+            self.block_count -= 1;
         }
 
-        pub fn emit(self: *Self, args: anytype) Result(ReturnType, void) {
+        pub fn emit(self: *Self, args: anytype) Expected(ReturnType, void) {
             comptime assert(args.len == signature.len - 1);
-            if (self.block_count.load(.Acquire) > 0) return .{ .Err = {} };
+            if (self.block_count > 0) return .{ .Err = {} };
             var acc_value: ReturnType = undefined;
             var unhandled: bool = true;
             for (self.connections.items) |connection| {

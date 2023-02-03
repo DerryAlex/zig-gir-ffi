@@ -37,19 +37,7 @@ const ExampleAppPrefsPrivateImpl = struct {
     TCtransition: Gtk.ComboBoxText,
 };
 
-pub const ExampleAppPrefsNullable = packed struct {
-    ptr: ?*ExampleAppPrefsImpl,
-
-    pub fn expect(self: ExampleAppPrefsNullable, message: []const u8) ExampleAppPrefs {
-        if (self.ptr) |some| {
-            return ExampleAppPrefs{ .instance = some };
-        } else @panic(message);
-    }
-
-    pub fn wrap(self: ExampleAppPrefsNullable) ?ExampleAppPrefs {
-        return if (self.ptr) |some| ExampleAppPrefs{ .instance = some } else null;
-    }
-};
+pub const ExampleAppPrefsNullable = core.Nullable(ExampleAppPrefs);
 
 pub const ExampleAppPrefs = packed struct {
     instance: *ExampleAppPrefsImpl,

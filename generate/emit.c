@@ -1309,7 +1309,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 	int return_nullable = g_callable_info_may_return_null(info);
 	if (throw || boolean_error)
 	{
-		printf("core.Result(");
+		printf("core.Expected(");
 	}
 	if (multiple_return == 0) printf("void");
 	else
@@ -1729,17 +1729,7 @@ void emit_registered_type(GIRegisteredTypeInfo *info, int is_instance)
 
 void emit_nullable(const char *name)
 {
-	printf("pub const %sNullable = packed struct {\n", name);
-	printf("    ptr: ?*%sImpl,\n", name);
-	printf("\n");
-	printf("    pub fn expect(self: %sNullable, message: []const u8) %s {\n", name, name);
-	printf("        if (self.ptr) |some| { return %s{ .instance = some }; } else @panic(message);\n", name);
-	printf("    }\n");
-	printf("\n");
-	printf("    pub fn wrap(self: %sNullable) ?%s {\n", name, name);
-	printf("        return if (self.ptr) |some| %s{ .instance = some } else null;\n", name);
-	printf("    }\n");
-	printf("};\n");
+	printf("pub const %sNullable = core.Nullable(%s);\n", name, name);
 }
 
 void emit_into(const char *name)

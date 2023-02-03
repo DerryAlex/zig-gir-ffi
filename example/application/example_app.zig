@@ -37,19 +37,7 @@ const ExampleAppImpl = extern struct {
     parent: Gtk.Application.cType(),
 };
 
-pub const ExampleAppNullable = packed struct {
-    ptr: ?*ExampleAppImpl,
-
-    pub fn expect(self: ExampleAppNullable, message: []const u8) ExampleApp {
-        if (self.ptr) |some| {
-            return ExampleApp{ .instance = some };
-        } else @panic(message);
-    }
-
-    pub fn wrap(self: ExampleAppNullable) ?ExampleApp {
-        return if (self.ptr) |some| ExampleApp{ .instance = some } else null;
-    }
-};
+pub const ExampleAppNullable = core.Nullable(ExampleApp);
 
 pub const ExampleApp = packed struct {
     instance: *ExampleAppImpl,

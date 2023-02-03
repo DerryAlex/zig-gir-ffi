@@ -77,19 +77,7 @@ const ExampleAppWindowImpl = extern struct {
     TClines_label: Gtk.Label,
 };
 
-pub const ExampleAppWindowNullable = packed struct {
-    ptr: ?*ExampleAppWindowImpl,
-
-    pub fn expect(self: ExampleAppWindowNullable, message: []const u8) ExampleAppWindow {
-        if (self.ptr) |some| {
-            return ExampleAppWindow{ .instance = some };
-        } else @panic(message);
-    }
-
-    pub fn wrap(self: ExampleAppWindowNullable) ?ExampleAppWindow {
-        return if (self.ptr) |some| ExampleAppWindow{ .instance = some } else null;
-    }
-};
+pub const ExampleAppWindowNullable = core.Nullable(ExampleAppWindow);
 
 pub const ExampleAppWindow = packed struct {
     instance: *ExampleAppWindowImpl,
