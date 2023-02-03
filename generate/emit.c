@@ -1309,11 +1309,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 	int return_nullable = g_callable_info_may_return_null(info);
 	if (throw || boolean_error)
 	{
-		printf("union(enum) {\n");
-		printf("    Ok: Ok,\n");
-		printf("    Err: Err,\n");
-		printf("\n");
-		printf("    const Ok = ");
+		printf("core.Result(");
 	}
 	if (multiple_return == 0) printf("void");
 	else
@@ -1343,9 +1339,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 	}
 	if (throw || boolean_error)
 	{
-		printf(";\n");
-		printf("    const Err = %s;\n", boolean_error ? "void" : "*core.Error");
-		printf("}");
+		printf(", %s)", boolean_error ? "void" : "*core.Error");
 	}
 	printf(" {\n");
 	/* prepare output parameter */

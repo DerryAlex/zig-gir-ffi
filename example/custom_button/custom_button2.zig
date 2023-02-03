@@ -11,7 +11,12 @@ const Properties = enum(u32) {
 var properties: [@enumToInt(Properties.Number) + 1]core.ParamSpec = undefined;
 
 const SignalZeroReached = core.Signal(&[_]type{ void, CustomButton });
-const SignalDebug = core.Signal(&[_]type{ bool });
+const SignalDebug = core.Signal(&[_]type{bool});
+
+pub fn print(str: []const u8) bool {
+    std.log.debug("{s}", .{str});
+    return false;
+}
 
 pub const CustomButtonClass = extern struct {
     parent: Gtk.ButtonClass,
@@ -73,7 +78,7 @@ pub const CustomButtonImpl = extern struct {
 
 pub const CustomButtonPrivateImpl = struct {
     zeroReached: SignalZeroReached, // custom signal
-    debug: SignalDebug, // test default handler, test connect flags, test disable
+    debug: SignalDebug,
     number: i32,
     cleared: bool,
 };
@@ -95,6 +100,7 @@ pub const CustomButton = packed struct {
         self.instance.private.zeroReached = SignalZeroReached.init();
         _ = self.instance.private.zeroReached.overrideDefault(emitDebug, .{}, .{});
         self.instance.private.debug = SignalDebug.initAccumulator(core.accumulatorTrueHandled, .{});
+        _ = self.instance.private.debug.connect(print, .{"signal debug triggered"}, .{ .after = true });
     }
 
     pub fn disposeOverride(self: CustomButton) void {
