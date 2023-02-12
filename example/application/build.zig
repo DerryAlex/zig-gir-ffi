@@ -3,31 +3,30 @@ const Builder = std.build.Builder;
 
 pub fn build(b: *Builder) !void {
     const target = b.standardTargetOptions(.{});
-    const mode = b.standardReleaseOptions();
+    const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable("application", "application.zig");
+    const exe = b.addExecutable(.{ .name = "application", .root_source_file = .{ .path = "application.zig" }, .optimize = optimize, .target = target });
     var pid = try std.os.fork();
     if (pid == 0) {
-        const argv = [_:null]?[*:0]const u8{ "glib-compile-resources", "exampleapp.gresource.xml", "--target=resources.c", "--generate-source", null };
-        const envp = [_]?[*:0]const u8{null};
-        var err = std.os.execvpeZ("glib-compile-resources", @ptrCast([*:null]const ?[*:0]u8, &argv), @ptrCast([*:null]const ?[*:0]u8, &envp));
+        const argv = [_:null]?[*:0]const u8{ "glib-compile-resources", "exampleapp.gresource.xml", "--target=resources.c", "--generate-source" };
+        const envp = [_:null]?[*:0]const u8{};
+        const err = std.os.execvpeZ("glib-compile-resources", &argv, &envp);
         return err;
     } else {
         std.debug.assert(std.os.waitpid(pid, 0).status == 0);
     }
     pid = try std.os.fork();
     if (pid == 0) {
-        const argv = [_]?[*:0]const u8{ "glib-compile-schemas", ".", null };
-        const envp = [_]?[*:0]const u8{null};
-        var err = std.os.execvpeZ("glib-compile-schemas", @ptrCast([*:null]const ?[*:0]u8, &argv), @ptrCast([*:null]const ?[*:0]u8, &envp));
+        const argv = [_:null]?[*:0]const u8{ "glib-compile-schemas", "." };
+        const envp = [_:null]?[*:0]const u8{};
+        const err = std.os.execvpeZ("glib-compile-schemas", &argv, &envp);
         return err;
     } else {
         std.debug.assert(std.os.waitpid(pid, 0).status == 0);
     }
     exe.addCSourceFile("resources.c", &[_][]const u8{""});
-    exe.addPackagePath("Gtk", "../../generate/publish/Gtk.zig");
-    exe.setTarget(target);
-    exe.setBuildMode(mode);
+    const gtk_mod = b.createModule(.{ .source_file = .{ .path = "../../generate/publish/Gtk.zig" } });
+    exe.addModule("Gtk", gtk_mod);
     exe.linkLibC();
     exe.linkSystemLibrary("gtk4");
     exe.install();

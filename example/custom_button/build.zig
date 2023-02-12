@@ -3,12 +3,11 @@ const Builder = std.build.Builder;
 
 pub fn build(b: *Builder) !void {
     const target = b.standardTargetOptions(.{});
-    const mode = b.standardReleaseOptions();
+    const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable("main", "main.zig");
-    exe.addPackagePath("Gtk", "../../generate/publish/Gtk.zig");
-    exe.setTarget(target);
-    exe.setBuildMode(mode);
+    const exe = b.addExecutable(.{ .name = "main", .root_source_file = .{ .path = "main.zig" }, .optimize = optimize, .target = target });
+    const gtk_mod = b.createModule(.{ .source_file = .{ .path = "../../generate/publish/Gtk.zig" } });
+    exe.addModule("Gtk", gtk_mod);
     exe.linkLibC();
     exe.linkSystemLibrary("gtk4");
     exe.install();
