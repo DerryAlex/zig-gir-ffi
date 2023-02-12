@@ -127,7 +127,8 @@ void emit_c_function(GIBaseInfo *info, const char *name, const char *container_n
 		GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
 		GIDirection direction = g_arg_info_get_direction(arg_info);
 		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT, 1);
+		int is_out_dir = (direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT);
+		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, is_out_dir, 1, is_out_dir);
 		g_base_info_unref(type_info);
 		g_base_info_unref(arg_info);
 	}
@@ -140,7 +141,7 @@ void emit_c_function(GIBaseInfo *info, const char *name, const char *container_n
 	int return_nullable = g_callable_info_may_return_null(info);
 	GITypeInfo *return_type_info = g_callable_info_get_return_type(info);
 	if (is_gtk_widget(return_type_info) && strncmp(name, "new", 3) == 0) printf("%s", container_name);
-	else emit_type(return_type_info, return_nullable || patch_return_nullable(return_type_info), 0, 0, 1);
+	else emit_type(return_type_info, return_nullable || patch_return_nullable(return_type_info), 0, 0, 1, 1);
 	g_base_info_unref(return_type_info);
 	printf(";\n");
 }
@@ -171,14 +172,15 @@ void emit_callback(GIBaseInfo *info, const char *name, int is_deprecated, int ty
 		GIArgInfo *arg_info = g_callable_info_get_arg(info, i);
 		GIDirection direction = g_arg_info_get_direction(arg_info);
 		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT, 1);
+		int is_out_dir = (direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT);
+		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, is_out_dir, 1, is_out_dir);
 		g_base_info_unref(type_info);
 		g_base_info_unref(arg_info);
 	}
 	printf(") callconv(.C) ");
 	int return_nullable = g_callable_info_may_return_null(info);
 	GITypeInfo *return_type_info = g_callable_info_get_return_type(info);
-	emit_type(return_type_info, return_nullable, 0, 0, 1);
+	emit_type(return_type_info, return_nullable, 0, 0, 1, 1);
 	g_base_info_unref(return_type_info);
 	if (!type_only) printf(";\n");
 }
@@ -870,7 +872,7 @@ void emit_union(GIBaseInfo *info, const char *name, int is_deprecated)
 	printf("};\n");
 }
 
-void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, int prefer_c)
+void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, int prefer_c, int prefer_mut)
 {
 	int pointer = g_type_info_is_pointer(type_info) || is_out;
 	GITypeTag type = g_type_info_get_tag(type_info);
@@ -944,7 +946,7 @@ void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, in
 		case GI_TYPE_TAG_FILENAME:
 			if (optional) printf("?");
 			if (g_type_info_is_pointer(type_info) && is_out) printf("*");
-			printf("[*:0]const u8");
+			printf(prefer_mut ? "[*:0]u8" : "[*:0]const u8");
 			break;
 		case GI_TYPE_TAG_ARRAY:
 			GIArrayType array_type = g_type_info_get_array_type(type_info);
@@ -983,7 +985,7 @@ void emit_type(GIBaseInfo *type_info, int optional, int is_slice, int is_out, in
 					}
 					if (!is_slice && array_length == -1 && array_fixed_size == -1 && !zero_terminated) printf("[*]");
 					GITypeTag elem_type = g_type_info_get_tag(array_info);
-					emit_type(array_info, zero_terminated && (!is_basic_type(elem_type) || g_type_info_is_pointer(array_info)), 0, 0, 0);
+					emit_type(array_info, zero_terminated && (!is_basic_type(elem_type) || g_type_info_is_pointer(array_info)), 0, 0, 0, prefer_mut);
 					g_base_info_unref(array_info);
 					break;
 			}
@@ -1142,7 +1144,7 @@ void emit_function_comment(GIBaseInfo *info)
 				break;
 		}
 		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-		emit_type(type_info, arg_optional, 0, 0, 0);
+		emit_type(type_info, arg_optional, 0, 0, 0, 0);
 		printf("\n");
 		g_base_info_unref(type_info);
 		g_base_info_unref(arg_info);
@@ -1165,7 +1167,7 @@ void emit_function_comment(GIBaseInfo *info)
 	GITypeInfo *return_type_info = g_callable_info_get_return_type(info);
 	int return_nullable = g_callable_info_may_return_null(info) || patch_return_nullable(return_type_info);
 	if (return_nullable) printf("(nullable) ");
-	emit_type(return_type_info, return_nullable, 0, 0, 0);
+	emit_type(return_type_info, return_nullable, 0, 0, 0, 1);
 	g_base_info_unref(return_type_info);
 	printf("\n");
 }
@@ -1278,7 +1280,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 			const char *arg_name = g_base_info_get_name(arg_info);
 			printf("arg_%s: ", arg_name);
 			GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-			emit_type(type_info, param_nullable[i] || param_optional[i], param_is_slice_ptr[i], 0, 0);
+			emit_type(type_info, param_nullable[i] || param_optional[i], param_is_slice_ptr[i], 0, 0, param_dir[i] & PARAM_OUT);
 			g_base_info_unref(type_info);
 			g_base_info_unref(arg_info);
 		}
@@ -1319,7 +1321,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 		{
 			if (multiple_return > 1) printf("    ret: ");
 			if (is_gtk_widget(return_type_info) && strncmp(name, "new", 3) == 0) printf("%s", container_name);
-			else emit_type(return_type_info, return_nullable || patch_return_nullable(return_type_info), 0, 0, 0);
+			else emit_type(return_type_info, return_nullable || patch_return_nullable(return_type_info), 0, 0, 0, 1);
 			if (multiple_return > 1) printf(",\n");
 		}
 		for (int i = 0; i < n; i++)
@@ -1330,7 +1332,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 			const char *arg_name = g_base_info_get_name(arg_info);
 			GITypeInfo *type_info = g_arg_info_get_type(arg_info);
 			if (multiple_return > 1) printf("    %s: ", arg_name);
-			emit_type(type_info, param_nullable[i] || param_optional[i], param_is_slice_ptr[i], 0, 0);
+			emit_type(type_info, param_nullable[i] || param_optional[i], param_is_slice_ptr[i], 0, 0, param_dir[i] & PARAM_OUT);
 			if (multiple_return > 1) printf(",\n");
 			g_base_info_unref(type_info);
 			g_base_info_unref(arg_info);
@@ -1356,9 +1358,9 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 			{
 				printf("    var %s: ", arg_name);
 				GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-				emit_type(type_info, 0, 0, 0, 0);
+				emit_type(type_info, 0, 0, 0, 0, 1);
 				printf(" = @intCast(");
-				emit_type(type_info, 0, 0, 0, 0);
+				emit_type(type_info, 0, 0, 0, 0, 1);
 				printf(", ");
 				if (param_nullable[ptr_pos] || param_optional[ptr_pos]) printf("if (arg_%s) |some| some.len else 0", ptr_name);
 				else printf("arg_%s.len", ptr_name);
@@ -1369,7 +1371,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 				/* callee-allocated non-optional output parameter */
 				printf("    var %s: ", arg_name);
 				GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-				emit_type(type_info, 0, 0, 0, 0);
+				emit_type(type_info, 0, 0, 0, 0, 1);
 				printf(" = 0;\n");
 				g_base_info_unref(type_info);
 			}
@@ -1389,7 +1391,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 			{
 				printf("    var %s: ", arg_name);
 				GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-				emit_type(type_info, 0, 0, 0, 0);
+				emit_type(type_info, 0, 0, 0, 0, 1);
 				printf(" = undefined;\n");
 				g_base_info_unref(type_info);
 			}
@@ -1411,7 +1413,7 @@ void emit_function_wrapper(GIBaseInfo *info, const char *name, const char *conta
 			const char *arg_name = g_base_info_get_name(arg_info);
 			printf("    var %s_mut: ", arg_name);
 			GITypeInfo *type_info = g_arg_info_get_type(arg_info);
-			emit_type(type_info, 0, 0, 0, 0);
+			emit_type(type_info, 0, 0, 0, 0, 1);
 			printf(" = undefined;\n");
 			g_base_info_unref(type_info);
 			g_base_info_unref(arg_info);
@@ -1561,7 +1563,7 @@ void emit_field(GIFieldInfo *field_info, int first_field)
 	// printf("\n");
 	if (strcmp(field_name, "error") == 0 || strcmp(field_name, "var") == 0) printf("    @\"%s\": ", field_name);
 	else printf("    %s: ", field_name);
-	emit_type(field_type_info, g_type_info_is_pointer(field_type_info) || is_callback(field_type_info), 0, 0, 0);
+	emit_type(field_type_info, g_type_info_is_pointer(field_type_info) || is_callback(field_type_info), 0, 0, 0, 0);
 	if (first_field && is_instance(field_type_info) && !g_type_info_is_pointer(field_type_info)) printf(".cType()");
 	printf(",\n");
 	g_base_info_unref(field_type_info);
@@ -1586,18 +1588,19 @@ void emit_signal(GISignalInfo *info, const char *container_name)
 		GIDirection direction = g_arg_info_get_direction(arg_info);
 		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
 		if (is_struct_union(type_info)) printf("*");
-		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT, 1);
+		int is_out_dir = (direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT);
+		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, is_out_dir, 1, is_out_dir);
 		g_base_info_unref(type_info);
 		g_base_info_unref(arg_info);
 	}
 	printf(", args...) ");
 	int return_nullable = g_callable_info_may_return_null(info);
 	GITypeInfo *return_type_info = g_callable_info_get_return_type(info);
-	emit_type(return_type_info, return_nullable, 0, 0, 1);
+	emit_type(return_type_info, return_nullable, 0, 0, 1, 1);
 	printf("\n");
 	printf("    pub fn connect(self: SignalProxy%s, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlagsZ) usize {\n", ziggy_signal_name);
 	printf("        return core.connectZ(self.object.into(core.Object), \"%s\", handler, args, flags, &[_]type{ ", signal_name);
-	emit_type(return_type_info, return_nullable, 0, 0, 1);
+	emit_type(return_type_info, return_nullable, 0, 0, 1, 1);
 	printf(", %s", container_name);
 	n = g_callable_info_get_n_args(info);
 	for (int i = 0; i < n; i++)
@@ -1607,7 +1610,8 @@ void emit_signal(GISignalInfo *info, const char *container_name)
 		GIDirection direction = g_arg_info_get_direction(arg_info);
 		GITypeInfo *type_info = g_arg_info_get_type(arg_info);
 		if (is_struct_union(type_info)) printf("*"); /* no pointer annotation for struct */
-		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT, 1);
+		int is_out_dir = (direction == GI_DIRECTION_OUT || direction == GI_DIRECTION_INOUT);
+		emit_type(type_info, g_arg_info_is_optional(arg_info) || g_arg_info_may_be_null(arg_info), 0, is_out_dir, 1, is_out_dir);
 		g_base_info_unref(type_info);
 		g_base_info_unref(arg_info);
 	}
@@ -1641,10 +1645,10 @@ void emit_property(GIPropertyInfo *info, const char *container_name)
 		printf("    extern fn ");
 		emit_function_symbol(getter);
 		printf("(%s) ", container_name);
-		emit_type(type_info, 0, 0, 0, 1);
+		emit_type(type_info, 0, 0, 0, 1, 0);
 		printf(";\n");
 		printf("    pub fn get(self: PropertyProxy%s) ", ziggy_property_name);
-		emit_type(type_info, 0, 0, 0, 1);
+		emit_type(type_info, 0, 0, 0, 1, 0);
 		printf(" {\n");
 		printf("        return ");
 		emit_function_symbol(getter);
@@ -1656,7 +1660,7 @@ void emit_property(GIPropertyInfo *info, const char *container_name)
 	{
 		printf("\n");
 		printf("    pub fn get(self: PropertyProxy%s) ", ziggy_property_name);
-		emit_type(type_info, 0, 0, 0, 1);
+		emit_type(type_info, 0, 0, 0, 1, 0);
 		printf(" {\n");
 		printf("        var property_value = std.mem.zeroes(core.Value);\n");
 		printf("        defer property_value.unset();\n");
@@ -1674,10 +1678,10 @@ void emit_property(GIPropertyInfo *info, const char *container_name)
 		printf("    extern fn ");
 		emit_function_symbol(setter);
 		printf("(%s, ", container_name);
-		emit_type(type_info, 0, 0, 0, 1);
+		emit_type(type_info, 0, 0, 0, 1, 0);
 		printf(") void;\n");
 		printf("    pub fn set(self: PropertyProxy%s, value: ", ziggy_property_name);
-		emit_type(type_info, 0, 0, 0, 1);
+		emit_type(type_info, 0, 0, 0, 1, 0);
 		printf(") void {\n");
 		printf("        ");
 		emit_function_symbol(setter);
@@ -1689,7 +1693,7 @@ void emit_property(GIPropertyInfo *info, const char *container_name)
 	{
 		printf("\n");
 		printf("    pub fn set(self: PropertyProxy%s, value: ", ziggy_property_name);
-		emit_type(type_info, 0, 0, 0, 1);
+		emit_type(type_info, 0, 0, 0, 1, 0);
 		printf(") void {\n");
 		printf("        var property_value = std.mem.zeroes(core.Value);\n");
 		printf("        defer property_value.unset();\n");
@@ -1813,7 +1817,7 @@ void emit_value_get(const char *value_name, GITypeInfo *type_info)
 				default:
 					/* C array */
 					printf("core.alignedPtrCast(");
-					emit_type(type_info, 0, 0, 0, 1);
+					emit_type(type_info, 0, 0, 0, 1, 0);
 					printf(", %s.getPointer())", value_name);
 					break;
 			}
@@ -1826,24 +1830,24 @@ void emit_value_get(const char *value_name, GITypeInfo *type_info)
 				case GI_INFO_TYPE_OBJECT:
 				case GI_INFO_TYPE_INTERFACE:
 					printf("%s.getObject().tryInto(", value_name);
-					emit_type(type_info, 0, 0, 0, 1);
+					emit_type(type_info, 0, 0, 0, 1, 0);
 					printf(").?");
 					break;
 				case GI_INFO_TYPE_STRUCT:
 				case GI_INFO_TYPE_UNION:
 				case GI_INFO_TYPE_BOXED:
 					printf("core.alignedPtrCast(*");
-					emit_type(type_info, 0, 0, 0, 1);
+					emit_type(type_info, 0, 0, 0, 1, 0);
 					printf(", %s.getBoxed())", value_name);
 					break;
 				case GI_INFO_TYPE_ENUM:
 					printf("@intToEnum(");
-					emit_type(type_info, 0, 0, 0, 1);
+					emit_type(type_info, 0, 0, 0, 1, 0);
 					printf(", %s.getEnum())", value_name);
 					break;
 				case GI_INFO_TYPE_FLAGS:
 					printf("@intToEnum(");
-					emit_type(type_info, 0, 0, 0, 1);
+					emit_type(type_info, 0, 0, 0, 1, 0);
 					printf(", %s.getFlags())", value_name);
 					break;
 				case GI_INFO_TYPE_CALLBACK:

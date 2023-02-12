@@ -8,12 +8,12 @@ const assert = std.debug.assert;
 const ExampleApp = @import("example_app.zig").ExampleApp;
 
 pub const CstrContext = struct {
-    pub fn hash(self: CstrContext, key: [*:0]const u8) u64 {
+    pub fn hash(self: CstrContext, key: [*:0]u8) u64 {
         _ = self;
-        return std.hash.Wyhash.hash(0, key[0..std.mem.indexOfSentinel(u8, 0, key)]);
+        return std.hash.Wyhash.hash(0, std.mem.sliceTo(key, 0));
     }
 
-    pub fn eql(self: CstrContext, a: [*:0]const u8, b: [*:0]const u8) bool {
+    pub fn eql(self: CstrContext, a: [*:0]u8, b: [*:0]u8) bool {
         _ = self;
         return std.cstr.cmp(a, b) == 0;
     }
@@ -130,7 +130,7 @@ pub const ExampleAppWindow = packed struct {
 
     pub fn open(self: ExampleAppWindow, file: core.File) void {
         var basename = file.getBasename().?;
-        defer core.freeDiscardConst(basename);
+        defer core.free(basename);
         var scrolled = Gtk.ScrolledWindow.new();
         scrolled.callMethod("setHexpand", .{core.Boolean.True});
         scrolled.callMethod("setVexpand", .{core.Boolean.True});
@@ -144,7 +144,7 @@ pub const ExampleAppWindow = packed struct {
         switch (result) {
             .Ok => |ok| {
                 defer core.free(ok.contents.ptr);
-                defer core.freeDiscardConst(ok.etag_out);
+                defer core.free(ok.etag_out);
                 buffer.setText(@ptrCast([*:0]const u8, ok.contents.ptr), @intCast(i32, ok.contents.len));
             },
             .Err => |err| {
@@ -180,11 +180,11 @@ pub const ExampleAppWindow = packed struct {
             if (gpa.deinit()) @panic("");
         }
         const allocator = gpa.allocator();
-        var strings = std.HashMap([*:0]const u8, void, CstrContext, std.hash_map.default_max_load_percentage).init(allocator);
+        var strings = std.HashMap([*:0]u8, void, CstrContext, std.hash_map.default_max_load_percentage).init(allocator);
         defer {
             var iter = strings.keyIterator();
             while (iter.next()) |some| {
-                core.freeDiscardConst(some.*);
+                core.free(some.*);
             }
             strings.deinit();
         }
@@ -195,7 +195,7 @@ pub const ExampleAppWindow = packed struct {
             end = start;
             if (!end.forwardWordEnd().toBool()) break :outer;
             var word = buffer.getText(&start, &end, core.Boolean.False);
-            defer core.freeDiscardConst(word);
+            defer core.free(word);
             strings.put(core.utf8Strdown(word, -1), {}) catch @panic("");
             start = end;
         }

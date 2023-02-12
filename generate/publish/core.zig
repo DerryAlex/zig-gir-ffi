@@ -71,8 +71,8 @@ pub fn Flags(comptime T: type) type {
             return Self{};
         }
 
-        pub fn newWithValue(value_: T) Self {
-            return Self{ ._value = @enumToInt(value_) };
+        pub fn newValue(_value: T) Self {
+            return Self{ ._value = @enumToInt(_value) };
         }
 
         pub fn set(self: *Self, bit: T) void {
@@ -188,10 +188,6 @@ pub fn unsafeCast(comptime T: type, ptr: *anyopaque) T {
 // closure begin
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-
-pub fn coreAllocatorDeinit() bool {
-    return gpa.deinit();
-}
 
 fn ClosureZ(comptime T: type, comptime U: type, comptime swapped: bool, comptime signature: []const type, comptime call_abi: CallingConvention) type {
     comptime assert(meta.trait.isPtrTo(.Fn)(T));
@@ -315,13 +311,6 @@ fn Slot(comptime signature: []const type) type {
     @compileError("Unsuppoted signature for connection");
 }
 
-fn UnionError(payload: type, error_set: type) type {
-    return switch (@typeInfo(payload)) {
-        .ErrorUnion => |error_union| (error_union.error_set || error_set)!error_union.payload,
-        else => error_set!payload,
-    };
-}
-
 fn Connection(comptime signature: []const type) type {
     comptime assert(signature.len <= 7);
 
@@ -383,8 +372,8 @@ pub fn Signal(comptime signature: []const type) type {
     return struct {
         block_count: u16 = 0,
         default_connection: ?*ConnectionType = null,
-        connections: std.ArrayList(*ConnectionType),
-        connections_after: std.ArrayList(*ConnectionType),
+        connections: std.ArrayList(*ConnectionType) = std.ArrayList(*ConnectionType).init(gpa.allocator()),
+        connections_after: std.ArrayList(*ConnectionType) = std.ArrayList(*ConnectionType).init(gpa.allocator()),
         accumulator: ?AccumulatorType = null,
         accumulator_extra_args: ?*anyopaque = null,
         accumulator_extra_args_size: usize = 0,
@@ -392,13 +381,13 @@ pub fn Signal(comptime signature: []const type) type {
         const Self = @This();
 
         pub fn init() Self {
-            return Self{ .connections = std.ArrayList(*ConnectionType).init(gpa.allocator()), .connections_after = std.ArrayList(*ConnectionType).init(gpa.allocator()) };
+            return Self{};
         }
 
         pub fn initAccumulator(comptime accumulator: anytype, args: anytype) Self {
             var closure = createClosure(&accumulator, args, false, &[_]type{ bool, *ReturnType, *const ReturnType, bool }, .Unspecified);
             const ExtraArgs = meta.Child(@TypeOf(closure));
-            return Self{ .connections = std.ArrayList(*ConnectionType).init(gpa.allocator()), .connections_after = std.ArrayList(*ConnectionType).init(gpa.allocator()), .accumulator = closure.invoke_fn(), .accumulator_extra_args = closure, .accumulator_extra_args_size = @sizeOf(ExtraArgs) };
+            return Self{ .accumulator = closure.invoke_fn(), .accumulator_extra_args = closure, .accumulator_extra_args_size = @sizeOf(ExtraArgs) };
         }
 
         pub fn deinit(self: *Self) void {
@@ -555,6 +544,12 @@ pub fn typeTag(comptime Instance: type) *TypeTag {
     return &Static.tag;
 }
 
+test "typeTag" {
+    var u8_tag = typeTag(u8);
+    var i8_tag = typeTag(i8);
+    std.testing.expect(!(u8_tag == i8_tag));
+}
+
 pub const TypeFlagsZ = struct {
     abstract: bool = false,
     value_abstract: bool = false,
@@ -585,17 +580,17 @@ pub fn registerType(comptime Class: type, comptime Instance: type, name: [*:0]co
         }
     }.trampoline;
     if (GLib.onceInitEnter(&typeTag(Instance).type_id).toBool()) {
-        var builder = Flags(GObject.TypeFlags).new();
+        var flags_builder = Flags(GObject.TypeFlags).new();
         if (flags.abstract) {
-            builder.set(.Abstract);
+            flags_builder.set(.Abstract);
         }
         if (flags.value_abstract) {
-            builder.set(.ValueAbstract);
+            flags_builder.set(.ValueAbstract);
         }
         if (flags.final) {
-            builder.set(.Final);
+            flags_builder.set(.Final);
         }
-        const type_id = typeRegisterStaticSimple(Instance.Parent.gType(), name, @sizeOf(Class), @ptrCast(GObject.ClassInitFunc, &class_init), @sizeOf(Instance.cType()), @ptrCast(GObject.InstanceInitFunc, &instance_init), builder.value());
+        const type_id = typeRegisterStaticSimple(Instance.Parent.gType(), name, @sizeOf(Class), @ptrCast(GObject.ClassInitFunc, &class_init), @sizeOf(Instance.cType()), @ptrCast(GObject.InstanceInitFunc, &instance_init), flags_builder.value());
         if (@hasDecl(Instance.cType(), "Private")) {
             typeTag(Instance).private_offset = GObject.typeAddInstancePrivate(type_id, @sizeOf(Instance.cType().Private));
         }
@@ -661,13 +656,6 @@ pub fn FnReturnType(comptime T: type) type {
 /// Suppress `unused`
 pub fn maybeUnused(arg: anytype) void {
     _ = arg;
-}
-
-/// Supress `discard const`
-pub fn freeDiscardConst(mem: ?*const anyopaque) void {
-    struct {
-        pub extern fn g_free(?*const anyopaque) void;
-    }.g_free(mem);
 }
 
 // misc end
