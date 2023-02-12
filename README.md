@@ -13,12 +13,6 @@ The generated code is unlicensed. You may download pre-generated code for GTK4 [
 - [GTK Documentation](https://docs.gtk.org/)
 - [Zig Language Reference](https://ziglang.org/documentation/master/)
 
-## Screenshots of examples
-
-[example1](./example/example1/)
+## Screenshot
 
 ![example.png](./doc/img/example.png)
-
-[application](./example/application/)
-
-![application.png](./doc/img/application.png)
