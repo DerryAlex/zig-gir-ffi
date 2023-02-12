@@ -647,10 +647,11 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 	
 	printf("\n");
 	printf("    pub fn CallMethod(comptime method: []const u8) ?type {\n");
-	printf("        core.maybeUnused(method);\n");
+	int arg_method_used = 0;
 	n = g_interface_info_get_n_methods(info);
 	for (int i = 0; i < n; i++)
 	{
+		arg_method_used = 1;
 		GIFunctionInfo *method = g_interface_info_get_method(info, i);
 		if (!g_callable_info_is_method(method))
 		{
@@ -668,6 +669,7 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 	n = g_interface_info_get_n_signals(info);
 	for (int i = 0; i < n; i++)
 	{
+		arg_method_used = 1;
 		GISignalInfo *signal = g_interface_info_get_signal(info, i);
 		const char *signal_name = g_base_info_get_name(signal);
 		char *ziggy_signal_name = snake_to_title(signal_name);
@@ -678,6 +680,7 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 	n = g_interface_info_get_n_properties(info);
 	for (int i = 0; i < n; i++)
 	{
+		arg_method_used = 1;
 		GIPropertyInfo *property = g_interface_info_get_property(info, i);
 		const char *property_name = g_base_info_get_name(property);
 		char *ziggy_property_name = snake_to_title(property_name);
@@ -688,6 +691,7 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 	n = g_interface_info_get_n_vfuncs(info);
 	for (int i = 0; i < n; i++)
 	{
+		arg_method_used = 1;
 		GIVFuncInfo *vfunc = g_interface_info_get_vfunc(info, i);
 		const char *vfunc_name = g_base_info_get_name(vfunc);
 		char *ziggy_vfunc_name = snake_to_camel(vfunc_name);
@@ -695,6 +699,7 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 		free(ziggy_vfunc_name);
 		g_base_info_unref(vfunc);
 	}
+	if (!arg_method_used) printf("        _ = method;\n");
 	printf("        return null;\n");
 	printf("    }\n");
 
@@ -707,15 +712,14 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 	printf("            @compileError(std.fmt.comptimePrint(\"No such method {s}\", .{method}));\n");
 	printf("        }\n");
 	printf("    } {\n");
-	printf("        core.maybeUnused(self);\n");
-	printf("        core.maybeUnused(method);\n");
-	printf("        core.maybeUnused(args);\n");
 	printf("        if (false) {\n");
 	printf("            return {};\n");
 	printf("        }\n");
+	arg_method_used = 0;
 	n = g_interface_info_get_n_methods(info);
 	for (int i = 0; i < n; i++)
 	{
+		arg_method_used = 1;
 		GIFunctionInfo *method = g_interface_info_get_method(info, i);
 		if (!g_callable_info_is_method(method))
 		{
@@ -735,6 +739,7 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 	n = g_interface_info_get_n_signals(info);
 	for (int i = 0; i < n; i++)
 	{
+		arg_method_used = 1;
 		GISignalInfo *signal = g_interface_info_get_signal(info, i);
 		const char *signal_name = g_base_info_get_name(signal);
 		char *ziggy_signal_name = snake_to_title(signal_name);
@@ -747,6 +752,7 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 	n = g_interface_info_get_n_properties(info);
 	for (int i = 0; i < n; i++)
 	{
+		arg_method_used = 1;
 		GIPropertyInfo *property = g_interface_info_get_property(info, i);
 		const char *property_name = g_base_info_get_name(property);
 		char *ziggy_property_name = snake_to_title(property_name);
@@ -759,6 +765,7 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 	n = g_interface_info_get_n_vfuncs(info);
 	for (int i = 0; i < n; i++)
 	{
+		arg_method_used = 1;
 		GIVFuncInfo *vfunc = g_interface_info_get_vfunc(info, i);
 		const char *vfunc_name = g_base_info_get_name(vfunc);
 		char *ziggy_vfunc_name = snake_to_camel(vfunc_name);
@@ -771,6 +778,11 @@ void emit_interface(GIBaseInfo *info, const char *name, int is_deprecated)
 	printf("        else {\n");
 	printf("            @compileError(\"No such method\");\n");
 	printf("        }\n");
+	if (!arg_method_used) {
+		printf("        _ = self;\n");
+		// printf("        _ = method;\n");
+		printf("        _ = args;\n");
+	}
 	printf("    }\n");
 
 	printf("\n");

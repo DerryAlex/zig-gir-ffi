@@ -653,11 +653,6 @@ pub fn FnReturnType(comptime T: type) type {
     return if (fn_info.Fn.return_type) |some| some else void;
 }
 
-/// Suppress `unused`
-pub fn maybeUnused(arg: anytype) void {
-    _ = arg;
-}
-
 // misc end
 // --------
 

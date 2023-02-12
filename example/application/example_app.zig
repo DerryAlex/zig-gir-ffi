@@ -83,15 +83,8 @@ pub const ExampleApp = packed struct {
     }
 
     pub fn startupOverride(self: ExampleApp) void {
-        var action_preference = core.createClosure(&preferenceActivate, .{self}, false, &[_]type{ void, core.SimpleAction, *core.Variant }, .C);
+        var action_preference = core.createClosure(&preferenceActivate, .{self}, false, &[_]type{ void, core.SimpleAction, *core.Variant }, .C); // Memory leak, this is not deinited
         var action_quit = core.createClosure(&quitActivate, .{self}, false, &[_]type{ void, core.SimpleAction, *core.Variant }, .C);
-        // Ask glib to destroy the closure automatically
-        var closure1 = action_preference.toClosure();
-        self.callMethod("watchClosure", .{closure1});
-        // closure1.sink(); // Takes over the initial ownership
-        var closure2 = action_quit.toClosure();
-        self.callMethod("watchClosure", .{closure2});
-        // closure2.sink();
         var app_entries = [_]core.ActionEntry{
             .{ .name = "preferences", .activate = action_preference.invoke_fn(), .parameter_type = null, .state = null, .change_state = null, .padding = undefined },
             .{ .name = "quit", .activate = action_quit.invoke_fn(), .parameter_type = null, .state = null, .change_state = null, .padding = undefined },
