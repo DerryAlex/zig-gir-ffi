@@ -10,6 +10,7 @@ extern "C" {
 
 extern int config_enable_deprecated;
 extern int config_enable_uppercase_constant;
+extern int config_enable_auto_function_comment;
 extern GIRepository *repository;
 
 #ifdef __cplusplus

@@ -114,11 +114,12 @@ pub const ExampleAppWindow = packed struct {
     }
 
     pub fn new(app: ExampleApp) ExampleAppWindow {
+        var application = core.GValue(Gtk.Application).new();
+        defer application.deinit();
+        application.set(app.into(Gtk.Application));
         var property_names = [_][*:0]const u8{"application"};
-        var property_values = std.mem.zeroes([1]core.Value);
-        var application = property_values[0].init(.Object);
-        application.setObject(app.into(core.Object).asSome());
-        defer application.unset();
+        var property_values: [1]core.Value = undefined;
+        property_values[0] = application.toValue().*;
         return core.objectNewWithProperties(gType(), property_names[0..], property_values[0..]).tryInto(ExampleAppWindow).?;
     }
 

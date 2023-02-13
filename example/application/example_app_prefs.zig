@@ -53,14 +53,16 @@ pub const ExampleAppPrefs = packed struct {
     }
 
     pub fn new(win: ExampleAppWindow) ExampleAppPrefs {
+        var transient_for = core.GValue(Gtk.Window).new();
+        defer transient_for.deinit();
+        transient_for.set(win.into(Gtk.Window));
+        var use_header_bar = core.GValue(core.Boolean).new();
+        defer use_header_bar.deinit();
+        use_header_bar.set(.True);
         var property_names = [_][*:0]const u8{ "transient-for", "use-header-bar" };
-        var property_values = std.mem.zeroes([2]core.Value);
-        var transient_for = property_values[0].init(.Object);
-        transient_for.setObject(win.into(core.Object).asSome());
-        defer transient_for.unset();
-        var use_header_bar = property_values[1].init(.Boolean);
-        use_header_bar.setBoolean(.True);
-        defer use_header_bar.unset();
+        var property_values: [2]core.Value = undefined;
+        property_values[0] = transient_for.toValue().*;
+        property_values[1] = use_header_bar.toValue().*;
         return core.objectNewWithProperties(gType(), property_names[0..], property_values[0..]).tryInto(ExampleAppPrefs).?;
     }
 

@@ -56,14 +56,16 @@ pub const ExampleApp = packed struct {
     }
 
     pub fn new() ExampleApp {
+        var application_id = core.GValue([*:0]const u8).new();
+        defer application_id.deinit();
+        application_id.set("org.gtk.example");
+        var flags = core.GValue(core.ApplicationFlags).new();
+        defer flags.deinit();
+        flags.set(.HandlesOpen);
         var property_names = [_][*:0]const u8{ "application-id", "flags" };
-        var property_values = std.mem.zeroes([2]core.Value);
-        var application_id = property_values[0].init(.String);
-        application_id.setStaticString("org.gtk.example");
-        defer application_id.unset();
-        var flags = property_values[1].init(.Flags);
-        flags.setFlags(@enumToInt(core.ApplicationFlags.HandlesOpen));
-        defer flags.unset();
+        var property_values: [2]core.Value = undefined;
+        property_values[0] = application_id.toValue().*;
+        property_values[1] = flags.toValue().*;
         return core.objectNewWithProperties(gType(), property_names[0..], property_values[0..]).tryInto(ExampleApp).?;
     }
 

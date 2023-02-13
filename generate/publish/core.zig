@@ -59,6 +59,10 @@ pub const GType = enum(usize) {
     Object = 80,
     Variant = 84,
     _,
+
+    pub fn gType() GType {
+        return GObject.gtypeGetType();
+    }
 };
 
 pub fn Flags(comptime T: type) type {
@@ -89,6 +93,153 @@ pub fn Flags(comptime T: type) type {
 
         pub fn value(self: Self) T {
             return @intToEnum(T, self._value);
+        }
+    };
+}
+
+pub fn GValue(comptime T: type) type {
+    return struct {
+        gvalue: GObject.Value = .{},
+
+        const Self = @This();
+
+        pub fn new() Self {
+            var tmp: Self = .{};
+            tmp.init();
+            return tmp;
+        }
+
+        fn init(self: *Self) void {
+            if (comptime T == Boolean) {
+                _ = self.gvalue.init(.Boolean);
+            } else if (comptime T == i8) {
+                _ = self.gvalue.init(.Char);
+            } else if (comptime T == u8) {
+                _ = self.gvalue.init(.Uchar);
+            } else if (comptime T == i32) {
+                _ = self.gvalue.init(.Int); // TODO: c_int
+            } else if (comptime T == u32) {
+                _ = self.gvalue.init(.Uint);
+            } else if (comptime T == i64) {
+                _ = self.gvalue.init(.Int64);
+            } else if (comptime T == u64) {
+                _ = self.gvalue.init(.UInt64);
+            } else if (comptime T == f32) {
+                _ = self.gvalue.init(.Float);
+            } else if (comptime T == f64) {
+                _ = self.gvalue.init(.Double);
+            } else if (comptime T == [*:0]const u8) {
+                _ = self.gvalue.init(.String);
+            } else if (comptime meta.trait.isSingleItemPtr(T)) {
+                _ = self.gvalue.init(.Pointer);
+            } else if (comptime T == GLib.Variant) {
+                _ = self.gvalue.init(.Variant);
+            } else if (comptime @hasDecl(T, "gType")) {
+                _ = self.gvalue.init(T.gType());
+            } else {
+                @compileError(std.fmt.comptimePrint("Unsupported GValue Type {s}", @typeName(T)));
+            }
+        }
+
+        pub fn deinit(self: *Self) void {
+            self.gvalue.unset();
+        }
+
+        fn isBoxed() bool {
+            if (comptime T == i8) return false;
+            if (comptime T == u8) return false;
+            if (comptime T == i32) return false;
+            if (comptime T == u32) return false;
+            if (comptime T == i64) return false;
+            if (comptime T == u64) return false;
+            if (comptime T == f32) return false;
+            if (comptime T == f64) return false;
+            if (comptime T == [*:0]const u8) return false; // String
+            if (comptime meta.trait.isSingleItemPtr(T)) return false; // Pointer
+            if (comptime meta.trait.is(.Enum)(T)) return false; // Enum or Flags or Boolean or GType
+            if (comptime @hasDecl(T, "isAImpl")) return false; // Object or Interface
+            return true;
+        }
+
+        pub fn get(self: *Self) if (isBoxed()) *T else T {
+            if (comptime T == Boolean) {
+                return self.gvalue.getBoolean();
+            } else if (comptime T == i8) {
+                return self.gvalue.getSchar();
+            } else if (comptime T == u8) {
+                return self.gvalue.getUchar();
+            } else if (comptime T == i32) {
+                return self.gvalue.getInt();
+            } else if (comptime T == u32) {
+                return self.gvalue.getUint();
+            } else if (comptime T == i64) {
+                return self.gvalue.getInt64();
+            } else if (comptime T == u64) {
+                return self.gvalue.getUint64();
+            } else if (comptime T == f32) {
+                return self.gvalue.getFloat();
+            } else if (comptime T == f64) {
+                return self.gvalue.getDouble();
+            } else if (comptime T == GType) {
+                return self.gvalue.getGtype();
+            } else if (comptime meta.trait.is(.Enum)(T)) {
+                return if (comptime @typeInfo(T).Enum.is_exhaustive) @intToEnum(T,  self.gvalue.getEnum()) else @intToEnum(T, self.gvalue.getFlags());
+            } else if (comptime T == [*:0]const u8) {
+                return self.gvalue.getString();
+            } else if (comptime meta.trait.isSingleItemPtr(T)) {
+                return @ptrCast(T, self.gvalue.getPointer());
+            } else if (comptime @hasDecl(T, "isAImpl")) {
+                const obj = self.gvalue.getObject();
+                return obj.tryInto(T).?;
+            } else if (comptime T == GLib.Variant) {
+                return self.gvalue.getVariant().?;
+            } else {
+                return @ptrCast(*T, self.gvalue.getBoxed().?);
+            }
+        }
+
+        pub fn set(self: *Self, value: if (isBoxed()) *T else T) void {
+            if (comptime T == Boolean) {
+                self.gvalue.setBoolean(value);
+            } else if (comptime T == i8) {
+                self.gvalue.setSchar(value);
+            } else if (comptime T == u8) {
+                self.gvalue.setUchar(value);
+            } else if (comptime T == i32) {
+                self.gvalue.setInt(value);
+            } else if (comptime T == u32) {
+                self.gvalue.setUint(value);
+            } else if (comptime T == i64) {
+                self.gvalue.setInt64(value);
+            } else if (comptime T == u64) {
+                self.gvalue.setUint64(value);
+            } else if (comptime T == f32) {
+                self.gvalue.setFloat(value);
+            } else if (comptime T == f64) {
+                self.gvalue.setDouble(value);
+            } else if (comptime T == GType) {
+                self.gvalue.setGtype(value);
+            } else if (comptime meta.trait.is(.Enum)(T)) {
+                if (comptime @typeInfo(T).Enum.is_exhaustive) {
+                    self.gvalue.setEnum(@enumToInt(value));
+                } else {
+                    self.gvalue.setFlags(@enumToInt(value));
+                }
+            } else if (comptime T == [*:0]const u8) {
+                self.gvalue.setString(value);
+            } else if (comptime meta.trait.isSingleItemPtr(T)) {
+                self.gvalue.setPointer(value);
+            } else if (comptime @hasDecl(T, "isAImpl")) {
+                self.gvalue.setObject(value.into(GObject.Object).asSome());
+            } else if (comptime T == GLib.Variant) {
+                self.gvalue.setVariant(value);
+            } else {
+                self.gvalue.setBoxed(value);
+            }
+        }
+
+        pub fn toValue(self: *Self) *GObject.Value {
+            return &self.gvalue;
         }
     };
 }
@@ -547,7 +698,7 @@ pub fn typeTag(comptime Instance: type) *TypeTag {
 test "typeTag" {
     var u8_tag = typeTag(u8);
     var i8_tag = typeTag(i8);
-    std.testing.expect(!(u8_tag == i8_tag));
+    try std.testing.expect(!(u8_tag == i8_tag));
 }
 
 pub const TypeFlagsZ = struct {

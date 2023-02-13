@@ -5,6 +5,7 @@
 
 int config_enable_deprecated = 1;
 int config_enable_uppercase_constant = 1;
+int config_enable_auto_function_comment = 0;
 GIRepository *repository = NULL;
 
 int main(int argc, char *argv[])
