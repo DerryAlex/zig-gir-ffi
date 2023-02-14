@@ -119,7 +119,7 @@ pub const ExampleAppWindow = packed struct {
         application.set(app.into(Gtk.Application));
         var property_names = [_][*:0]const u8{"application"};
         var property_values: [1]core.Value = undefined;
-        property_values[0] = application.toValue().*;
+        property_values[0] = application.asValue().*;
         return core.objectNewWithProperties(gType(), property_names[0..], property_values[0..]).tryInto(ExampleAppWindow).?;
     }
 

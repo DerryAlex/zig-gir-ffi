@@ -39,3 +39,7 @@ pub fn bindCallback(class: *Gtk.WidgetClass, comptime Class: type) void {
         class.bindTemplateCallbackFull(&name_c, @ptrCast(core.Callback, &@field(Class, name)));
     }
 }
+
+test {
+    _ = @This();
+}

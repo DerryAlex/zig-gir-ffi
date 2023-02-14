@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
 			if (strcmp(dependency, "Gtk") == 0) printf("pub const template = @import(\"template.zig\");\n");
 			free(dependency);
 		}
-		printf("pub const core = @import(\"core.zig\");\n");
+		printf("%sconst core = @import(\"core.zig\");\n", (strcmp(namespaces[namespace_idx], "GLib") == 0 || strcmp(namespaces[namespace_idx], "GObject") == 0 || strcmp(namespaces[namespace_idx], "Gio") == 0) ? "" : "pub ");
 		if (strcmp(namespaces[namespace_idx], "Gtk") == 0) printf("pub const template = @import(\"template.zig\");\n");
 		printf("const std = @import(\"std\");\n");
 		printf("const meta = std.meta;\n");
@@ -114,6 +114,9 @@ int main(int argc, char *argv[])
 			}
 			g_base_info_unref(info);
 		}
+		printf("test {\n");
+        printf("    _ = @This();\n");
+        printf("}\n");
 		fflush(stdout);
 		fclose(stdout);
 	}

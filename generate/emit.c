@@ -543,7 +543,7 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 		GIInterfaceInfo *interface = g_object_info_get_interface(info, i);
 		const char *interface_name = g_base_info_get_name(interface);
 		const char *interface_namespace = g_base_info_get_namespace(interface);
-		printf("        else if (%s.%s.CallMethod(method)) |_| {\n", interface_namespace, interface_name);
+		printf("        else if (comptime %s.%s.CallMethod(method)) |_| {\n", interface_namespace, interface_name);
 		printf("            return self.into(%s.%s).callMethod(method, args);\n", interface_namespace, interface_name);
 		printf("        }\n");
 		g_base_info_unref(interface);
@@ -551,7 +551,7 @@ void emit_object(GIBaseInfo *info, const char *name, int is_deprecated)
 	parent = g_object_info_get_parent(info);
 	if (parent != NULL)
 	{
-		printf("        else if (Parent.CallMethod(method)) |_| {\n");
+		printf("        else if (comptime Parent.CallMethod(method)) |_| {\n");
 		printf("            return self.into(Parent).callMethod(method, args);\n");
 		printf("        }\n");
 		g_base_info_unref(parent);
@@ -1744,6 +1744,7 @@ void emit_registered_type(GIRegisteredTypeInfo *info, int is_instance)
 
 	unsigned long id = g_registered_type_info_get_g_type(info);
 	if (id == G_TYPE_NONE) return;
+	if (strcmp(g_registered_type_info_get_type_init(info), "intern") == 0) return;
 	printf("\n");
 	printf("    pub fn gType() core.GType {\n");
 	printf("        return struct {\n");

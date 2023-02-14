@@ -56,6 +56,7 @@ pub const GType = enum(usize) {
     String = 64,
     Pointer = 68,
     Boxed = 72,
+    Param = 76,
     Object = 80,
     Variant = 84,
     _,
@@ -109,6 +110,11 @@ pub fn GValue(comptime T: type) type {
             return tmp;
         }
 
+        const Int = @Type(@typeInfo(c_int));
+        const Uint = @Type(@typeInfo(c_uint));
+        const Long = @Type(@typeInfo(c_long));
+        const Ulong = @Type(@typeInfo(c_ulong));
+
         fn init(self: *Self) void {
             if (comptime T == Boolean) {
                 _ = self.gvalue.init(.Boolean);
@@ -116,14 +122,18 @@ pub fn GValue(comptime T: type) type {
                 _ = self.gvalue.init(.Char);
             } else if (comptime T == u8) {
                 _ = self.gvalue.init(.Uchar);
-            } else if (comptime T == i32) {
-                _ = self.gvalue.init(.Int); // TODO: c_int
-            } else if (comptime T == u32) {
+            } else if (comptime T == Int) {
+                _ = self.gvalue.init(.Int);
+            } else if (comptime T == Uint) {
                 _ = self.gvalue.init(.Uint);
             } else if (comptime T == i64) {
                 _ = self.gvalue.init(.Int64);
             } else if (comptime T == u64) {
                 _ = self.gvalue.init(.UInt64);
+            } else if (comptime T == Long) {
+                _ = self.gvalue.init(.Long);
+            } else if (comptime T == Ulong) {
+                _ = self.gvalue.init(.Ulong);
             } else if (comptime T == f32) {
                 _ = self.gvalue.init(.Float);
             } else if (comptime T == f64) {
@@ -134,6 +144,8 @@ pub fn GValue(comptime T: type) type {
                 _ = self.gvalue.init(.Pointer);
             } else if (comptime T == GLib.Variant) {
                 _ = self.gvalue.init(.Variant);
+            } else if (comptime T == GObject.ParamSpec) {
+                _ = self.gvalue.init(.Param);
             } else if (comptime @hasDecl(T, "gType")) {
                 _ = self.gvalue.init(T.gType());
             } else {
@@ -168,14 +180,18 @@ pub fn GValue(comptime T: type) type {
                 return self.gvalue.getSchar();
             } else if (comptime T == u8) {
                 return self.gvalue.getUchar();
-            } else if (comptime T == i32) {
+            } else if (comptime T == Int) {
                 return self.gvalue.getInt();
-            } else if (comptime T == u32) {
+            } else if (comptime T == Uint) {
                 return self.gvalue.getUint();
             } else if (comptime T == i64) {
                 return self.gvalue.getInt64();
             } else if (comptime T == u64) {
                 return self.gvalue.getUint64();
+            } else if (comptime T == Long) {
+                return self.gvalue.getLong();
+            } else if (comptime T == Ulong) {
+                return self.gvalue.getUlong();
             } else if (comptime T == f32) {
                 return self.gvalue.getFloat();
             } else if (comptime T == f64) {
@@ -183,16 +199,18 @@ pub fn GValue(comptime T: type) type {
             } else if (comptime T == GType) {
                 return self.gvalue.getGtype();
             } else if (comptime meta.trait.is(.Enum)(T)) {
-                return if (comptime @typeInfo(T).Enum.is_exhaustive) @intToEnum(T,  self.gvalue.getEnum()) else @intToEnum(T, self.gvalue.getFlags());
+                return if (comptime @typeInfo(T).Enum.is_exhaustive) @intToEnum(T, self.gvalue.getEnum()) else @intToEnum(T, self.gvalue.getFlags());
             } else if (comptime T == [*:0]const u8) {
                 return self.gvalue.getString();
             } else if (comptime meta.trait.isSingleItemPtr(T)) {
                 return @ptrCast(T, self.gvalue.getPointer());
+            } else if (comptime T == GLib.Variant) {
+                return self.gvalue.getVariant().?;
+            } else if (comptime T == GObject.ParamSpec) {
+                return self.gvalue.getParam();
             } else if (comptime @hasDecl(T, "isAImpl")) {
                 const obj = self.gvalue.getObject();
                 return obj.tryInto(T).?;
-            } else if (comptime T == GLib.Variant) {
-                return self.gvalue.getVariant().?;
             } else {
                 return @ptrCast(*T, self.gvalue.getBoxed().?);
             }
@@ -205,14 +223,18 @@ pub fn GValue(comptime T: type) type {
                 self.gvalue.setSchar(value);
             } else if (comptime T == u8) {
                 self.gvalue.setUchar(value);
-            } else if (comptime T == i32) {
+            } else if (comptime T == Int) {
                 self.gvalue.setInt(value);
-            } else if (comptime T == u32) {
+            } else if (comptime T == Uint) {
                 self.gvalue.setUint(value);
             } else if (comptime T == i64) {
                 self.gvalue.setInt64(value);
             } else if (comptime T == u64) {
                 self.gvalue.setUint64(value);
+            } else if (comptime T == Long) {
+                self.gvalue.setLong(value);
+            } else if (comptime T == Ulong) {
+                self.gvalue.setUlong(value);
             } else if (comptime T == f32) {
                 self.gvalue.setFloat(value);
             } else if (comptime T == f64) {
@@ -229,16 +251,18 @@ pub fn GValue(comptime T: type) type {
                 self.gvalue.setString(value);
             } else if (comptime meta.trait.isSingleItemPtr(T)) {
                 self.gvalue.setPointer(value);
-            } else if (comptime @hasDecl(T, "isAImpl")) {
-                self.gvalue.setObject(value.into(GObject.Object).asSome());
             } else if (comptime T == GLib.Variant) {
                 self.gvalue.setVariant(value);
+            } else if (comptime T == GObject.ParamSpec) {
+                self.gvalue.setParam(value);
+            } else if (comptime @hasDecl(T, "isAImpl")) {
+                self.gvalue.setObject(value.into(GObject.Object).asSome());
             } else {
                 self.gvalue.setBoxed(value);
             }
         }
 
-        pub fn toValue(self: *Self) *GObject.Value {
+        pub fn asValue(self: *Self) *GObject.Value {
             return &self.gvalue;
         }
     };
@@ -910,3 +934,7 @@ pub fn typeRegisterStaticSimple(parent_type: GType, type_name: [*:0]const u8, cl
 
 // manual bindings end
 // -------------------
+
+test {
+    _ = @This();
+}

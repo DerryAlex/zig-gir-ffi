@@ -61,8 +61,8 @@ pub const ExampleAppPrefs = packed struct {
         use_header_bar.set(.True);
         var property_names = [_][*:0]const u8{ "transient-for", "use-header-bar" };
         var property_values: [2]core.Value = undefined;
-        property_values[0] = transient_for.toValue().*;
-        property_values[1] = use_header_bar.toValue().*;
+        property_values[0] = transient_for.asValue().*;
+        property_values[1] = use_header_bar.asValue().*;
         return core.objectNewWithProperties(gType(), property_names[0..], property_values[0..]).tryInto(ExampleAppPrefs).?;
     }
 

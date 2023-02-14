@@ -64,8 +64,8 @@ pub const ExampleApp = packed struct {
         flags.set(.HandlesOpen);
         var property_names = [_][*:0]const u8{ "application-id", "flags" };
         var property_values: [2]core.Value = undefined;
-        property_values[0] = application_id.toValue().*;
-        property_values[1] = flags.toValue().*;
+        property_values[0] = application_id.asValue().*;
+        property_values[1] = flags.asValue().*;
         return core.objectNewWithProperties(gType(), property_names[0..], property_values[0..]).tryInto(ExampleApp).?;
     }
 
