@@ -6,7 +6,38 @@
 int config_enable_deprecated = 1;
 int config_enable_uppercase_constant = 1;
 int config_enable_auto_function_comment = 0;
+int config_enable_ref_test = 0;
 GIRepository *repository = NULL;
+
+// FIXME:
+// 1. error: expected type 'core.GType', found 'comptime_int'
+//    ret: [*][*:0]core.GType
+// 2. error: opaque type 'Pango.Language' cannot be optional
+//    pub fn getLanguages(self: Font) ?[*:null]?Pango.Language
+// 3. error: expected type '*core.Nullable(Gtk.CellRenderer)', found '*Gtk.CellRenderer'
+//    gtk_icon_view_get_cursor(self, &path_mut, &cell_mut)
+// 4. error: expected type '*[4]f32', found '*const [4]f32'
+//    gtk_snapshot_append_border(self, arg_outline, &arg_border_width, &arg_border_color)
+// 5. error: expected type '**[8]Graphene.Vec3', found '*[8]Graphene.Vec3'
+//    graphene_box_get_vertices(self, &vertices_mut)
+// 6. error: expected type '[4]f32', found '*[4]f32'
+//    return ret;
+//    note: function return type declared here
+//    pub fn getWidths(self: BorderNode) [4]f32
+// 7. error: expected type '?GObject.Value', found '*GObject.Value'
+//    return if (arg_return_value) |_| return_value_mut else null.*;
+//    note: function return type declared here
+//    pub fn invoke(self: *Closure, arg_return_value: ?*GObject.Value, arg_param_values: []GObject.Value, arg_invocation_hint: ?*anyopaque) ?GObject.Value
+// 8. error: expected type 'core.Nullable(Gio.Cancellable)', found 'Gio.Cancellable'
+//    _ = cancelled_fn(self);
+// 9. error: expected type '?*GLib.ByteArray', found '**GLib.ByteArray'
+//    g_dtls_connection_get_channel_binding_data(self, arg_type, &data_mut, &err);
+//
+// HarfBuzz.zig:
+// error: enum tag value 0 already taken
+//    RequiredLigaturesOn = 0,
+// note: other occurrence here
+//    AllTypeFeaturesOn = 0,
 
 int main(int argc, char *argv[])
 {
@@ -114,9 +145,14 @@ int main(int argc, char *argv[])
 			}
 			g_base_info_unref(info);
 		}
-		printf("test {\n");
-        printf("    _ = @This();\n");
-        printf("}\n");
+		if (config_enable_ref_test)
+		{
+			printf("\n");
+			printf("test \"refAllDecls\" {\n");
+			printf("    @setEvalBranchQuota(1_000_000);");
+            printf("    std.testing.refAllDecls(@This());\n");
+            printf("}\n");
+		}
 		fflush(stdout);
 		fclose(stdout);
 	}
