@@ -150,8 +150,8 @@ int main(int argc, char *argv[])
 			printf("\n");
 			printf("test \"refAllDecls\" {\n");
 			printf("    @setEvalBranchQuota(1_000_000);");
-            printf("    std.testing.refAllDecls(@This());\n");
-            printf("}\n");
+			printf("    std.testing.refAllDecls(@This());\n");
+			printf("}\n");
 		}
 		fflush(stdout);
 		fclose(stdout);
