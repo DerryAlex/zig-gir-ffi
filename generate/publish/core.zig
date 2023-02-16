@@ -732,6 +732,86 @@ pub const TypeFlagsZ = struct {
     extra_register_fn: ?*const fn (GType) void = null,
 };
 
+/// Convenience wrapper for Boxed definitions
+pub fn registerBoxed(comptime Box: type, name: [*:0]const u8) GType {
+    const boxed_copy = struct {
+        pub fn trampoline(self: *Box) callconv(.C) *Box {
+            if (@hasDecl(Box, "copy")) {
+                comptime assert(@hasDecl(Box, "free"));
+                return self.copy();
+            } else {
+                const allocator = gpa.allocator();
+                var new_box = allocator.create(Box) catch @panic("Out Of Memory");
+                new_box.* = self.*;
+                return new_box;
+            }
+        }
+    }.trampoline;
+    const boxed_free = struct {
+        pub fn trampoline(self: *Box) callconv(.C) void {
+            if (@hasDecl(Box, "free")) {
+                comptime assert(@hasDecl(Box, "copy"));
+                self.free();
+            } else {
+                const allocator = gpa.allocator();
+                allocator.destroy(self);
+            }
+        }
+    }.trampoline;
+    const Static = struct {
+        var type_id: GType = .Invalid;
+    };
+    if (GLib.onceInitEnter(&Static.type_id).toBool()) {
+        const type_id = boxedTypeRegisterStatic(name, @ptrCast(GObject.BoxedCopyFunc, boxed_copy), @ptrCast(GObject.BoxedFreeFunc, boxed_free));
+        GLib.onceInitLeave(&Static.type_id, @enumToInt(type_id));
+    }
+    return Static.type_id;
+}
+
+/// Convenience wrapper for Enum definitions
+pub fn registerEnum(comptime Enum: type, name: [*:0]const u8) GType {
+    const fields = std.meta.fields(Enum);
+    const len = fields.len;
+    const Static = struct {
+        var type_id: GType = .Invalid;
+        var values: [len:std.mem.zeroes(GObject.EnumValue)]GObject.EnumValue = undefined;
+    };
+    if (GLib.onceInitEnter(&Static.type_id).toBool()) {
+        inline for (fields) |field, index| {
+            Static.values[index].value = field.value;
+            comptime var name_c: [field.name.len:0]u8 = undefined;
+            comptime std.mem.copy(u8, name_c[0..], field.name[0..]);
+            Static.values[index].value_name = &name_c;
+            Static.values[index].value_nick = null;
+        }
+        const type_id = GObject.enumRegisterStatic(name, &Static.values[0]);
+        GLib.onceInitLeave(&Static.type_id, @enumToInt(type_id));
+    }
+    return Static.type_id;
+}
+
+/// Convenience wrapper for Flags definitions
+pub fn registerFlags(comptime Enum: type, name: [*:0]const u8) GType {
+    const fields = std.meta.fields(Enum);
+    const len = fields.len;
+    const Static = struct {
+        var type_id: GType = .Invalid;
+        var values: [len:std.mem.zeroes(GObject.FlagsValue)]GObject.FlagsValue = undefined;
+    };
+    if (GLib.onceInitEnter(&Static.type_id).toBool()) {
+        inline for (fields) |field, index| {
+            Static.values[index].value = field.value;
+            comptime var name_c: [field.name.len:0]u8 = undefined;
+            comptime std.mem.copy(u8, name_c[0..], field.name[0..]);
+            Static.values[index].value_name = &name_c;
+            Static.values[index].value_nick = null;
+        }
+        const type_id = GObject.flagsRegisterStatic(name, &Static.values[0]);
+        GLib.onceInitLeave(&Static.type_id, @enumToInt(type_id));
+    }
+    return Static.type_id;
+}
+
 /// Convenience wrapper for Type implementations
 pub fn registerType(comptime Class: type, comptime Instance: type, name: [*:0]const u8, comptime flags: TypeFlagsZ) GType {
     const class_init = struct {
@@ -785,6 +865,12 @@ pub fn registerInterfaceImplementation(type_id: GType, comptime Interface: type,
 
 /// Convenience wrapper for Interface definitions
 pub fn registerInterface(comptime Interface: type, comptime Prerequisite: ?type, name: [*:0]const u8, comptime flags: TypeFlagsZ) GType {
+    comptime {
+        const default_flags: TypeFlagsZ = .{};
+        assert(flags.abstract == default_flags.abstract);
+        assert(flags.value_abstract == default_flags.value_abstract);
+        assert(flags.final == default_flags.final);
+    }
     const class_init = struct {
         pub fn trampoline(self: Interface) callconv(.C) void {
             if (@hasDecl(Interface, "init")) {
@@ -833,6 +919,18 @@ pub fn FnReturnType(comptime T: type) type {
 
 // ---------------------
 // manual bindings begin
+
+/// This function creates a new G_TYPE_BOXED derived type id for a new boxed type with name name.
+/// Boxed type handling functions have to be provided to copy and free opaque boxed structures of this type.
+/// @name:       Name of the new boxed type.
+/// @boxed_copy: Boxed structure copy function.
+/// @boxed_free: Boxed structure free function.
+/// Return:      New G_TYPE_BOXED derived type id for name.
+pub fn boxedTypeRegisterStatic(name: [*:0]const u8, boxed_copy: GObject.BoxedCopyFunc, boxed_free: GObject.BoxedFreeFunc) GType {
+    return struct {
+        pub extern fn g_boxed_type_register_static([*:0]const u8, GObject.BoxedCopyFunc, GObject.BoxedFreeFunc) GType;
+    }.g_boxed_type_register_static(name, boxed_copy, boxed_free);
+}
 
 /// Creates a new closure which invokes callback_func with user_data as the last parameter.
 /// destroy_data will be called as a finalize notifier on the GClosure.
@@ -935,6 +1033,6 @@ pub fn typeRegisterStaticSimple(parent_type: GType, type_name: [*:0]const u8, cl
 // manual bindings end
 // -------------------
 
-test {
-    _ = @This();
+test "refAllDecls" {
+    std.testing.refAllDecls(@This());
 }

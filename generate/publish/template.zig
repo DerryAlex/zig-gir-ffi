@@ -40,6 +40,6 @@ pub fn bindCallback(class: *Gtk.WidgetClass, comptime Class: type) void {
     }
 }
 
-test {
-    _ = @This();
+test "refAllDecls" {
+    std.testing.refAllDecls(@This());
 }
