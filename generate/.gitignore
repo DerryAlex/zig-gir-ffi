@@ -1,4 +1,0 @@
-gir-zig
-publish/*
-!publish/core.zig
-!publish/template.zig

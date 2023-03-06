@@ -6,25 +6,25 @@ pub fn printHello() void {
     std.log.info("Hello World", .{});
 }
 
-pub fn activate(arg_app: core.Application) void {
+pub fn activate(arg_app: *core.Application) void {
     var app = arg_app.tryInto(Gtk.Application).?;
     var window = Gtk.ApplicationWindow.new(app);
-    window.callMethod("setTitle", .{"Window"});
-    window.callMethod("setDefaultSize", .{ 200, 200 });
+    window.callZ("setTitle", .{"Window"});
+    window.callZ("setDefaultSize", .{ 200, 200 });
     var box = Gtk.Box.new(.Vertical, 0);
-    box.callMethod("setHalign", .{.Center});
-    box.callMethod("setValign", .{.Center});
-    window.callMethod("setChild", .{box.into(Gtk.Widget).asSome()});
+    box.callZ("setHalign", .{.Center});
+    box.callZ("setValign", .{.Center});
+    window.callZ("setChild", .{box.into(Gtk.Widget)});
     var button = Gtk.Button.newWithLabel("Hello, World");
-    _ = button.signalClicked().connect(printHello, .{}, .{ .swapped = true });
-    _ = button.signalClicked().connect(Gtk.Window.destroy, .{window.into(Gtk.Window)}, .{ .swapped = true });
+    _ = button.signalClicked().connectSwap(printHello, .{}, .{});
+    _ = button.signalClicked().connectSwap(Gtk.Window.destroy, .{window.into(Gtk.Window)}, .{});
     box.append(button.into(Gtk.Widget));
-    window.callMethod("show", .{});
+    window.callZ("show", .{});
 }
 
 pub fn main() !void {
     var app = Gtk.Application.new("org.gtk.example", .FlagsNone);
-    defer app.callMethod("unref", .{});
-    _ = app.callMethod("signalActivate", .{}).connect(activate, .{}, .{});
-    _ = app.callMethod("run", .{std.os.argv});
+    defer app.callZ("unref", .{});
+    _ = app.callZ("signalActivate", .{}).connect(activate, .{}, .{});
+    _ = app.callZ("run", .{@intCast(i32, std.os.argv.len), std.os.argv.ptr});
 }
