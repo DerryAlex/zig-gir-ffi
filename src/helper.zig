@@ -61,8 +61,14 @@ pub fn snakeToCamel(src: []const u8, buf: []u8) []u8 {
 }
 
 pub fn isZigKeyword(str: []const u8) bool {
-    const keywords = [_][]const u8{ "break", "continue", "error", "export", "test", "type", "union", "var" };
+    const keywords = [_][]const u8{ "addrspace", "align", "allowzero", "and", "anyframe", "anytype", "asm", "async", "await", "break", "callconv", "catch", "comptime", "const", "continue", "defer", "else", "enum", "errdefer", "error", "export", "extern", "fn", "for", "if", "inline", "linksection", "noalias", "noinline", "nosuspend", "opaque", "or", "orelse", "packed", "pub", "resume", "return", "struct", "suspend", "switch", "test", "threadlocal", "try", "union", "unreachable", "usingnamespace", "var", "volatile", "while" };
     for (keywords) |keyword| {
+        if (std.mem.eql(u8, keyword, str)) {
+            return true;
+        }
+    }
+    const primitives = [_][]const u8{ "anyerror", "anyframe", "anyopaque", "bool", "comptime_float", "comptime_int", "false", "isize", "noreturn", "null", "true", "type", "undefined", "usize", "void" };
+    for (primitives) |keyword| {
         if (std.mem.eql(u8, keyword, str)) {
             return true;
         }

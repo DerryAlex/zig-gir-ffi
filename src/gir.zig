@@ -459,7 +459,15 @@ pub const CallableInfo = struct {
         return .{ .callable_info = self, .capacity = @intCast(usize, c.g_callable_info_get_n_args(self.info)) };
     }
 
-    fn format_helper(self: CallableInfo, writer: anytype, type_annotation: bool, allow_skip_return: bool, c_callconv: bool, vfunc: bool) !void {
+    pub fn argsAlloc(self: CallableInfo, allocator: std.mem.Allocator) []ArgInfo {
+        var args = allocator.alloc(ArgInfo, @intCast(usize, c.g_callable_info_get_n_args(self.info)));
+        for (args, 0..) |*arg, index| {
+            arg.* = .{ .info = c.g_callable_info_get_arg(self.callable_info.info, @intCast(c_int, index)) };
+        }
+        return args;
+    }
+
+    fn format_helper(self: CallableInfo, writer: anytype, type_annotation: bool, c_callconv: bool, vfunc: bool) !void {
         var first = true;
         try writer.writeAll("(");
         if (self.isMethod()) {
@@ -506,9 +514,12 @@ pub const CallableInfo = struct {
                 try writer.writeAll(", ");
             }
             if (type_annotation) {
-                try writer.writeAll("err: *?*core.Error");
+                try writer.writeAll("_error: *?*core.Error");
             } else {
-                try writer.writeAll("err");
+                if (!vfunc) {
+                    try writer.writeAll("&"); // method wrapper
+                }
+                try writer.writeAll("_error");
             }
         }
         try writer.writeAll(") ");
@@ -516,7 +527,7 @@ pub const CallableInfo = struct {
             if (c_callconv) {
                 try writer.writeAll("callconv(.C) ");
             }
-            if (self.skipReturn() and allow_skip_return) {
+            if (self.skipReturn()) {
                 try writer.writeAll("void");
             } else {
                 const return_type = self.returnType();
@@ -572,6 +583,8 @@ pub const FunctionInfo = struct {
     }
 
     // TODO: wrapper
+    // [ ] slice
+    // [ ] out parameter
     pub fn format(self: FunctionInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
@@ -585,18 +598,102 @@ pub const FunctionInfo = struct {
         } else {
             try writer.print("pub fn {s}", .{func_name});
         }
-        try self.asCallable().format_helper(writer, true, true, false, false);
+        const return_type = self.asCallable().returnType();
+        defer return_type.asBase().deinit();
+        // const throw_bool = return_type.tag() == .Boolean;
+        const throw_bool = false;
+        const throw_error = self.asCallable().canThrow();
+        const skip_return = self.asCallable().skipReturn();
+        {
+            try writer.writeAll("(");
+            var first = true;
+            if (self.asCallable().isMethod()) {
+                if (first) {
+                    first = false;
+                } else {
+                    try writer.writeAll(", ");
+                }
+                const container = self.asCallable().asBase().container();
+                try writer.print("self: *{s}", .{container.name().?});
+            }
+            var iter = self.asCallable().argsIter();
+            while (iter.next()) |arg| {
+                if (first) {
+                    first = false;
+                } else {
+                    try writer.writeAll(", ");
+                }
+                try writer.print("{}", .{arg});
+            }
+            try writer.writeAll(") ");
+            if (throw_bool or throw_error) {
+                try writer.writeAll("core.Expected(");
+            }
+            if (skip_return or throw_bool) {
+                try writer.writeAll("void");
+            } else {
+                var generic_gtk_widget = false;
+                if (func_name.len >= 3 and std.mem.eql(u8, "new", func_name[0..3])) {
+                    if (return_type.interface()) |interface| {
+                        if (std.mem.eql(u8, "Gtk", interface.namespace()) and std.mem.eql(u8, "Widget", interface.name().?)) {
+                            generic_gtk_widget = true;
+                        }
+                    }
+                }
+                if (generic_gtk_widget) {
+                    const container = self.asCallable().asBase().container();
+                    if (self.asCallable().mayReturnNull()) {
+                        try writer.writeAll("?");
+                    }
+                    try writer.print("*{s}", .{container.name().?});
+                } else {
+                    if (self.asCallable().mayReturnNull()) {
+                        try writer.print("{&?}", .{return_type});
+                    } else {
+                        try writer.print("{&}", .{return_type});
+                    }
+                }
+            }
+            if (throw_error) {
+                try writer.writeAll(", *core.Error)");
+            } else if (throw_bool) {
+                try writer.writeAll(", void)");
+            }
+        }
         try writer.writeAll(" {\n");
+        if (throw_error) {
+            try writer.writeAll("var _error: ?*core.Error = null;\n");
+        }
         try writer.print("const ffi_fn = struct {{ extern \"c\" fn {s}", .{self.symbol()});
-        try self.asCallable().format_helper(writer, true, false, false, false);
+        try self.asCallable().format_helper(writer, true, false, false);
         try writer.print("; }}.{s};\n", .{self.symbol()});
         try writer.writeAll("const ret = ffi_fn");
-        try self.asCallable().format_helper(writer, false, false, false, false);
+        try self.asCallable().format_helper(writer, false, false, false);
         try writer.writeAll(";\n");
-        if (self.asCallable().skipReturn()) {
+        if (skip_return) {
             try writer.writeAll("_ = ret;\n");
+        }
+        if (throw_error) {
+            if (throw_bool) {
+                try writer.writeAll("_ = ret;\n");
+            }
+            try writer.writeAll("if (_error) |some| return .{.err = some};\n");
+            try writer.writeAll("return .{.value = ");
+        } else if (throw_bool) {
+            try writer.writeAll("if (ret) return .{.err = {}};\n");
+            try writer.writeAll("return .{.value = ");
         } else {
-            try writer.writeAll("return ret;\n");
+            try writer.writeAll("return ");
+        }
+        if (skip_return or throw_bool) {
+            try writer.writeAll("{}");
+        } else {
+            try writer.writeAll("ret");
+        }
+        if (throw_bool or throw_error) {
+            try writer.writeAll("};\n");
+        } else {
+            try writer.writeAll(";\n");
         }
         try writer.writeAll("}\n");
     }
@@ -614,7 +711,7 @@ pub const CallbackInfo = struct {
         _ = options;
         if (self.asCallable().asBase().isDeprecated() and !enable_deprecated) return;
         try writer.writeAll("*const fn ");
-        try self.asCallable().format_helper(writer, true, false, true, false);
+        try self.asCallable().format_helper(writer, true, true, false);
     }
 };
 
@@ -650,10 +747,12 @@ pub const SignalInfo = struct {
         // connect
         try writer.print("pub fn connect(self: Signal{c}{s}Z, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..] });
         try writer.print("return core.connectZ(self.object.into(core.Object), \"{s}\", handler, args, flags, &[_]type{{", .{raw_name});
+        const return_type = self.asCallable().returnType();
+        defer return_type.asBase().deinit();
         if (self.asCallable().mayReturnNull()) {
-            try writer.print("{&*}", .{self.asCallable().returnType()});
+            try writer.print("{&*}", .{return_type});
         } else {
-            try writer.print("{&}", .{self.asCallable().returnType()});
+            try writer.print("{&}", .{return_type});
         }
         try writer.print(", *{s}", .{container_name});
         var iter = self.asCallable().argsIter();
@@ -666,13 +765,13 @@ pub const SignalInfo = struct {
         try writer.print("pub fn connectSwap(self: Signal{c}{s}Z, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..] });
         try writer.print("return core.connectSwapZ(self.object.into(core.Object), \"{s}\", handler, args, flags, &[_]type{{", .{raw_name});
         if (self.asCallable().mayReturnNull()) {
-            try writer.print("{&*}", .{self.asCallable().returnType()});
+            try writer.print("{&*}", .{return_type});
         } else {
-            try writer.print("{&}", .{self.asCallable().returnType()});
+            try writer.print("{&}", .{return_type});
         }
         try writer.writeAll("});\n");
         try writer.writeAll("}\n");
-        try writer.writeAll("};\n\n");
+        try writer.writeAll("};\n");
         try writer.print("pub fn signal{c}{s}(self: *{s}) Signal{c}{s}Z {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name, std.ascii.toUpper(name[0]), name[1..] });
         try writer.writeAll("return .{.object = self};");
         try writer.writeAll("}\n");
@@ -702,7 +801,6 @@ pub const VFuncInfo = struct {
         return if (c.g_vfunc_info_get_invoker(self.info)) |some| FunctionInfo{ .info = some } else null;
     }
 
-    // TODO: wrapper
     pub fn format(self: VFuncInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
@@ -716,16 +814,20 @@ pub const VFuncInfo = struct {
             .Interface => container.asRegisteredType().asInterface().ifaceStruct().?,
             else => unreachable,
         };
+        defer class.asRegisteredType().asBase().deinit();
         const class_name = class.asRegisteredType().asBase().name().?;
         try writer.print("pub fn {s}V", .{vfunc_name});
-        try self.asCallable().format_helper(writer, true, true, false, true);
+        try self.asCallable().format_helper(writer, true, false, true);
         try writer.writeAll(" {\n");
         try writer.print("const vfunc_fn = @ptrCast(*{s}, core.typeClassPeek(_type)).{s}.?;", .{ class_name, raw_vfunc_name });
         try writer.writeAll("const ret = vfunc_fn");
-        try self.asCallable().format_helper(writer, false, false, false, true);
+        try self.asCallable().format_helper(writer, false, false, true);
         try writer.writeAll(";\n");
         if (self.asCallable().skipReturn()) {
             try writer.writeAll("_ = ret;\n");
+        }
+        if (self.asCallable().skipReturn()) {
+            try writer.writeAll("return {};\n");
         } else {
             try writer.writeAll("return ret;\n");
         }
@@ -894,7 +996,7 @@ pub const EnumInfo = struct {
                         if (_value >= 0) {
                             try writer.print("0x{x}", .{_value});
                         } else {
-                            try writer.print("-0x{x}", .{-_value});
+                            try writer.print("@bitCast(i32, 0x{x})", .{@bitCast(u32, _value)});
                         }
                     },
                     .UInt32 => {
@@ -1540,6 +1642,15 @@ pub const InterfaceInfo = struct {
             try writer.print("{}", .{signal});
         }
         try helper.emitCall(self, writer);
+        // cast
+        {
+            try writer.print("pub fn into(self: *{s}, comptime T: type) *T {{\n", .{name});
+            try writer.writeAll("return core.upCast(T, self);\n");
+            try writer.writeAll("}\n");
+            try writer.print("pub fn tryInto(self: *{s}, comptime T: type) ?*T {{\n", .{name});
+            try writer.writeAll("return core.downCast(T, self);\n");
+            try writer.writeAll("}\n");
+        }
         try self.asRegisteredType().format_helper(writer);
         try writer.writeAll("};\n");
     }
@@ -1610,25 +1721,27 @@ pub const ArgInfo = struct {
             const name = self.asBase().name().?;
             try writer.print("arg_{s}: ", .{name});
         }
+        const arg_type = self.type();
+        defer arg_type.asBase().deinit();
         if (self.direction() != .In) {
             if (self.isOptional()) {
                 if (self.mayBeNull()) {
-                    try writer.print("{_&?*}", .{self.type()});
+                    try writer.print("{_&?*}", .{arg_type});
                 } else {
-                    try writer.print("{_&*}", .{self.type()});
+                    try writer.print("{_&*}", .{arg_type});
                 }
             } else {
                 if (self.mayBeNull()) {
-                    try writer.print("{&?*}", .{self.type()});
+                    try writer.print("{&?*}", .{arg_type});
                 } else {
-                    try writer.print("{&*}", .{self.type()});
+                    try writer.print("{&*}", .{arg_type});
                 }
             }
         } else {
             if (self.mayBeNull()) {
-                try writer.print("{??}", .{self.type()});
+                try writer.print("{??}", .{arg_type});
             } else {
-                try writer.print("{}", .{self.type()});
+                try writer.print("{}", .{arg_type});
             }
         }
     }
@@ -1773,6 +1886,22 @@ pub const PropertyInfo = struct {
         return if (c.g_property_info_get_setter(self.info)) |some| FunctionInfo{ .info = some } else null;
     }
 
+    fn isBasicTypeProperty(self: PropertyInfo) bool {
+        const property_type = self.type();
+        defer property_type.asBase().deinit();
+        switch (property_type.tag()) {
+            .Interface => {
+                const interface = property_type.interface().?;
+                defer interface.deinit();
+                switch (interface.type()) {
+                    .Enum, .Flags => return true,
+                    else => return false,
+                }
+            },
+            else => return true,
+        }
+    }
+
     pub fn format(self: PropertyInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
@@ -1782,24 +1911,44 @@ pub const PropertyInfo = struct {
         const container_name = self.asBase().container().name().?;
         try writer.print("const Property{c}{s}Z = struct {{\n", .{ std.ascii.toUpper(name[0]), name[1..] });
         try writer.print("object: *{s},", .{container_name});
+        const property_type = self.type();
+        defer property_type.asBase().deinit();
         const _flags = self.flags();
         if (_flags.readable) {
+            try writer.print("pub fn get(self: Property{c}{s}Z) {s}{} {{\n", .{ std.ascii.toUpper(name[0]), name[1..], if (self.isBasicTypeProperty()) "" else "*", property_type });
             if (self.getter()) |some| {
-                try writer.print("pub fn get(self: Property{c}{s}Z) {} {{\n", .{ std.ascii.toUpper(name[0]), name[1..], self.type() });
-                try writer.print("return self.object.{s};\n", .{some.asCallable().asBase().name().?});
-                try writer.writeAll("}\n");
+                defer some.asCallable().asBase().deinit();
+                var buf2: [256]u8 = undefined;
+                const getter_name = snakeToCamel(some.asCallable().asBase().name().?, buf2[0..]);
+                try writer.print("return self.object.{s}();\n", .{getter_name});
             } else {
-                // TODO
+                try writer.print("var property_value = core.ValueZ({}).new();\n", .{property_type});
+                try writer.writeAll("defer property_value.deinit();\n");
+                try writer.print("self.callZ(\"getProperty\", .{{ \"{s}\", property_value.toValue() }});\n", .{raw_name});
+                try writer.writeAll("return property_value.get();\n");
             }
+            try writer.writeAll("}\n");
         }
         if (_flags.writable and !_flags.construct_only) {
+            try writer.print("pub fn set(self: Property{c}{s}Z, arg_value: {s}{}) void {{\n", .{ std.ascii.toUpper(name[0]), name[1..], if (self.isBasicTypeProperty()) "" else "*", property_type });
             if (self.setter()) |some| {
-                try writer.print("pub fn set(self: Property{c}{s}Z, arg_value: {}) void {{\n", .{ std.ascii.toUpper(name[0]), name[1..], self.type() });
-                try writer.print("self.object.{s}(arg_value);\n", .{some.asCallable().asBase().name().?});
-                try writer.writeAll("}\n");
+                defer some.asCallable().asBase().deinit();
+                var buf2: [256]u8 = undefined;
+                const setter_name = snakeToCamel(some.asCallable().asBase().name().?, buf2[0..]);
+                try writer.print("self.object.{s}(arg_value);\n", .{setter_name});
             } else {
-                // TODO
+                try writer.print("var property_value = core.ValueZ({}).new();\n", .{property_type});
+                try writer.writeAll("defer property_value.deinit();\n");
+                try writer.writeAll("property_value.set(arg_value);\n");
+                try writer.print("self.callZ(\"setProperty\", .{{ \"{s}\", property_value.toValue() }});\n", .{raw_name});
             }
+            try writer.writeAll("}\n");
+            try writer.print("pub fn connect(self: Property{c}{s}Z, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..] });
+            try writer.print("return core.connectZ(self.object.into(core.Object), \"notify::{s}\", handler, args, flags, &[_]type{{ void, {s}, core.ParamSpec }});\n", .{ raw_name, container_name });
+            try writer.writeAll("}\n");
+            try writer.print("pub fn connectSwap(self: Property{c}{s}Z, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..] });
+            try writer.print("return core.connectSwapZ(self.object.into(core.Object), \"notify::{s}\", handler, args, flags, &[_]type{{ void }});\n", .{raw_name});
+            try writer.writeAll("}\n");
         }
         try writer.writeAll("};\n");
         try writer.print("pub fn property{c}{s}(self: *{s}) Property{c}{s}Z {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name, std.ascii.toUpper(name[0]), name[1..] });
