@@ -79,7 +79,7 @@ pub fn isZigKeyword(str: []const u8) bool {
 pub fn emitCall(self: anytype, writer: anytype) !void {
     // part 1
     const name = self.asRegisteredType().asBase().name().?;
-    try writer.writeAll("pub fn CallZ(comptime method: []const u8) ?type {\n");
+    try writer.writeAll("pub fn __Call(comptime method: []const u8) ?type {\n");
     var m_iter = self.methodIter();
     while (m_iter.next()) |method| {
         if (method.asCallable().asBase().isDeprecated() and !enable_deprecated) continue;
@@ -90,10 +90,15 @@ pub fn emitCall(self: anytype, writer: anytype) !void {
         }
         if (method.asCallable().isMethod()) {
             try writer.print("if (comptime std.mem.eql(u8, \"{s}\", method))", .{m_name});
-            if (method.asCallable().mayReturnNull()) {
-                try writer.print(" return {&?};\n", .{method.asCallable().returnType()});
+            // if (method.asCallable().mayReturnNull()) {
+            //     try writer.print(" return {&?};\n", .{method.asCallable().returnType()});
+            // } else {
+            //     try writer.print(" return {&};\n", .{method.asCallable().returnType()});
+            // }
+            if (isZigKeyword(m_name)) {
+                try writer.print(" return core.FnReturnType(@This().@\"{s}\");\n", .{m_name});
             } else {
-                try writer.print(" return {&};\n", .{method.asCallable().returnType()});
+                try writer.print(" return core.FnReturnType(@This().{s});\n", .{m_name});
             }
         }
     }
@@ -114,20 +119,39 @@ pub fn emitCall(self: anytype, writer: anytype) !void {
         if (property.asBase().isDeprecated() and !enable_deprecated) continue;
         var buf: [256]u8 = undefined;
         const p_name = snakeToCamel(property.asBase().name().?, buf[0..]);
-        try writer.print("if (comptime std.mem.eql(u8, \"property{c}{s}\", method)) return Property{c}{s}Z;\n", .{ std.ascii.toUpper(p_name[0]), p_name[1..], std.ascii.toUpper(p_name[0]), p_name[1..] });
+        const flags = property.flags();
+        const property_type = property.type();
+        defer property_type.asBase().deinit();
+        if (flags.readable) {
+            if (property.getter()) |some| {
+                defer some.asCallable().asBase().deinit();
+            } else {
+                try writer.print("if (comptime std.mem.eql(u8, \"get{c}{s}\", method)) return {s}{&};\n", .{ std.ascii.toUpper(p_name[0]), p_name[1..], if (property.isBasicTypeProperty()) "" else "*", property_type });
+            }
+        }
+        if (flags.writable and !flags.construct_only) {
+            if (property.setter()) |some| {
+                defer some.asCallable().asBase().deinit();
+            } else {
+                try writer.print("if (comptime std.mem.eql(u8, \"set{c}{s}\", method)) return void;\n", .{ std.ascii.toUpper(p_name[0]), p_name[1..] });
+            }
+            try writer.print("if (comptime std.mem.eql(u8, \"connect{c}{s}Notify\", method)) return usize;\n", .{ std.ascii.toUpper(p_name[0]), p_name[1..] });
+            try writer.print("if (comptime std.mem.eql(u8, \"connect{c}{s}NotifySwap\", method)) return usize;\n", .{ std.ascii.toUpper(p_name[0]), p_name[1..] });
+        }
     }
     var s_iter = self.signalIter();
     while (s_iter.next()) |signal| {
         if (signal.asCallable().asBase().isDeprecated() and !enable_deprecated) continue;
         var buf: [256]u8 = undefined;
         const s_name = snakeToCamel(signal.asCallable().asBase().name().?, buf[0..]);
-        try writer.print("if (comptime std.mem.eql(u8, \"signal{c}{s}\", method)) return Signal{c}{s}Z;\n", .{ std.ascii.toUpper(s_name[0]), s_name[1..], std.ascii.toUpper(s_name[0]), s_name[1..] });
+        try writer.print("if (comptime std.mem.eql(u8, \"connect{c}{s}\", method)) return usize;\n", .{ std.ascii.toUpper(s_name[0]), s_name[1..] });
+        try writer.print("if (comptime std.mem.eql(u8, \"connect{c}{s}Swap\", method)) return usize;\n", .{ std.ascii.toUpper(s_name[0]), s_name[1..] });
     }
-    try writer.writeAll("return core.DispatchZ(@This(), method);\n");
+    try writer.writeAll("return core.CallInherited(@This(), method);\n");
     try writer.writeAll("}\n");
     // part 2
-    try writer.print("pub fn callZ(self: *{s}, comptime method: []const u8, args: anytype)", .{name});
-    try writer.writeAll(" if (CallZ(method)) |some| some else @compileError(std.fmt.comptimePrint(\"No such method {s}\", .{method})) {\n");
+    try writer.print("pub fn __call(self: *{s}, comptime method: []const u8, args: anytype)", .{name});
+    try writer.writeAll(" if (__Call(method)) |some| some else @compileError(std.fmt.comptimePrint(\"No such method {s}\", .{method})) {\n");
     m_iter = self.methodIter();
     while (m_iter.next()) |method| {
         if (method.asCallable().asBase().isDeprecated() and !enable_deprecated) continue;
@@ -156,15 +180,34 @@ pub fn emitCall(self: anytype, writer: anytype) !void {
         if (property.asBase().isDeprecated() and !enable_deprecated) continue;
         var buf: [256]u8 = undefined;
         const p_name = snakeToCamel(property.asBase().name().?, buf[0..]);
-        try writer.print("if (comptime std.mem.eql(u8, \"property{c}{s}\", method)) return @call(.auto, property{c}{s}, .{{self}} ++ args);\n", .{ std.ascii.toUpper(p_name[0]), p_name[1..], std.ascii.toUpper(p_name[0]), p_name[1..] });
+        const flags = property.flags();
+        const property_type = property.type();
+        defer property_type.asBase().deinit();
+        if (flags.readable) {
+            if (property.getter()) |some| {
+                defer some.asCallable().asBase().deinit();
+            } else {
+                try writer.print("if (comptime std.mem.eql(u8, \"get{c}{s}\", method)) return @call(.auto, get{c}{s}, .{{self}} ++ args);\n", .{ std.ascii.toUpper(p_name[0]), p_name[1..], std.ascii.toUpper(p_name[0]), p_name[1..] });
+            }
+        }
+        if (flags.writable and !flags.construct_only) {
+            if (property.setter()) |some| {
+                defer some.asCallable().asBase().deinit();
+            } else {
+                try writer.print("if (comptime std.mem.eql(u8, \"set{c}{s}\", method)) return @call(.auto, set{c}{s}, .{{self}} ++ args);\n", .{ std.ascii.toUpper(p_name[0]), p_name[1..], std.ascii.toUpper(p_name[0]), p_name[1..] });
+            }
+            try writer.print("if (comptime std.mem.eql(u8, \"connect{c}{s}Notify\", method)) return @call(.auto, connect{c}{s}Notify, .{{self}} ++ args);\n", .{ std.ascii.toUpper(p_name[0]), p_name[1..], std.ascii.toUpper(p_name[0]), p_name[1..] });
+            try writer.print("if (comptime std.mem.eql(u8, \"connect{c}{s}NotifySwap\", method)) return @call(.auto, connect{c}{s}NotifySwap, .{{self}} ++ args);\n", .{ std.ascii.toUpper(p_name[0]), p_name[1..], std.ascii.toUpper(p_name[0]), p_name[1..] });
+        }
     }
     s_iter = self.signalIter();
     while (s_iter.next()) |signal| {
         if (signal.asCallable().asBase().isDeprecated() and !enable_deprecated) continue;
         var buf: [256]u8 = undefined;
         const s_name = snakeToCamel(signal.asCallable().asBase().name().?, buf[0..]);
-        try writer.print("if (comptime std.mem.eql(u8, \"signal{c}{s}\", method)) return @call(.auto, signal{c}{s}, .{{self}} ++ args);\n", .{ std.ascii.toUpper(s_name[0]), s_name[1..], std.ascii.toUpper(s_name[0]), s_name[1..] });
+        try writer.print("if (comptime std.mem.eql(u8, \"connect{c}{s}\", method)) return @call(.auto, connect{c}{s}, .{{self}} ++ args);\n", .{ std.ascii.toUpper(s_name[0]), s_name[1..], std.ascii.toUpper(s_name[0]), s_name[1..] });
+        try writer.print("if (comptime std.mem.eql(u8, \"connect{c}{s}Swap\", method)) return @call(.auto, connect{c}{s}Swap, .{{self}} ++ args);\n", .{ std.ascii.toUpper(s_name[0]), s_name[1..], std.ascii.toUpper(s_name[0]), s_name[1..] });
     }
-    try writer.writeAll("return core.dispatchZ(self, method, args);\n");
+    try writer.writeAll("return core.callInherited(self, method, args);\n");
     try writer.writeAll("}\n");
 }

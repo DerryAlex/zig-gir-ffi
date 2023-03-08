@@ -5,7 +5,7 @@ pub fn build(b: *Builder) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable(.{ .name = "example", .root_source_file = .{ .path = "example1.zig" }, .optimize = optimize, .target = target });
+    const exe = b.addExecutable(.{ .name = "example", .root_source_file = .{ .path = "example.zig" }, .optimize = optimize, .target = target });
     const gtk_mod = b.createModule(.{ .source_file = .{ .path = "../../publish/Gtk.zig" } });
     exe.addModule("Gtk", gtk_mod);
     exe.linkLibC();

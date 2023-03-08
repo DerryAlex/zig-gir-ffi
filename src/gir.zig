@@ -490,7 +490,7 @@ pub const CallableInfo = struct {
                 } else {
                     try writer.writeAll(", ");
                 }
-                try writer.writeAll("_type: core.GType");
+                try writer.writeAll("_type: core.Type");
             }
         }
         var iter = self.argsIter();
@@ -677,11 +677,11 @@ pub const FunctionInfo = struct {
             if (throw_bool) {
                 try writer.writeAll("_ = ret;\n");
             }
-            try writer.writeAll("if (_error) |some| return .{.err = some};\n");
-            try writer.writeAll("return .{.value = ");
+            try writer.writeAll("if (_error) |some| return .{.Err = some};\n");
+            try writer.writeAll("return .{.Ok = ");
         } else if (throw_bool) {
-            try writer.writeAll("if (ret) return .{.err = {}};\n");
-            try writer.writeAll("return .{.value = ");
+            try writer.writeAll("if (ret) return .{.Err = {}};\n");
+            try writer.writeAll("return .{.Ok = ");
         } else {
             try writer.writeAll("return ");
         }
@@ -742,11 +742,8 @@ pub const SignalInfo = struct {
         var buf: [256]u8 = undefined;
         const raw_name = self.asCallable().asBase().name().?;
         const name = snakeToCamel(raw_name, buf[0..]);
-        try writer.print("const Signal{c}{s}Z = struct {{\n", .{ std.ascii.toUpper(name[0]), name[1..] });
-        try writer.print("object: *{s},\n", .{container_name});
-        // connect
-        try writer.print("pub fn connect(self: Signal{c}{s}Z, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..] });
-        try writer.print("return core.connectZ(self.object.into(core.Object), \"{s}\", handler, args, flags, &[_]type{{", .{raw_name});
+        try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
+        try writer.print("return core.connect(self.into(core.Object), \"{s}\", handler, args, flags, &[_]type{{", .{raw_name});
         const return_type = self.asCallable().returnType();
         defer return_type.asBase().deinit();
         if (self.asCallable().mayReturnNull()) {
@@ -762,18 +759,14 @@ pub const SignalInfo = struct {
         try writer.writeAll("});\n");
         try writer.writeAll("}\n");
         // connect swapped
-        try writer.print("pub fn connectSwap(self: Signal{c}{s}Z, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..] });
-        try writer.print("return core.connectSwapZ(self.object.into(core.Object), \"{s}\", handler, args, flags, &[_]type{{", .{raw_name});
+        try writer.print("pub fn connect{c}{s}Swap(self: *{s}, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
+        try writer.print("return core.connectSwap(self.into(core.Object), \"{s}\", handler, args, flags, &[_]type{{", .{raw_name});
         if (self.asCallable().mayReturnNull()) {
             try writer.print("{&*}", .{return_type});
         } else {
             try writer.print("{&}", .{return_type});
         }
         try writer.writeAll("});\n");
-        try writer.writeAll("}\n");
-        try writer.writeAll("};\n");
-        try writer.print("pub fn signal{c}{s}(self: *{s}) Signal{c}{s}Z {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name, std.ascii.toUpper(name[0]), name[1..] });
-        try writer.writeAll("return .{.object = self};");
         try writer.writeAll("}\n");
     }
 };
@@ -881,12 +874,12 @@ pub const RegisteredTypeInfo = struct {
 
     pub fn format_helper(self: RegisteredTypeInfo, writer: anytype) !void {
         if (self.gType() != c.G_TYPE_NONE) {
-            try writer.writeAll("pub fn gType() core.GType {\n");
+            try writer.writeAll("pub fn @\"type\"() core.Type {\n");
             const init_fn = self.typeInit();
             if (std.mem.eql(u8, "intern", init_fn)) {
-                try writer.print("return @intToEnum(core.GType, {});", .{self.gType()});
+                try writer.print("return @intToEnum(core.Type, {});", .{self.gType()});
             } else {
-                try writer.print("const ffi_fn = struct {{ extern \"c\" fn {s}() core.GType; }}.{s};\n", .{ init_fn, init_fn });
+                try writer.print("const ffi_fn = struct {{ extern \"c\" fn {s}() core.Type; }}.{s};\n", .{ init_fn, init_fn });
                 try writer.writeAll("return ffi_fn();\n");
             }
             try writer.writeAll("}\n");
@@ -1886,7 +1879,8 @@ pub const PropertyInfo = struct {
         return if (c.g_property_info_get_setter(self.info)) |some| FunctionInfo{ .info = some } else null;
     }
 
-    fn isBasicTypeProperty(self: PropertyInfo) bool {
+    /// helper function
+    pub fn isBasicTypeProperty(self: PropertyInfo) bool {
         const property_type = self.type();
         defer property_type.asBase().deinit();
         switch (property_type.tag()) {
@@ -1909,51 +1903,39 @@ pub const PropertyInfo = struct {
         const raw_name = self.asBase().name().?;
         const name = snakeToCamel(raw_name, buf[0..]);
         const container_name = self.asBase().container().name().?;
-        try writer.print("const Property{c}{s}Z = struct {{\n", .{ std.ascii.toUpper(name[0]), name[1..] });
-        try writer.print("object: *{s},", .{container_name});
         const property_type = self.type();
         defer property_type.asBase().deinit();
         const _flags = self.flags();
         if (_flags.readable) {
-            try writer.print("pub fn get(self: Property{c}{s}Z) {s}{} {{\n", .{ std.ascii.toUpper(name[0]), name[1..], if (self.isBasicTypeProperty()) "" else "*", property_type });
             if (self.getter()) |some| {
                 defer some.asCallable().asBase().deinit();
-                var buf2: [256]u8 = undefined;
-                const getter_name = snakeToCamel(some.asCallable().asBase().name().?, buf2[0..]);
-                try writer.print("return self.object.{s}();\n", .{getter_name});
             } else {
+                try writer.print("pub fn get{c}{s}(self: *{s}) {s}{&} {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name, if (self.isBasicTypeProperty()) "" else "*", property_type });
                 try writer.print("var property_value = core.ValueZ({}).new();\n", .{property_type});
                 try writer.writeAll("defer property_value.deinit();\n");
-                try writer.print("self.callZ(\"getProperty\", .{{ \"{s}\", property_value.toValue() }});\n", .{raw_name});
+                try writer.print("self.__call(\"getProperty\", .{{ \"{s}\", &property_value.value }});\n", .{raw_name});
                 try writer.writeAll("return property_value.get();\n");
+                try writer.writeAll("}\n");
             }
-            try writer.writeAll("}\n");
         }
         if (_flags.writable and !_flags.construct_only) {
-            try writer.print("pub fn set(self: Property{c}{s}Z, arg_value: {s}{}) void {{\n", .{ std.ascii.toUpper(name[0]), name[1..], if (self.isBasicTypeProperty()) "" else "*", property_type });
             if (self.setter()) |some| {
                 defer some.asCallable().asBase().deinit();
-                var buf2: [256]u8 = undefined;
-                const setter_name = snakeToCamel(some.asCallable().asBase().name().?, buf2[0..]);
-                try writer.print("self.object.{s}(arg_value);\n", .{setter_name});
             } else {
+                try writer.print("pub fn set{c}{s}(self: *{s}, arg_value: {s}{}) void {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name, if (self.isBasicTypeProperty()) "" else "*", property_type });
                 try writer.print("var property_value = core.ValueZ({}).new();\n", .{property_type});
                 try writer.writeAll("defer property_value.deinit();\n");
                 try writer.writeAll("property_value.set(arg_value);\n");
-                try writer.print("self.callZ(\"setProperty\", .{{ \"{s}\", property_value.toValue() }});\n", .{raw_name});
+                try writer.print("self.__call(\"setProperty\", .{{ \"{s}\", &property_value.value }});\n", .{raw_name});
+                try writer.writeAll("}");
             }
+            try writer.print("pub fn connect{c}{s}Notify(self: *{s}, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
+            try writer.print("return core.connect(self.into(core.Object), \"notify::{s}\", handler, args, flags, &[_]type{{ void, {s}, core.ParamSpec }});\n", .{ raw_name, container_name });
             try writer.writeAll("}\n");
-            try writer.print("pub fn connect(self: Property{c}{s}Z, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..] });
-            try writer.print("return core.connectZ(self.object.into(core.Object), \"notify::{s}\", handler, args, flags, &[_]type{{ void, {s}, core.ParamSpec }});\n", .{ raw_name, container_name });
-            try writer.writeAll("}\n");
-            try writer.print("pub fn connectSwap(self: Property{c}{s}Z, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..] });
-            try writer.print("return core.connectSwapZ(self.object.into(core.Object), \"notify::{s}\", handler, args, flags, &[_]type{{ void }});\n", .{raw_name});
+            try writer.print("pub fn connect{c}{s}NotifySwap(self: *{s}, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
+            try writer.print("return core.connectSwap(self.into(core.Object), \"notify::{s}\", handler, args, flags, &[_]type{{ void }});\n", .{raw_name});
             try writer.writeAll("}\n");
         }
-        try writer.writeAll("};\n");
-        try writer.print("pub fn property{c}{s}(self: *{s}) Property{c}{s}Z {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name, std.ascii.toUpper(name[0]), name[1..] });
-        try writer.writeAll("return .{.object = self};\n");
-        try writer.writeAll("}\n");
     }
 };
 
@@ -2143,7 +2125,7 @@ pub const TypeInfo = struct {
                     }
                     try writer.writeAll("*");
                 }
-                try writer.writeAll("core.GType");
+                try writer.writeAll("core.Type");
             },
             .Utf8, .Filename => {
                 assert(self.isPointer());
