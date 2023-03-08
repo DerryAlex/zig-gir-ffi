@@ -13,6 +13,10 @@ pub fn FnReturnType(comptime func: anytype) type {
     return if (fn_info.Fn.return_type) |some| some else void;
 }
 
+pub inline fn initVar(comptime T: type) T {
+    return undefined;
+}
+
 // ----------
 // type begin
 
@@ -386,6 +390,7 @@ pub fn ClosureZ(comptime Fn: type, comptime Args: type, comptime signature: []co
     return struct {
         handler: Fn,
         args: Args,
+        once: bool,
         allocator: std.mem.Allocator,
 
         const Self = @This();
@@ -395,18 +400,25 @@ pub fn ClosureZ(comptime Fn: type, comptime Args: type, comptime signature: []co
             var closure = try real_allocator.create(Self);
             closure.handler = handler;
             closure.args = args;
+            closure.once = false;
             closure.allocator = real_allocator;
             return closure;
         }
 
         pub usingnamespace if (signature.len == 1) struct {
             pub fn invoke(self: *Self) callconv(.C) signature[0] {
+                defer if (self.once) {
+                    self.deinit();
+                };
                 return @call(.auto, self.handler, self.args);
             }
         } else struct {};
 
         pub usingnamespace if (signature.len == 2) struct {
             pub fn invoke(arg1: signature[1], self: *Self) callconv(.C) signature[0] {
+                defer if (self.once) {
+                    self.deinit();
+                };
                 if (n_arg == 0 and n_param == 0) {
                     return @call(.auto, self.handler, .{});
                 } else {
@@ -417,6 +429,9 @@ pub fn ClosureZ(comptime Fn: type, comptime Args: type, comptime signature: []co
 
         pub usingnamespace if (signature.len == 3) struct {
             pub fn invoke(arg1: signature[1], arg2: signature[2], self: *Self) callconv(.C) signature[0] {
+                defer if (self.once) {
+                    self.deinit();
+                };
                 if (n_arg == 0 and n_param == 0) {
                     @call(.auto, self.handler, .{});
                 } else if (n_arg == 0 and n_param == 1) {
@@ -429,6 +444,9 @@ pub fn ClosureZ(comptime Fn: type, comptime Args: type, comptime signature: []co
 
         pub usingnamespace if (signature.len == 4) struct {
             pub fn invoke(arg1: signature[1], arg2: signature[2], arg3: signature[3], self: *Self) callconv(.C) signature[0] {
+                defer if (self.once) {
+                    self.deinit();
+                };
                 if (n_arg == 0 and n_param == 0) {
                     @call(.auto, self.handler, .{});
                 } else if (n_arg == 0 and n_param == 1) {
@@ -443,6 +461,9 @@ pub fn ClosureZ(comptime Fn: type, comptime Args: type, comptime signature: []co
 
         pub usingnamespace if (signature.len == 5) struct {
             pub fn invoke(arg1: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], self: *Self) callconv(.C) signature[0] {
+                defer if (self.once) {
+                    self.deinit();
+                };
                 if (n_arg == 0 and n_param == 0) {
                     @call(.auto, self.handler, .{});
                 } else if (n_arg == 0 and n_param == 1) {
@@ -459,6 +480,9 @@ pub fn ClosureZ(comptime Fn: type, comptime Args: type, comptime signature: []co
 
         pub usingnamespace if (signature.len == 6) struct {
             pub fn invoke(arg1: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], arg5: signature[5], self: *Self) callconv(.C) signature[0] {
+                defer if (self.once) {
+                    self.deinit();
+                };
                 if (n_arg == 0 and n_param == 0) {
                     @call(.auto, self.handler, .{});
                 } else if (n_arg == 0 and n_param == 1) {
@@ -477,6 +501,9 @@ pub fn ClosureZ(comptime Fn: type, comptime Args: type, comptime signature: []co
 
         pub usingnamespace if (signature.len == 7) struct {
             pub fn invoke(arg1: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], arg5: signature[5], arg6: signature[6], self: *Self) callconv(.C) signature[0] {
+                defer if (self.once) {
+                    self.deinit();
+                };
                 if (n_arg == 0 and n_param == 0) {
                     @call(.auto, self.handler, .{});
                 } else if (n_arg == 0 and n_param == 1) {

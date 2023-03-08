@@ -33,5 +33,5 @@ pub fn main() !void {
     var app = Application.new("org.gtk.example", .FlagsNone);
     defer app.__call("unref", .{});
     _ = app.__call("connectActivate", .{activate, .{}, .{}});
-    _ = app.__call("run", .{@intCast(i32, std.os.argv.len), std.os.argv.ptr});
+    _ = app.__call("run", .{std.os.argv});
 }

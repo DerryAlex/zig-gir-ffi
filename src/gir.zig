@@ -459,10 +459,10 @@ pub const CallableInfo = struct {
         return .{ .callable_info = self, .capacity = @intCast(usize, c.g_callable_info_get_n_args(self.info)) };
     }
 
-    pub fn argsAlloc(self: CallableInfo, allocator: std.mem.Allocator) []ArgInfo {
-        var args = allocator.alloc(ArgInfo, @intCast(usize, c.g_callable_info_get_n_args(self.info)));
+    pub fn argsAlloc(self: CallableInfo, allocator: std.mem.Allocator) ![]ArgInfo {
+        var args = try allocator.alloc(ArgInfo, @intCast(usize, c.g_callable_info_get_n_args(self.info)));
         for (args, 0..) |*arg, index| {
-            arg.* = .{ .info = c.g_callable_info_get_arg(self.callable_info.info, @intCast(c_int, index)) };
+            arg.* = .{ .info = c.g_callable_info_get_arg(self.info, @intCast(c_int, index)) };
         }
         return args;
     }
@@ -559,6 +559,23 @@ pub const CallableInfo = struct {
     }
 };
 
+const SliceInfo = struct {
+    is_slice_ptr: bool = false,
+    slice_len: usize = undefined,
+    is_slice_len: bool = false,
+    slice_ptr: usize = undefined,
+};
+
+const ClosureInfo = struct {
+    scope: ScopeType = .Invalid,
+    is_func: bool = false,
+    closure_data: usize = undefined,
+    is_data: bool = false,
+    closure_func: usize = undefined,
+    is_destroy: bool = false,
+    closure_destroy: usize = undefined,
+};
+
 pub const FunctionInfo = struct {
     info: *c.GIFunctionInfo,
 
@@ -582,13 +599,13 @@ pub const FunctionInfo = struct {
         return if (c.g_function_info_get_vfunc(self.info)) |some| VFuncInfo{ .info = some } else null;
     }
 
-    // TODO: wrapper
-    // [ ] slice
-    // [ ] out parameter
     pub fn format(self: FunctionInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
         if (self.asCallable().asBase().isDeprecated() and !enable_deprecated) return;
+        var buffer: [4096]u8 = undefined;
+        var fixed_buffer_allocator = std.heap.FixedBufferAllocator.init(buffer[0..]);
+        const allocator = fixed_buffer_allocator.allocator();
         var buf: [256]u8 = undefined;
         const func_name = snakeToCamel(self.asCallable().asBase().name().?, buf[0..]);
         if (isZigKeyword(func_name)) {
@@ -600,8 +617,48 @@ pub const FunctionInfo = struct {
         }
         const return_type = self.asCallable().returnType();
         defer return_type.asBase().deinit();
-        // const throw_bool = return_type.tag() == .Boolean;
-        const throw_bool = false;
+        var args = self.asCallable().argsAlloc(allocator) catch @panic("Out of Memory");
+        defer {
+            for (args) |arg| {
+                arg.asBase().deinit();
+            }
+        }
+        var slice_info = allocator.alloc(SliceInfo, args.len) catch @panic("Out of Memory");
+        std.mem.set(SliceInfo, slice_info[0..], .{});
+        var closure_info = allocator.alloc(ClosureInfo, args.len) catch @panic("Out of Memory");
+        std.mem.set(ClosureInfo, closure_info[0..], .{});
+        var n_out_param: usize = 0;
+        for (args, 0..) |arg, idx| {
+            if (arg.direction() == .Out and !arg.isCallerAllocates()) {
+                n_out_param += 1;
+            }
+            const arg_type = arg.type();
+            defer arg_type.asBase().deinit();
+            if (arg_type.arrayLength()) |pos| {
+                slice_info[idx].is_slice_ptr = true;
+                slice_info[idx].slice_len = pos;
+                if (!slice_info[pos].is_slice_len) {
+                    slice_info[pos].is_slice_len = true;
+                    slice_info[pos].slice_ptr = idx;
+                }
+            }
+            const arg_name = arg.asBase().name().?;
+            if (arg.scope() != .Invalid and arg.closure() != null and !std.mem.eql(u8, "data", arg_name[arg_name.len - 4 .. arg_name.len])) {
+                closure_info[idx].scope = arg.scope();
+                closure_info[idx].is_func = true;
+                if (arg.closure()) |pos| {
+                    closure_info[idx].closure_data = pos;
+                    closure_info[pos].is_data = true;
+                    closure_info[pos].closure_func = idx;
+                }
+                if (arg.destroy()) |pos| {
+                    closure_info[idx].closure_destroy = pos;
+                    closure_info[pos].is_destroy = true;
+                    closure_info[pos].closure_func = idx;
+                }
+            }
+        }
+        const throw_bool = (return_type.tag() == .Boolean) and (n_out_param > 0);
         const throw_error = self.asCallable().canThrow();
         const skip_return = self.asCallable().skipReturn();
         {
@@ -616,18 +673,37 @@ pub const FunctionInfo = struct {
                 const container = self.asCallable().asBase().container();
                 try writer.print("self: *{s}", .{container.name().?});
             }
-            var iter = self.asCallable().argsIter();
-            while (iter.next()) |arg| {
+            for (args, 0..) |arg, idx| {
+                if (arg.direction() == .Out and !arg.isCallerAllocates()) continue;
+                if (slice_info[idx].is_slice_len) continue;
+                if (closure_info[idx].is_data) continue;
+                if (closure_info[idx].is_destroy) continue;
                 if (first) {
                     first = false;
                 } else {
                     try writer.writeAll(", ");
                 }
-                try writer.print("{}", .{arg});
+                const arg_type = arg.type();
+                defer arg_type.asBase().deinit();
+                if (slice_info[idx].is_slice_ptr) {
+                    try writer.print("argz_{s}: ", .{arg.asBase().name().?});
+                    if (arg.isOptional()) {
+                        try writer.writeAll("?");
+                    }
+                    try writer.print("[]{}", .{arg.type().paramType(0)});
+                } else if (closure_info[idx].is_func) {
+                    try writer.print("argz_{s}: anytype, argz_{s}_args: anytype", .{ arg.asBase().name().?, arg.asBase().name().? });
+                } else {
+                    try writer.print("{}", .{arg});
+                }
             }
             try writer.writeAll(") ");
             if (throw_bool or throw_error) {
                 try writer.writeAll("core.Expected(");
+            }
+            if (n_out_param > 0) {
+                try writer.writeAll("struct {\n");
+                try writer.writeAll("ret: ");
             }
             if (skip_return or throw_bool) {
                 try writer.writeAll("void");
@@ -654,6 +730,30 @@ pub const FunctionInfo = struct {
                     }
                 }
             }
+            if (n_out_param > 0) {
+                try writer.writeAll(",\n");
+                for (args, 0..) |arg, idx| {
+                    if (arg.direction() != .Out or arg.isCallerAllocates()) continue;
+                    if (slice_info[idx].is_slice_len) continue;
+                    const arg_type = arg.type();
+                    defer arg_type.asBase().deinit();
+                    if (slice_info[idx].is_slice_ptr) {
+                        try writer.print("{s}: ", .{arg.asBase().name().?});
+                        if (arg.isOptional()) {
+                            try writer.writeAll("?");
+                        }
+                        try writer.print("[]{}", .{arg.type().paramType(0)});
+                    } else {
+                        if (arg.mayBeNull()) {
+                            try writer.print("{s}: {&?}", .{ arg.asBase().name().?, arg.type() });
+                        } else {
+                            try writer.print("{s}: {&}", .{ arg.asBase().name().?, arg.type() });
+                        }
+                    }
+                    try writer.writeAll(",\n");
+                }
+                try writer.writeAll("}");
+            }
             if (throw_error) {
                 try writer.writeAll(", *core.Error)");
             } else if (throw_bool) {
@@ -661,8 +761,89 @@ pub const FunctionInfo = struct {
             }
         }
         try writer.writeAll(" {\n");
+        // prepare error
         if (throw_error) {
             try writer.writeAll("var _error: ?*core.Error = null;\n");
+        }
+        // prepare input/inout
+        for (args, 0..) |arg, idx| {
+            if (arg.direction() == .Out and !arg.isCallerAllocates()) continue;
+            const arg_name = arg.asBase().name().?;
+            if (slice_info[idx].is_slice_len) {
+                const arg_type = arg.type();
+                defer arg_type.asBase().deinit();
+                const ptr_arg = args[slice_info[idx].slice_ptr];
+                if (ptr_arg.isOptional()) {
+                    try writer.print("var arg_{s} = if (argz_{s}) |some| @intCast({}, some.len) else 0;\n", .{ arg_name, ptr_arg.asBase().name().?, arg_type });
+                } else {
+                    try writer.print("var arg_{s} = @intCast({}, argz_{s}.len);\n", .{ arg_name, arg_type, ptr_arg.asBase().name().? });
+                }
+            }
+            if (slice_info[idx].is_slice_ptr) {
+                if (arg.isOptional()) {
+                    try writer.print("var arg_{s} = if (argz_{s}) |some| some.ptr else null;\n", .{ arg_name, arg_name });
+                } else {
+                    try writer.print("var arg_{s} = argz_{s}.ptr;\n", .{ arg_name, arg_name });
+                }
+            }
+            if (closure_info[idx].is_func) {
+                // TODO: core.Error? optional callback?
+                try writer.print("var closure_{s} = core.ClosureZ(@TypeOf(&argz_{s}), @TypeOf(argz_{s}_args), &[_]type{{", .{ arg_name, arg_name, arg_name });
+                const arg_type = arg.type();
+                defer arg_type.asBase().deinit();
+                if (arg_type.interface()) |interface| {
+                    defer interface.deinit();
+                    if (interface.type() == .Callback) {
+                        var callback_args = interface.asCallable().argsAlloc(allocator) catch @panic("Out of Memory");
+                        defer {
+                            for (callback_args) |cb_arg| {
+                                cb_arg.asBase().deinit();
+                            }
+                        }
+                        for (callback_args[0..callback_args.len], 0..) |cb_arg, cb_idx| {
+                            if (cb_idx > 0) {
+                                try writer.writeAll(", ");
+                            }
+                            try writer.print("{$}", .{cb_arg});
+                        }
+                    } else {
+                        std.log.warn("[Invalid Callback] {s}: {s}.{?s}", .{ self.symbol(), interface.namespace(), interface.name() });
+                    }
+                } else {
+                    std.log.warn("[Invalid Callback] {s}", .{self.symbol()});
+                }
+                try writer.print("}}).new(null, argz_{s}, argz_{s}_args) catch @panic(\"Out of Memory\");\n", .{ arg_name, arg_name });
+                try writer.print("var arg_{s} = @ptrCast({$}, &@TypeOf(closure_{s}).invoke);\n", .{ arg_name, arg, arg_name });
+                switch (closure_info[idx].scope) {
+                    .Call => {
+                        try writer.print("defer closure_{s}.deinit();\n", .{arg_name});
+                    },
+                    .Async => {
+                        try writer.print("closure_{s}.once = true;\n", .{arg_name});
+                    },
+                    .Notified, .Forever => {
+                        // no op
+                    },
+                    else => unreachable,
+                }
+            }
+            if (closure_info[idx].is_data) {
+                const func_arg = args[closure_info[idx].closure_func];
+                try writer.print("var arg_{s} = @ptrCast({$}, closure_{s});\n", .{ arg_name, arg, func_arg.asBase().name().? });
+            }
+            if (closure_info[idx].is_destroy) {
+                const func_arg = args[closure_info[idx].closure_func];
+                try writer.print("var arg_{s} = @ptrCast({$}, &@TypeOf(closure_{s}).deinit);\n", .{ arg_name, arg, func_arg.asBase().name().? });
+            }
+        }
+        // prepare output
+        for (args) |arg| {
+            if (arg.direction() != .Out or arg.isCallerAllocates()) continue;
+            const arg_name = arg.asBase().name().?;
+            const arg_type = arg.type();
+            defer arg_type.asBase().deinit();
+            try writer.print("var out_{s} = core.initVar({$});\n", .{ arg_name, arg_type });
+            try writer.print("var arg_{s} = &out_{s};\n", .{ arg_name, arg_name });
         }
         try writer.print("const ffi_fn = struct {{ extern \"c\" fn {s}", .{self.symbol()});
         try self.asCallable().format_helper(writer, true, false, false);
@@ -685,10 +866,33 @@ pub const FunctionInfo = struct {
         } else {
             try writer.writeAll("return ");
         }
+        if (n_out_param > 0) {
+            try writer.writeAll(".{ .ret = ");
+        }
         if (skip_return or throw_bool) {
             try writer.writeAll("{}");
         } else {
             try writer.writeAll("ret");
+        }
+        if (n_out_param > 0) {
+            for (args, 0..) |arg, idx| {
+                if (arg.direction() != .Out or arg.isCallerAllocates()) continue;
+                if (slice_info[idx].is_slice_len) continue;
+                try writer.writeAll(", ");
+                const arg_name = arg.asBase().name().?;
+                try writer.print(".{s} = out_{s}", .{ arg_name, arg_name });
+                if (slice_info[idx].is_slice_ptr) {
+                    const len_arg = args[slice_info[idx].slice_len];
+                    try writer.writeAll("[0..@intCast(usize, ");
+                    if (len_arg.direction() == .Out and !len_arg.isCallerAllocates()) {
+                        try writer.print("out_{s}", .{len_arg.asBase().name().?});
+                    } else {
+                        try writer.print("arg_{s}", .{len_arg.asBase().name().?});
+                    }
+                    try writer.writeAll(")]");
+                }
+            }
+            try writer.writeAll("}");
         }
         if (throw_bool or throw_error) {
             try writer.writeAll("};\n");
