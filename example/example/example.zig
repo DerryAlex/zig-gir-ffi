@@ -29,9 +29,9 @@ pub fn activate(arg_app: *GApplication) void {
     window.__call("show", .{});
 }
 
-pub fn main() i32 {
+pub fn main() u8 {
     var app = Application.new("org.gtk.example", .FlagsNone);
     defer app.__call("unref", .{});
     _ = app.__call("connectActivate", .{activate, .{}, .{}});
-    return app.__call("run", .{std.os.argv});
+    return @truncate(u8, @bitCast(u32, app.__call("run", .{std.os.argv})));
 }

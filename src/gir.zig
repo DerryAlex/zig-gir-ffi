@@ -787,7 +787,6 @@ pub const FunctionInfo = struct {
                 }
             }
             if (closure_info[idx].is_func) {
-                // TODO: core.Error?
                 try writer.print("var closure_{s} = core.ClosureZ(@TypeOf(&argz_{s}), @TypeOf(argz_{s}_args), &[_]type{{", .{ arg_name, arg_name, arg_name });
                 const arg_type = arg.type();
                 defer arg_type.asBase().deinit();
@@ -811,8 +810,12 @@ pub const FunctionInfo = struct {
                             try writer.writeAll("void");
                             std.log.warn("[Generic Callback] {s}", .{self.symbol()});
                         }
+                        if (interface.asCallable().canThrow()) {
+                            std.log.warn("[Throwable Callback] {s}", .{self.symbol()});
+                        }
                     } else {
-                        unreachable;
+                        try writer.writeAll("void");
+                        std.log.warn("[Generic Callback] {s}", .{self.symbol()});
                     }
                 } else {
                     try writer.writeAll("void");
@@ -849,9 +852,9 @@ pub const FunctionInfo = struct {
             const arg_type = arg.type();
             defer arg_type.asBase().deinit();
             if (arg.mayBeNull()) {
-                try writer.print("var out_{s} = core.initVar({??});\n", .{ arg_name, arg_type });
+                try writer.print("var out_{s} = core.initVar({&?});\n", .{ arg_name, arg_type });
             } else {
-                try writer.print("var out_{s} = core.initVar({});\n", .{ arg_name, arg_type });
+                try writer.print("var out_{s} = core.initVar({&});\n", .{ arg_name, arg_type });
             }
             try writer.print("var arg_{s} = &out_{s};\n", .{ arg_name, arg_name });
         }
@@ -2371,6 +2374,7 @@ pub const TypeInfo = struct {
                             if (option_nullable) {
                                 try writer.writeAll("?");
                             }
+                            // TODO: https://github.com/ziglang/zig/issues/14855
                             try writer.print("[*:std.mem.zeroes({??})]{??}", .{ child_type, child_type });
                         } else {
                             assert(self.isPointer());

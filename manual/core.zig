@@ -82,7 +82,7 @@ pub fn Expected(comptime T: type, comptime E: type) type {
 
 pub fn Flags(comptime T: type) type {
     return struct {
-        value: T = @intToEnum(T, 0),
+        value: T = std.mem.zeroes(T),
 
         const Self = @This();
 
@@ -126,6 +126,7 @@ pub fn ValueZ(comptime T: type) type {
 
         const Self = @This();
 
+        // TODO: https://github.com/ziglang/zig/issues/14650
         const Int = @Type(@typeInfo(c_int));
         const Uint = @Type(@typeInfo(c_uint));
         const Long = @Type(@typeInfo(c_long));
@@ -389,7 +390,7 @@ fn cclosureNewSwap(callback_func: GObject.Callback, user_data: ?*anyopaque, dest
 pub fn ClosureZ(comptime Fn: type, comptime Args: type, comptime signature: []const type) type {
     comptime assert(meta.trait.isTuple(Args));
     const n_arg = @typeInfo(Args).Struct.fields.len;
-    if (meta.trait.isPtrTo(.Void)) {
+    if (meta.trait.isPtrTo(.Void)(Fn)) {
         comptime assert(n_arg == 0);
         return struct {
             handler: Fn,
