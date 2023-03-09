@@ -787,7 +787,7 @@ pub const FunctionInfo = struct {
                 }
             }
             if (closure_info[idx].is_func) {
-                // TODO: core.Error? optional callback?
+                // TODO: core.Error?
                 try writer.print("var closure_{s} = core.ClosureZ(@TypeOf(&argz_{s}), @TypeOf(argz_{s}_args), &[_]type{{", .{ arg_name, arg_name, arg_name });
                 const arg_type = arg.type();
                 defer arg_type.asBase().deinit();
@@ -800,17 +800,23 @@ pub const FunctionInfo = struct {
                                 cb_arg.asBase().deinit();
                             }
                         }
-                        for (callback_args[0..callback_args.len], 0..) |cb_arg, cb_idx| {
-                            if (cb_idx > 0) {
-                                try writer.writeAll(", ");
+                        if (callback_args.len > 0) {
+                            for (callback_args[0 .. callback_args.len - 1], 0..) |cb_arg, cb_idx| {
+                                if (cb_idx > 0) {
+                                    try writer.writeAll(", ");
+                                }
+                                try writer.print("{$}", .{cb_arg});
                             }
-                            try writer.print("{$}", .{cb_arg});
+                        } else {
+                            try writer.writeAll("void");
+                            std.log.warn("[Generic Callback] {s}", .{self.symbol()});
                         }
                     } else {
-                        std.log.warn("[Invalid Callback] {s}: {s}.{?s}", .{ self.symbol(), interface.namespace(), interface.name() });
+                        unreachable;
                     }
                 } else {
-                    std.log.warn("[Invalid Callback] {s}", .{self.symbol()});
+                    try writer.writeAll("void");
+                    std.log.warn("[Generic Callback] {s}", .{self.symbol()});
                 }
                 try writer.print("}}).new(null, argz_{s}, argz_{s}_args) catch @panic(\"Out of Memory\");\n", .{ arg_name, arg_name });
                 try writer.print("var arg_{s} = @ptrCast({$}, &@TypeOf(closure_{s}).invoke);\n", .{ arg_name, arg, arg_name });
@@ -842,7 +848,11 @@ pub const FunctionInfo = struct {
             const arg_name = arg.asBase().name().?;
             const arg_type = arg.type();
             defer arg_type.asBase().deinit();
-            try writer.print("var out_{s} = core.initVar({$});\n", .{ arg_name, arg_type });
+            if (arg.mayBeNull()) {
+                try writer.print("var out_{s} = core.initVar({??});\n", .{ arg_name, arg_type });
+            } else {
+                try writer.print("var out_{s} = core.initVar({});\n", .{ arg_name, arg_type });
+            }
             try writer.print("var arg_{s} = &out_{s};\n", .{ arg_name, arg_name });
         }
         try writer.print("const ffi_fn = struct {{ extern \"c\" fn {s}", .{self.symbol()});
@@ -2115,7 +2125,7 @@ pub const PropertyInfo = struct {
                 defer some.asCallable().asBase().deinit();
             } else {
                 try writer.print("pub fn get{c}{s}(self: *{s}) {s}{&} {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name, if (self.isBasicTypeProperty()) "" else "*", property_type });
-                try writer.print("var property_value = core.ValueZ({}).new();\n", .{property_type});
+                try writer.print("var property_value = core.ValueZ({}).init();\n", .{property_type});
                 try writer.writeAll("defer property_value.deinit();\n");
                 try writer.print("self.__call(\"getProperty\", .{{ \"{s}\", &property_value.value }});\n", .{raw_name});
                 try writer.writeAll("return property_value.get();\n");
@@ -2127,7 +2137,7 @@ pub const PropertyInfo = struct {
                 defer some.asCallable().asBase().deinit();
             } else {
                 try writer.print("pub fn set{c}{s}(self: *{s}, arg_value: {s}{}) void {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name, if (self.isBasicTypeProperty()) "" else "*", property_type });
-                try writer.print("var property_value = core.ValueZ({}).new();\n", .{property_type});
+                try writer.print("var property_value = core.ValueZ({}).init();\n", .{property_type});
                 try writer.writeAll("defer property_value.deinit();\n");
                 try writer.writeAll("property_value.set(arg_value);\n");
                 try writer.print("self.__call(\"setProperty\", .{{ \"{s}\", &property_value.value }});\n", .{raw_name});

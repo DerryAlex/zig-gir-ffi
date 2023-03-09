@@ -29,9 +29,9 @@ pub fn activate(arg_app: *GApplication) void {
     window.__call("show", .{});
 }
 
-pub fn main() !void {
+pub fn main() i32 {
     var app = Application.new("org.gtk.example", .FlagsNone);
     defer app.__call("unref", .{});
     _ = app.__call("connectActivate", .{activate, .{}, .{}});
-    _ = app.__call("run", .{std.os.argv});
+    return app.__call("run", .{std.os.argv});
 }

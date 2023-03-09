@@ -8,6 +8,9 @@ const std = @import("std");
 const meta = std.meta;
 const assert = std.debug.assert;
 
+// ----------
+// misc begin
+
 pub fn FnReturnType(comptime func: anytype) type {
     const fn_info = @typeInfo(@TypeOf(func));
     return if (fn_info.Fn.return_type) |some| some else void;
@@ -16,6 +19,9 @@ pub fn FnReturnType(comptime func: anytype) type {
 pub inline fn initVar(comptime T: type) T {
     return undefined;
 }
+
+// misc end
+// --------
 
 // ----------
 // type begin
@@ -76,7 +82,7 @@ pub fn Expected(comptime T: type, comptime E: type) type {
 
 pub fn Flags(comptime T: type) type {
     return struct {
-        value: T,
+        value: T = @intToEnum(T, 0),
 
         const Self = @This();
 
@@ -116,7 +122,7 @@ pub fn Flags(comptime T: type) type {
 
 pub fn ValueZ(comptime T: type) type {
     return struct {
-        value: GObject.Value,
+        value: GObject.Value = std.mem.zeroes(GObject.Value),
 
         const Self = @This();
 
@@ -381,12 +387,39 @@ fn cclosureNewSwap(callback_func: GObject.Callback, user_data: ?*anyopaque, dest
 }
 
 pub fn ClosureZ(comptime Fn: type, comptime Args: type, comptime signature: []const type) type {
-    comptime assert(meta.trait.isPtrTo(.Fn)(Fn));
     comptime assert(meta.trait.isTuple(Args));
+    const n_arg = @typeInfo(Args).Struct.fields.len;
+    if (meta.trait.isPtrTo(.Void)) {
+        comptime assert(n_arg == 0);
+        return struct {
+            handler: Fn,
+            args: Args,
+            once: bool,
+            allocator: std.mem.Allocator,
+
+            const Self = @This();
+
+            pub fn new(allocator: ?std.mem.allocator, handler: Fn, args: Args) !*Self {
+                const real_allocator = if (allocator) |some| some else gpa.allocator();
+                var closure = try real_allocator.create(Self);
+                closure.handler = handler;
+                closure.args = args;
+                closure.once = false;
+                closure.allocator = real_allocator;
+                return closure;
+            }
+
+            pub fn invoke() void {}
+
+            pub fn deinit(self: *Self) void {
+                self.allocator.destroy(self);
+            }
+        };
+    }
+
+    comptime assert(meta.trait.isPtrTo(.Fn)(Fn));
     comptime assert(1 <= signature.len and signature.len <= 7);
     const n_param = @typeInfo(meta.Child(Fn)).Fn.params.len;
-    const n_arg = @typeInfo(Args).Struct.fields.len;
-
     return struct {
         handler: Fn,
         args: Args,
@@ -526,10 +559,12 @@ pub fn ClosureZ(comptime Fn: type, comptime Args: type, comptime signature: []co
             self.allocator.destroy(self);
         }
 
+        // for internal use
         pub fn toClosure(self: *Self) *GObject.Closure {
             return cclosureNew(@ptrCast(GObject.Callback, &Self.invoke), self, @ptrCast(GObject.ClosureNotify, &Self.deinit));
         }
 
+        // for internal use
         pub fn toClosureSwap(self: *Self) *GObject.Closure {
             comptime assert(signature.len == 1);
             return cclosureNewSwap(@ptrCast(GObject.Callback, &Self.invoke), self, @ptrCast(GObject.ClosureNotify, &Self.deinit));
@@ -555,3 +590,38 @@ pub fn connectSwap(object: *GObject.Object, signal: [*:0]const u8, handler: anyt
 
 // closure end
 // -----------
+
+pub const TypeFlagsZ = struct {
+    abstract: bool = false,
+    value_abstract: bool = false,
+    final: bool = false,
+};
+
+pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]const u8, _flags: TypeFlagsZ) Type {
+    const class_init = struct {
+        fn trampoline(class: *Class) callconv(.C) void {
+            if (@hasDecl(Class, "init")) {
+                class.init();
+            }
+        }
+    }.trampoline;
+    const instance_init = struct {
+        fn trampoline(self: *Object) callconv(.C) void {
+            if (@hasDecl(Object, "init")) {
+                self.init();
+            }
+        }
+    }.trampoline;
+    var info: GObject.TypeInfo = .{ .class_size = @sizeOf(Class), .base_init = null, .base_finalize = null, .class_init = class_init, .class_finalize = null, .class_data = null, .instance_size = @sizeOf(Object), .n_preallocs = 0, .instance_init = instance_init, .value_table = null };
+    var flags = Flags(GObject.TypeFlags);
+    if (_flags.abstract) {
+        flags = flags.@"|"(.{ .value = .Abstract });
+    }
+    if (_flags.value_abstract) {
+        flags = flags.@"|"(.{ .value = .ValueAbstract });
+    }
+    if (_flags.final) {
+        flags = flags.@"|"(.{ .value = .Final });
+    }
+    return GObject.typeRegisterStatic(Object.Parent.type(), name, &info, flags.value);
+}
