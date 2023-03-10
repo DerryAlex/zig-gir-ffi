@@ -6,13 +6,15 @@ const meta = std.meta;
 const assert = std.debug.assert;
 const ExampleAppWindow = @import("example_app_window.zig").ExampleAppWindow;
 const ExampleAppPrefs = @import("example_app_prefs.zig").ExampleAppPrefs;
+const Action = core.Action;
 const Application = Gtk.Application;
 const ApplicationClass = Gtk.ApplicationClass;
 const ApplicationFlags = core.ApplicationFlags;
 const File = core.File;
+const SimpleAction = core.SimpleAction;
 const Value = core.Value;
 const GApplication = core.Application;
-const GApplicationClass = core.GApplicationClass;
+const GApplicationClass = core.ApplicationClass;
 
 pub const ExampleAppClass = extern struct {
     parent: ApplicationClass,
@@ -44,7 +46,7 @@ pub const ExampleAppClass = extern struct {
     }
 
     fn preferencesActivate(self: *ExampleApp) void {
-        var win = self.callMethod("getActiveWindow", .{}).?.tryInto(ExampleAppWindow).?;
+        var win = self.__call("getActiveWindow", .{}).?.tryInto(ExampleAppWindow).?;
         var prefs = ExampleAppPrefs.new(win);
         prefs.__call("present", .{});
     }
@@ -56,17 +58,17 @@ pub const ExampleAppClass = extern struct {
     // @override
     fn startup(arg_app: *GApplication) callconv(.C) void {
         var self = arg_app.tryInto(ExampleApp).?;
-        var action_preferences = core.SimpleAction.new("preferences", null);
+        var action_preferences = SimpleAction.new("preferences", null);
         defer action_preferences.__call("unref", .{});
-        action_preferences.connectActivateSwap(preferencesActivate, .{self}, .{});
-        self.__call("addAction", .{action_preferences});
-        var action_quit = core.SimpleAction.new("preferences", null);
+        _ = action_preferences.connectActivateSwap(preferencesActivate, .{self}, .{});
+        self.__call("addAction", .{action_preferences.into(Action)});
+        var action_quit = SimpleAction.new("quit", null);
         defer action_quit.__call("unref", .{});
-        action_quit.connectActivateSwap(quitActivate, .{self}, .{});
-        self.__call("addAction", .{action_quit});
+        _ = action_quit.connectActivateSwap(quitActivate, .{self}, .{});
+        self.__call("addAction", .{action_quit.into(Action)});
         var quit_accels = [_:null]?[*:0]const u8{"<Ctrl>Q"};
         self.__call("setAccelsForAction", .{ "app.quit", &quit_accels });
-        self.callMethod("startupV", .{ExampleApp.Parent.type()});
+        self.__call("startupV", .{ExampleApp.Parent.type()});
     }
 };
 

@@ -17,7 +17,7 @@ const File = core.File;
 const Label = Gtk.Label;
 const ListBox = Gtk.ListBox;
 const MenuButton = Gtk.MenuButton;
-const MenuModel = Gtk.MenuModel;
+const MenuModel = core.MenuModel;
 const Object = core.Object;
 const ObjectClass = core.ObjectClass;
 const ParamSpec = core.ParamSpec;
@@ -60,10 +60,7 @@ pub const ExampleAppWindowClass = extern struct {
     // @override
     pub fn dispose(arg_object: *Object) callconv(.C) void {
         var self = arg_object.tryInto(ExampleAppWindow).?;
-        if (!self.cleared) {
-            self.settings.__call("unref", .{});
-            self.cleared = true;
-        }
+        self.settings.__call("unref", .{}); // TODO: once
         self.__call("disposeTemplate", .{ExampleAppWindow.type()});
         self.__call("disposeV", .{ExampleAppWindow.Parent.type()});
     }
@@ -72,44 +69,40 @@ pub const ExampleAppWindowClass = extern struct {
     pub fn TCsearch_text_changed(entry: *Entry, self: *ExampleAppWindow) callconv(.C) void {
         var text = entry.__call("getText", .{});
         if (text[0] == 0) return;
-        var tab = self.TCstack.getVisibleChild().?.tryInto(ScrolledWindow).?;
+        var tab = self.tc_stack.getVisibleChild().?.tryInto(ScrolledWindow).?;
         var view = tab.getChild().?.tryInto(TextView).?;
         var buffer = view.getBuffer();
         var start: TextIter = undefined;
         buffer.getStartIter(&start);
-        var search_result = start.forwardSearch(text, .CaseInsensitive, null);
-        switch (search_result) {
-            .Ok => |ok| {
-                var match_start = ok.match_start;
-                var match_end = ok.match_end;
-                buffer.selectRange(&match_start, &match_end);
-                _ = view.scrollToIter(&match_start, 0, .False, 0, 0);
-            },
-            .Err => {},
+        var match_start: TextIter = undefined;
+        var match_end: TextIter = undefined;
+        if (start.forwardSearch(text, .CaseInsensitive, &match_start, &match_end, null)) {
+            buffer.selectRange(&match_start, &match_end);
+            _ = view.scrollToIter(&match_start, 0, .False, 0, 0);
         }
     }
 
     // template callback
     pub fn TCvisible_child_changed(stack: *Stack, _: *ParamSpec, self: *ExampleAppWindow) callconv(.C) void {
-        if (stack.__call("inDestruction", .{}).toBool()) return;
-        self.TCsearchbar.setSearchMode(.False);
+        if (stack.__call("inDestruction", .{})) return;
+        self.tc_searchbar.setSearchMode(.False);
         self.updateWords();
         self.updateLines();
     }
 };
 
-pub const ExampleAppWindow = packed struct {
+pub const ExampleAppWindow = extern struct {
     parent: Parent,
-    settings: Settings,
-    tc_stack: Stack, // template child
-    tc_gears: MenuButton, // template child
-    tc_search: ToggleButton, // template child
-    tc_search_bar: SearchBar, // template child
-    tc_search_entry: SearchEntry, // template child
-    tc_sidebar: Revealer, // template child
-    tc_words: ListBox, // template child
-    tc_lines: Label, // template child
-    tc_lines_label: Label, // template child
+    settings: *Settings,
+    tc_stack: *Stack, // template child
+    tc_gears: *MenuButton, // template child
+    tc_search: *ToggleButton, // template child
+    tc_searchbar: *SearchBar, // template child
+    tc_searchentry: *SearchEntry, // template child
+    tc_sidebar: *Revealer, // template child
+    tc_words: *ListBox, // template child
+    tc_lines: *Label, // template child
+    tc_lines_label: *Label, // template child
 
     pub const Parent = ApplicationWindow;
 
@@ -127,10 +120,10 @@ pub const ExampleAppWindow = packed struct {
         var action_show_words = self.settings.createAction("show-words");
         defer core.unsafeCast(Object, action_show_words).unref();
         self.__call("addAction", .{action_show_words});
-        var action_show_lines = core.PropertyAction.new("show-lines", self.tc_lines.into(Object), "visible");
+        var action_show_lines = PropertyAction.new("show-lines", self.tc_lines.into(Object), "visible");
         defer action_show_lines.__call("unref", .{});
-        self.__call("addAction", .{action_show_words.into(Action)});
-        _ = self.tc_lines.callMethod("bindProperty", .{ "visible", self.tc_lines_label.into(Object), "visible", .Default });
+        self.__call("addAction", .{action_show_lines.into(Action)});
+        _ = self.tc_lines.__call("bindProperty", .{ "visible", self.tc_lines_label.into(Object), "visible", .Default });
     }
 
     pub fn new(app: *ExampleApp) *ExampleAppWindow {
@@ -182,11 +175,11 @@ pub const ExampleAppWindow = packed struct {
 
     fn findWord(button: *Button, self: *ExampleAppWindow) void {
         var word = button.getLabel().?;
-        self.tc_search_entry.__call("setText", .{word});
+        self.tc_searchentry.__call("setText", .{word});
     }
 
     pub fn updateWords(self: *ExampleAppWindow) void {
-        var tab = if (self.instance.tc_stack.getVisibleChild()) |some| some.tryInto(ScrolledWindow).? else return;
+        var tab = if (self.tc_stack.getVisibleChild()) |some| some.tryInto(ScrolledWindow).? else return;
         var view = tab.getChild().?.tryInto(Gtk.TextView).?;
         var buffer = view.getBuffer();
         var start: TextIter = undefined;
@@ -205,12 +198,12 @@ pub const ExampleAppWindow = packed struct {
             }
             strings.deinit();
         }
-        outer: while (!start.isEnd().toBool()) {
-            while (!start.startsWord().toBool()) {
-                if (!start.forwardChar().toBool()) break :outer;
+        outer: while (!start.isEnd()) {
+            while (!start.startsWord()) {
+                if (!start.forwardChar()) break :outer;
             }
             end = start;
-            if (!end.forwardWordEnd().toBool()) break :outer;
+            if (!end.forwardWordEnd()) break :outer;
             var word = buffer.getText(&start, &end, .False);
             defer core.free(word);
             strings.put(core.utf8Strdown(word, -1), {}) catch @panic("");

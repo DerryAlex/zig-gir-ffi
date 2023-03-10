@@ -30,10 +30,7 @@ const ExampleAppPrefsClass = extern struct {
     // @override
     fn dispose(arg_object: *Object) callconv(.C) void {
         var self = arg_object.tryInto(ExampleAppPrefs).?;
-        if (!self.cleared) {
-            self.private.settings.__call("unref", .{});
-            self.cleared = true;
-        }
+        self.private.settings.__call("unref", .{}); // TODO: once
         self.__call("disposeTemplate", .{ExampleAppPrefs.type()});
         self.__call("disposeV", .{ExampleAppPrefs.Parent.type()});
     }
@@ -43,7 +40,6 @@ const ExampleAppPrefsPrivate = struct {
     settings: *Settings,
     tc_font: *FontButton, // template child
     tc_transition: *ComboBoxText, // template child
-    cleared: bool,
 };
 
 pub const ExampleAppPrefs = extern struct {
@@ -58,7 +54,6 @@ pub const ExampleAppPrefs = extern struct {
         self.private.settings = Settings.new("org.gtk.exampleapp");
         self.private.settings.__call("bind", .{ "font", self.private.tc_font.into(Object), "font", .Default });
         self.private.settings.__call("bind", .{ "transition", self.private.tc_transition.into(Object), "active-id", .Default });
-        self.cleared = false;
     }
 
     pub fn new(win: *ExampleAppWindow) *ExampleAppPrefs {
@@ -74,7 +69,7 @@ pub const ExampleAppPrefs = extern struct {
     }
 
     pub fn __Call(comptime method: []const u8) ?type {
-        return core.CallInherited(method);
+        return core.CallInherited(@This(), method);
     }
 
     pub fn __call(self: *ExampleAppPrefs, comptime method: []const u8, args: anytype) if (__Call(method)) |some| some else @compileError(std.fmt.comptimePrint("No such method {s}", .{method})) {

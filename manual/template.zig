@@ -32,6 +32,6 @@ pub fn bindCallback(class: *WidgetClass, comptime Class: type) void {
         if (comptime name.len <= 2 or name[0] != 'T' or name[1] != 'C') continue;
         comptime var name_c: [name.len - 2:0]u8 = undefined;
         comptime std.mem.copy(u8, name_c[0..], name[2..]);
-        class.bindTemplateCallbackFull(&name_c, @ptrCast(core.Callback, @field(class, name)));
+        class.bindTemplateCallbackFull(&name_c, @ptrCast(core.Callback, &@field(Class, name)));
     }
 }

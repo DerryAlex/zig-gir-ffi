@@ -536,6 +536,7 @@ pub const CallableInfo = struct {
                 const func_name = self.asBase().name().?;
                 if (func_name.len >= 3 and std.mem.eql(u8, "new", func_name[0..3])) {
                     if (return_type.interface()) |interface| {
+                        defer interface.deinit();
                         if (std.mem.eql(u8, "Gtk", interface.namespace()) and std.mem.eql(u8, "Widget", interface.name().?)) {
                             generic_gtk_widget = true;
                         }
@@ -548,7 +549,7 @@ pub const CallableInfo = struct {
                     }
                     try writer.print("*{s}", .{container.name().?});
                 } else {
-                    if (self.mayReturnNull()) {
+                    if (self.mayReturnNull() or return_type.tag() == .GList or return_type.tag() == .GSList) {
                         try writer.print("{&?}", .{return_type});
                     } else {
                         try writer.print("{&}", .{return_type});
@@ -658,7 +659,8 @@ pub const FunctionInfo = struct {
                 }
             }
         }
-        const throw_bool = (return_type.tag() == .Boolean) and (n_out_param > 0);
+        const return_bool = return_type.tag() == .Boolean;
+        const throw_bool = return_bool and (n_out_param > 0);
         const throw_error = self.asCallable().canThrow();
         const skip_return = self.asCallable().skipReturn();
         {
@@ -716,14 +718,17 @@ pub const FunctionInfo = struct {
                         }
                     }
                 }
-                if (generic_gtk_widget) {
+                if (return_bool) {
+                    try writer.writeAll("bool");
+                }
+                else if (generic_gtk_widget) {
                     const container = self.asCallable().asBase().container();
                     if (self.asCallable().mayReturnNull()) {
                         try writer.writeAll("?");
                     }
                     try writer.print("*{s}", .{container.name().?});
                 } else {
-                    if (self.asCallable().mayReturnNull()) {
+                    if (self.asCallable().mayReturnNull() or return_type.tag() == .GList or return_type.tag() == .GSList) {
                         try writer.print("{&?}", .{return_type});
                     } else {
                         try writer.print("{&}", .{return_type});
@@ -852,9 +857,9 @@ pub const FunctionInfo = struct {
             const arg_type = arg.type();
             defer arg_type.asBase().deinit();
             if (arg.mayBeNull()) {
-                try writer.print("var out_{s} = core.initVar({&?});\n", .{ arg_name, arg_type });
+                try writer.print("var out_{s}: {&?} = undefined;\n", .{ arg_name, arg_type });
             } else {
-                try writer.print("var out_{s} = core.initVar({&});\n", .{ arg_name, arg_type });
+                try writer.print("var out_{s}: {&} = undefined;\n", .{ arg_name, arg_type });
             }
             try writer.print("var arg_{s} = &out_{s};\n", .{ arg_name, arg_name });
         }
@@ -863,6 +868,9 @@ pub const FunctionInfo = struct {
         try writer.print("; }}.{s};\n", .{self.symbol()});
         try writer.writeAll("const ret = ffi_fn");
         try self.asCallable().format_helper(writer, false, false, false);
+        if (return_bool) {
+            try writer.writeAll(".toBool()");
+        }
         try writer.writeAll(";\n");
         if (skip_return) {
             try writer.writeAll("_ = ret;\n");
@@ -2374,8 +2382,18 @@ pub const TypeInfo = struct {
                             if (option_nullable) {
                                 try writer.writeAll("?");
                             }
-                            // TODO: https://github.com/ziglang/zig/issues/14855
-                            try writer.print("[*:std.mem.zeroes({??})]{??}", .{ child_type, child_type });
+                            if (child_type.isPointer()) {
+                                try writer.print("[*:null]{??}", .{child_type});
+                            } else {
+                                switch (child_type.tag()) {
+                                    .Int8, .UInt8, .Int16, .UInt16, .Int32, .UInt32, .Int64, .UInt64, .Float, .Double, .Unichar => {
+                                        try writer.print("[*:0]{}", .{child_type});
+                                    },
+                                    else => {
+                                        try writer.print("[*:std.mem.zeroes({??})]{??}", .{child_type, child_type});
+                                    }
+                                }
+                            }
                         } else {
                             assert(self.isPointer());
                             if (option_nullable) {

@@ -16,10 +16,6 @@ pub fn FnReturnType(comptime func: anytype) type {
     return if (fn_info.Fn.return_type) |some| some else void;
 }
 
-pub inline fn initVar(comptime T: type) T {
-    return undefined;
-}
-
 // misc end
 // --------
 
@@ -122,49 +118,49 @@ pub fn Flags(comptime T: type) type {
 
 pub fn ValueZ(comptime T: type) type {
     return struct {
-        value: GObject.Value = std.mem.zeroes(GObject.Value),
+        value: GObject.Value,
 
         const Self = @This();
 
-        // TODO: https://github.com/ziglang/zig/issues/14650
         const Int = @Type(@typeInfo(c_int));
         const Uint = @Type(@typeInfo(c_uint));
         const Long = @Type(@typeInfo(c_long));
         const Ulong = @Type(@typeInfo(c_ulong));
 
         pub fn init() Self {
-            var value = std.mem.zeroes(GObject.Value);
-            if (T == Boolean) {
+            // var value = std.mem.zeroes(GObject.Value);
+            var value: GObject.Value = .{ .g_type = .Invalid, .data = .{ .{ .v_pointer = null }, .{ .v_pointer = null } } };
+            if (comptime T == Boolean) {
                 _ = value.init(.Boolean);
-            } else if (T == i8) {
+            } else if (comptime T == i8) {
                 _ = value.init(.Char);
-            } else if (T == u8) {
+            } else if (comptime T == u8) {
                 _ = value.init(.Uchar);
-            } else if (T == Int) {
+            } else if (comptime T == Int) {
                 _ = value.init(.Int);
-            } else if (T == Uint) {
+            } else if (comptime T == Uint) {
                 _ = value.init(.Uint);
-            } else if (T == i64) {
+            } else if (comptime T == i64) {
                 _ = value.init(.Int64);
-            } else if (T == u64) {
+            } else if (comptime T == u64) {
                 _ = value.init(.UInt64);
-            } else if (T == Long) {
+            } else if (comptime T == Long) {
                 _ = value.init(.Long);
-            } else if (T == Ulong) {
+            } else if (comptime T == Ulong) {
                 _ = value.init(.Ulong);
-            } else if (T == f32) {
+            } else if (comptime T == f32) {
                 _ = value.init(.Float);
-            } else if (T == f64) {
+            } else if (comptime T == f64) {
                 _ = value.init(.Double);
-            } else if (T == [*:0]const u8) {
+            } else if (comptime T == [*:0]const u8) {
                 _ = value.init(.String);
-            } else if (meta.trait.isSingleItemPtr(T)) {
+            } else if (comptime meta.trait.isSingleItemPtr(T)) {
                 _ = value.init(.Pointer);
-            } else if (T == GLib.Variant) {
+            } else if (comptime T == GLib.Variant) {
                 _ = value.init(.Variant);
-            } else if (T == GObject.ParamSpec) {
+            } else if (comptime T == GObject.ParamSpec) {
                 _ = value.init(.Param);
-            } else if (@hasDecl(T, "type")) {
+            } else if (comptime @hasDecl(T, "type")) {
                 _ = value.init(T.type());
             } else {
                 @compileError(std.fmt.comptimePrint("Unsupported type {s} for GObject.Value", @typeName(T)));
@@ -176,109 +172,91 @@ pub fn ValueZ(comptime T: type) type {
             self.value.unset();
         }
 
-        fn isBasic() bool {
-            if (T == i8) return true;
-            if (T == u8) return true;
-            if (T == i16) return true;
-            if (T == u16) return true;
-            if (T == i32) return true;
-            if (T == u32) return true;
-            if (T == i64) return true;
-            if (T == u64) return true;
-            if (T == f32) return true;
-            if (T == f64) return true;
-            if (T == [*:0]const u8) return true; // String
-            if (meta.trait.isSingleItemPtr(T)) return true; // Pointer
-            if (meta.trait.is(.Enum)(T)) return true; // Enum(or Flags) or Boolean or Type
-            return false;
-        }
+        const is_basic = gen_is_basic: {
+            if (T == i8) break :gen_is_basic true;
+            if (T == u8) break :gen_is_basic true;
+            if (T == i16) break :gen_is_basic true;
+            if (T == u16) break :gen_is_basic true;
+            if (T == i32) break :gen_is_basic true;
+            if (T == u32) break :gen_is_basic true;
+            if (T == i64) break :gen_is_basic true;
+            if (T == u64) break :gen_is_basic true;
+            if (T == f32) break :gen_is_basic true;
+            if (T == f64) break :gen_is_basic true;
+            if (T == [*:0]const u8) break :gen_is_basic true; // String
+            if (meta.trait.isSingleItemPtr(T)) break :gen_is_basic true; // Pointer
+            if (meta.trait.is(.Enum)(T)) break :gen_is_basic true; // Enum(or Flags) or Boolean or Type
+            break :gen_is_basic false;
+        };
 
-        pub fn get(self: Self) if (isBasic()) T else *T {
-            if (T == Boolean) {
-                return self.value.getBoolean();
-            } else if (T == i8) {
-                return self.value.getSchar();
-            } else if (T == u8) {
-                return self.value.getUchar();
-            } else if (T == Int) {
-                return self.value.getInt();
-            } else if (T == Uint) {
-                return self.value.getUint();
-            } else if (T == i64) {
-                return self.value.getInt64();
-            } else if (T == u64) {
-                return self.value.getUint64();
-            } else if (T == Long) {
-                return self.value.getLong();
-            } else if (T == Ulong) {
-                return self.value.getUlong();
-            } else if (T == f32) {
-                return self.value.getFloat();
-            } else if (T == f64) {
-                return self.value.getDouble();
-            } else if (T == Type) {
-                return self.value.getGtype();
-            } else if (meta.trait.is(.Enum)(T)) {
+        pub fn get(self: Self) if (is_basic) T else *T {
+            if (comptime T == Boolean) return self.value.getBoolean();
+            if (comptime T == i8) return self.value.getSchar();
+            if (comptime T == u8) return self.value.getUchar();
+            if (comptime T == Int) return self.value.getInt();
+            if (comptime T == Uint) return self.value.getUint();
+            if (comptime T == i64) return self.value.getInt64();
+            if (comptime T == u64) return self.value.getUint64();
+            if (comptime T == Long) return self.value.getLong();
+            if (comptime T == Ulong) return self.value.getUlong();
+            if (comptime T == f32) return self.value.getFloat();
+            if (comptime T == f64) return self.value.getDouble();
+            if (comptime T == Type) return self.value.getGtype();
+            if (comptime meta.trait.is(.Enum)(T)) {
                 if (@typeInfo(T).Enum.is_exhaustive) {
                     return @intToEnum(T, self.value.getEnum());
                 } else {
                     return @intToEnum(T, self.value.getFlags());
                 }
-            } else if (T == [*:0]const u8) {
-                return self.value.getString();
-            } else if (meta.trait.isSingleItemPtr(T)) {
-                return @ptrCast(T, self.gvalue.getPointer());
-            } else if (T == GLib.Variant) {
-                return self.value.getVariant().?;
-            } else if (T == GObject.ParamSpec) {
-                return self.value.getParam();
-            } else if (@hasDecl(T, "__call")) {
-                return downCast(T, self.value.getObject()).?;
-            } else {
-                return @ptrCast(*T, self.value.getBoxed().?);
             }
+            if (comptime meta.trait.isSingleItemPtr(T)) return @ptrCast(T, self.gvalue.getPointer());
+            if (comptime T == [*:0]const u8) return self.value.getString();
+            if (comptime T == GLib.Variant) return self.value.getVariant().?;
+            if (comptime T == GObject.ParamSpec) return self.value.getParam();
+            if (comptime @hasDecl(T, "__call")) return downCast(T, self.value.getObject()).?;
+            return @ptrCast(*T, self.value.getBoxed().?);
         }
 
-        pub fn set(self: *Self, arg_value: if (isBasic()) T else *T) void {
-            if (T == Boolean) {
+        pub fn set(self: *Self, arg_value: if (is_basic) T else *T) void {
+            if (comptime T == Boolean) {
                 self.value.setBoolean(arg_value);
-            } else if (T == i8) {
+            } else if (comptime T == i8) {
                 self.value.setSchar(arg_value);
-            } else if (T == u8) {
+            } else if (comptime T == u8) {
                 self.value.setUchar(arg_value);
-            } else if (T == Int) {
+            } else if (comptime T == Int) {
                 self.value.setInt(arg_value);
-            } else if (T == Uint) {
+            } else if (comptime T == Uint) {
                 self.value.setUint(arg_value);
-            } else if (T == i64) {
+            } else if (comptime T == i64) {
                 self.value.setInt64(arg_value);
-            } else if (T == u64) {
+            } else if (comptime T == u64) {
                 self.value.setUint64(arg_value);
-            } else if (T == Long) {
+            } else if (comptime T == Long) {
                 self.value.setLong(arg_value);
-            } else if (T == Ulong) {
+            } else if (comptime T == Ulong) {
                 self.value.setUlong(arg_value);
-            } else if (T == f32) {
+            } else if (comptime T == f32) {
                 self.value.setFloat(arg_value);
-            } else if (T == f64) {
+            } else if (comptime T == f64) {
                 self.value.setDouble(arg_value);
-            } else if (T == Type) {
+            } else if (comptime T == Type) {
                 self.value.setGtype(arg_value);
-            } else if (meta.trait.is(.Enum)(T)) {
+            } else if (comptime meta.trait.is(.Enum)(T)) {
                 if (@typeInfo(T).Enum.is_exhaustive) {
                     self.value.setEnum(@enumToInt(arg_value));
                 } else {
                     self.value.setFlags(@enumToInt(arg_value));
                 }
-            } else if (T == [*:0]const u8) {
+            } else if (comptime T == [*:0]const u8) {
                 self.value.setString(arg_value);
-            } else if (meta.trait.isSingleItemPtr(T)) {
+            } else if (comptime meta.trait.isSingleItemPtr(T)) {
                 self.value.setPointer(arg_value);
-            } else if (T == GLib.Variant) {
+            } else if (comptime T == GLib.Variant) {
                 self.value.setVariant(arg_value);
-            } else if (T == GObject.ParamSpec) {
+            } else if (comptime T == GObject.ParamSpec) {
                 self.gvalue.setParam(arg_value);
-            } else if (@hasDecl(T, "into")) {
+            } else if (comptime @hasDecl(T, "__call")) {
                 self.value.setObject(upCast(GObject.Object, arg_value));
             } else {
                 self.value.setBoxed(arg_value);
@@ -320,7 +298,7 @@ pub inline fn downCast(comptime T: type, object: anytype) ?*T {
 }
 
 pub inline fn dynamicCast(comptime T: type, object: anytype) ?*T {
-    return if (GObject.typeCheckInstanceIsA(unsafeCast(GObject.TypeInstance, object), T.type()).toBool()) unsafeCast(T, object) else null;
+    return if (GObject.typeCheckInstanceIsA(unsafeCast(GObject.TypeInstance, object), T.type())) unsafeCast(T, object) else null;
 }
 
 pub inline fn unsafeCast(comptime T: type, object: anytype) *T {
@@ -592,6 +570,27 @@ pub fn connectSwap(object: *GObject.Object, signal: [*:0]const u8, handler: anyt
 // closure end
 // -----------
 
+pub fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?[]GObject.Value) *GObject.Object {
+    assert((names == null) == (values == null));
+    if (names) |_| assert(names.?.len == values.?.len);
+    return struct {
+        pub extern fn g_object_new_with_properties(Type, c_uint, ?[*][*:0]const u8, ?[*]GObject.Value) *GObject.Object;
+    }.g_object_new_with_properties(object_type, if (names) |some| @intCast(c_uint, some.len) else 0, if (names) |some| some.ptr else null, if (values) |some| some.ptr else null);
+}
+
+const TypeTag = struct {
+    type_id: Type = .Invalid,
+    private_offset: c_int = 0,
+};
+
+pub fn typeTag(comptime Object: type) *TypeTag {
+    _ = Object;
+    const Static = struct {
+        var tag = TypeTag{};
+    };
+    return &Static.tag;
+}
+
 pub const TypeFlagsZ = struct {
     abstract: bool = false,
     value_abstract: bool = false,
@@ -601,6 +600,9 @@ pub const TypeFlagsZ = struct {
 pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]const u8, _flags: TypeFlagsZ) Type {
     const class_init = struct {
         fn trampoline(class: *Class) callconv(.C) void {
+            if (typeTag(Object).private_offset != 0) {
+                _ = GObject.typeClassAdjustPrivateOffset(class, &typeTag(Object).private_offset);
+            }
             if (@hasDecl(Class, "init")) {
                 class.init();
             }
@@ -608,21 +610,31 @@ pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]cons
     }.trampoline;
     const instance_init = struct {
         fn trampoline(self: *Object) callconv(.C) void {
+            if (@hasDecl(Object, "Private")) {
+                self.private = @intToPtr(*Object.Private, @bitCast(usize, @bitCast(isize, @ptrToInt(self)) + typeTag(Object).private_offset));
+            }
             if (@hasDecl(Object, "init")) {
                 self.init();
             }
         }
     }.trampoline;
-    var info: GObject.TypeInfo = .{ .class_size = @sizeOf(Class), .base_init = null, .base_finalize = null, .class_init = class_init, .class_finalize = null, .class_data = null, .instance_size = @sizeOf(Object), .n_preallocs = 0, .instance_init = instance_init, .value_table = null };
-    var flags = Flags(GObject.TypeFlags);
-    if (_flags.abstract) {
-        flags = flags.@"|"(.{ .value = .Abstract });
+    if (GLib.onceInitEnter(&typeTag(Object).type_id)) {
+        var flags: Flags(GObject.TypeFlags) = .{};
+        if (_flags.abstract) {
+            flags = flags.@"|"(.{ .value = .Abstract });
+        }
+        if (_flags.value_abstract) {
+            flags = flags.@"|"(.{ .value = .ValueAbstract });
+        }
+        if (_flags.final) {
+            flags = flags.@"|"(.{ .value = .Final });
+        }
+        var info: GObject.TypeInfo = .{ .class_size = @sizeOf(Class), .base_init = null, .base_finalize = null, .class_init = @ptrCast(GObject.ClassInitFunc, &class_init), .class_finalize = null, .class_data = null, .instance_size = @sizeOf(Object), .n_preallocs = 0, .instance_init = @ptrCast(GObject.InstanceInitFunc, &instance_init), .value_table = null };
+        var type_id = GObject.typeRegisterStatic(Object.Parent.type(), name, &info, flags.value);
+        if (@hasDecl(Object, "Private")) {
+            typeTag(Object).private_offset = GObject.typeAddInstancePrivate(type_id, @sizeOf(Object.Private));
+        }
+        GLib.onceInitLeave(&typeTag(Object).type_id, @enumToInt(type_id));
     }
-    if (_flags.value_abstract) {
-        flags = flags.@"|"(.{ .value = .ValueAbstract });
-    }
-    if (_flags.final) {
-        flags = flags.@"|"(.{ .value = .Final });
-    }
-    return GObject.typeRegisterStatic(Object.Parent.type(), name, &info, flags.value);
+    return typeTag(Object).type_id;
 }
