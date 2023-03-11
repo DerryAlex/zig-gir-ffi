@@ -90,11 +90,6 @@ pub fn emitCall(self: anytype, writer: anytype) !void {
         }
         if (method.asCallable().isMethod()) {
             try writer.print("if (comptime std.mem.eql(u8, \"{s}\", method))", .{m_name});
-            // if (method.asCallable().mayReturnNull()) {
-            //     try writer.print(" return {&?};\n", .{method.asCallable().returnType()});
-            // } else {
-            //     try writer.print(" return {&};\n", .{method.asCallable().returnType()});
-            // }
             if (isZigKeyword(m_name)) {
                 try writer.print(" return core.FnReturnType(@This().@\"{s}\");\n", .{m_name});
             } else {
@@ -151,7 +146,7 @@ pub fn emitCall(self: anytype, writer: anytype) !void {
     try writer.writeAll("}\n");
     // part 2
     try writer.print("pub fn __call(self: *{s}, comptime method: []const u8, args: anytype)", .{name});
-    try writer.writeAll(" if (__Call(method)) |some| some else @compileError(std.fmt.comptimePrint(\"No such method {s}\", .{method})) {\n");
+    try writer.writeAll(" core.CallReturnType(@This(), method) {\n");
     m_iter = self.methodIter();
     while (m_iter.next()) |method| {
         if (method.asCallable().asBase().isDeprecated() and !enable_deprecated) continue;

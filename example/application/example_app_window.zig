@@ -240,7 +240,7 @@ pub const ExampleAppWindow = extern struct {
         return core.CallInherited(@This(), method);
     }
 
-    pub fn __call(self: *ExampleAppWindow, comptime method: []const u8, args: anytype) if (__Call(method)) |some| some else @compileError(std.fmt.comptimePrint("No such method {s}", .{method})) {
+    pub fn __call(self: *ExampleAppWindow, comptime method: []const u8, args: anytype) core.CallReturnType(@This(), method) {
         if (comptime std.mem.eql(u8, method, "open")) return @call(.auto, open, .{self} ++ args);
         return core.callInherited(self, method, args);
     }

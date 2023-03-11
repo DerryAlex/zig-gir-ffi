@@ -16,6 +16,10 @@ pub fn FnReturnType(comptime func: anytype) type {
     return if (fn_info.Fn.return_type) |some| some else void;
 }
 
+pub fn CallReturnType(comptime Object: type, comptime method: []const u8) type {
+    if (Object.__Call(method)) |some| return some else @compileError(std.fmt.comptimePrint("{s}: No such method {s}", .{@typeName(Object), method}));
+}
+
 // misc end
 // --------
 
@@ -272,13 +276,13 @@ pub fn ValueZ(comptime T: type) type {
 fn isA(comptime U: type, comptime V: type) bool {
     if (U == V) return true;
     if (@hasDecl(U, "Prerequisites")) {
-        for (U.Prerequisites) |prerequisite| {
-            if (isA(prerequisite, V)) return true;
+        for (U.Prerequisites) |Prerequisite| {
+            if (isA(Prerequisite, V)) return true;
         }
     }
     if (@hasDecl(U, "Interfaces")) {
-        for (U.Interfaces) |interface| {
-            if (isA(interface, V)) return true;
+        for (U.Interfaces) |Interface| {
+            if (isA(Interface, V)) return true;
         }
     }
     if (@hasDecl(U, "Parent")) {
@@ -307,13 +311,13 @@ pub inline fn unsafeCast(comptime T: type, object: anytype) *T {
 
 pub fn CallInherited(comptime T: type, comptime method: []const u8) ?type {
     if (@hasDecl(T, "Prerequisites")) {
-        for (T.Prerequisites) |prerequisite| {
-            if (prerequisite.__Call(method)) |some| return some;
+        for (T.Prerequisites) |Prerequisite| {
+            if (Prerequisite.__Call(method)) |some| return some;
         }
     }
     if (@hasDecl(T, "Interfaces")) {
-        for (T.Interfaces) |interface| {
-            if (interface.__Call(method)) |some| return some;
+        for (T.Interfaces) |Interface| {
+            if (Interface.__Call(method)) |some| return some;
         }
     }
     if (@hasDecl(T, "Parent")) {
@@ -325,16 +329,16 @@ pub fn CallInherited(comptime T: type, comptime method: []const u8) ?type {
 pub fn callInherited(self: anytype, comptime method: []const u8, args: anytype) CallInherited(meta.Child(@TypeOf(self)), method).? {
     const T = meta.Child(@TypeOf(self));
     if (@hasDecl(T, "Prerequisites")) {
-        inline for (T.Prerequisites) |prerequisite| {
-            if (prerequisite.__Call(method)) |_| {
-                return upCast(prerequisite, self).__call(method, args);
+        inline for (T.Prerequisites) |Prerequisite| {
+            if (Prerequisite.__Call(method)) |_| {
+                return upCast(Prerequisite, self).__call(method, args);
             }
         }
     }
     if (@hasDecl(T, "Interfaces")) {
-        inline for (T.Interfaces) |interface| {
-            if (interface.__Call(method)) |_| {
-                return upCast(interface, self).__call(method, args);
+        inline for (T.Interfaces) |Interface| {
+            if (Interface.__Call(method)) |_| {
+                return upCast(Interface, self).__call(method, args);
             }
         }
     }
@@ -570,6 +574,9 @@ pub fn connectSwap(object: *GObject.Object, signal: [*:0]const u8, handler: anyt
 // closure end
 // -----------
 
+// --------------
+// subclass begin
+
 pub fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?[]GObject.Value) *GObject.Object {
     assert((names == null) == (values == null));
     if (names) |_| assert(names.?.len == values.?.len);
@@ -597,7 +604,8 @@ pub const TypeFlagsZ = struct {
     final: bool = false,
 };
 
-pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]const u8, _flags: TypeFlagsZ) Type {
+/// Convenience wrapper for g_type_register_static
+pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]const u8, flags: TypeFlagsZ) Type {
     const class_init = struct {
         fn trampoline(class: *Class) callconv(.C) void {
             if (typeTag(Object).private_offset != 0) {
@@ -619,22 +627,66 @@ pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]cons
         }
     }.trampoline;
     if (GLib.onceInitEnter(&typeTag(Object).type_id)) {
-        var flags: Flags(GObject.TypeFlags) = .{};
-        if (_flags.abstract) {
-            flags = flags.@"|"(.{ .value = .Abstract });
+        var _flags: Flags(GObject.TypeFlags) = .{};
+        if (flags.abstract) {
+            _flags = _flags.@"|"(.{ .value = .Abstract });
         }
-        if (_flags.value_abstract) {
-            flags = flags.@"|"(.{ .value = .ValueAbstract });
+        if (flags.value_abstract) {
+            _flags = _flags.@"|"(.{ .value = .ValueAbstract });
         }
-        if (_flags.final) {
-            flags = flags.@"|"(.{ .value = .Final });
+        if (flags.final) {
+            _flags = _flags.@"|"(.{ .value = .Final });
         }
         var info: GObject.TypeInfo = .{ .class_size = @sizeOf(Class), .base_init = null, .base_finalize = null, .class_init = @ptrCast(GObject.ClassInitFunc, &class_init), .class_finalize = null, .class_data = null, .instance_size = @sizeOf(Object), .n_preallocs = 0, .instance_init = @ptrCast(GObject.InstanceInitFunc, &instance_init), .value_table = null };
-        var type_id = GObject.typeRegisterStatic(Object.Parent.type(), name, &info, flags.value);
+        const type_id = GObject.typeRegisterStatic(Object.Parent.type(), name, &info, _flags.value);
         if (@hasDecl(Object, "Private")) {
             typeTag(Object).private_offset = GObject.typeAddInstancePrivate(type_id, @sizeOf(Object.Private));
+        }
+        if (@hasDecl(Object, "Interfaces")) {
+            inline for (Object.Interfaces) |Interface| {
+                const interface_init = struct {
+                    const init_func = "init" ++ @typeName(Interface)[(if (std.mem.lastIndexOfScalar(u8, @typeName(Interface), '.')) |some| some + 1 else 0)..];
+                    fn trampoline(self: *Interface) callconv(.C) void {
+                        if (@hasDecl(Object, init_func)) {
+                            @call(.auto, @field(Object, init_func), .{self});
+                        }
+                    }
+                }.trampoline;
+                var interface_info: GObject.InterfaceInfo = .{ .interface_init = @ptrCast(GObject.InterfaceInitFunc, &interface_init), .interface_finalize = null, .interface_data = null };
+                GObject.typeAddInterfaceStatic(type_id, Interface.type(), &interface_info);
+            }
         }
         GLib.onceInitLeave(&typeTag(Object).type_id, @enumToInt(type_id));
     }
     return typeTag(Object).type_id;
 }
+
+/// Convenience wrapper for g_type_register_static
+pub fn registerInterface(comptime Interface: type, name: [*:0]const u8) Type {
+    const class_init = struct {
+        pub fn trampoline(self: *Interface) callconv(.C) void {
+            if (@hasDecl(Interface, "init")) {
+                self.init();
+            }
+        }
+    }.trampoline;
+    if (GLib.onceInitEnter(&typeTag(Interface).type_id)) {
+        var info: GObject.TypeInfo = .{ .class_size = @sizeOf(Interface), .base_init = null, .base_finalize = null, .class_init = @ptrCast(GObject.ClassInitFunc, &class_init), .class_finalize = null, .class_data = null, .instance_size = 0, .n_preallocs = 0, .instance_init = null, .value_table = null };
+        const type_id = GObject.typeRegisterStatic(.Interface, name, &info, .None);
+        if (@hasDecl(Interface, "Prerequisites")) {
+            inline for (Interface.Prerequisites) |Prerequisite| {
+                GObject.typeInterfaceAddPrerequisite(type_id, Prerequisite.type());
+            }
+        }
+        GLib.onceInitLeave(&typeTag(Interface).type_id, @enumToInt(type_id));
+    }
+    return typeTag(Interface).type_id;
+}
+
+pub fn typeInstanceGetInterface(comptime Interface: type, self: *Interface) *Interface {
+    const class = unsafeCast(GObject.TypeInstance, self).g_class.?;
+    return unsafeCast(Interface, GObject.typeInterfacePeek(class, Interface.type()));
+}
+
+// subclass end
+// ------------

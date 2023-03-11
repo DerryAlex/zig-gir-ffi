@@ -72,7 +72,7 @@ pub const ExampleAppPrefs = extern struct {
         return core.CallInherited(@This(), method);
     }
 
-    pub fn __call(self: *ExampleAppPrefs, comptime method: []const u8, args: anytype) if (__Call(method)) |some| some else @compileError(std.fmt.comptimePrint("No such method {s}", .{method})) {
+    pub fn __call(self: *ExampleAppPrefs, comptime method: []const u8, args: anytype) core.CallReturnType(@This(), method) {
         core.callInherited(self, method, args);
     }
 
