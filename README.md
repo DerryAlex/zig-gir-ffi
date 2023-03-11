@@ -1,8 +1,6 @@
-# Zig GIR
+# Zig GIR FFI
 
-GObject Introspection Repository binding for zig
-
-Generated [GTK4 binding](https://github.com/DerryAlex/zig-gir-ffi/releases) can be downloaded.
+GObject Introspection for zig. Generated [GTK4 binding](https://github.com/DerryAlex/zig-gir-ffi/releases) can be downloaded.
 
 ## Documentation
 
