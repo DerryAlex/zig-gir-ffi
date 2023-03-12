@@ -20,8 +20,6 @@ const ExampleAppPrefsClass = extern struct {
     parent: DialogClass,
 
     pub fn init(class: *ExampleAppPrefsClass) void {
-        var object_class = @ptrCast(*ObjectClass, class);
-        object_class.dispose = &dispose;
         var widget_class = @ptrCast(*WidgetClass, class);
         widget_class.setTemplateFromResource("/org/gtk/exampleapp/prefs.ui");
         template.bindChild(widget_class, ExampleAppPrefs);

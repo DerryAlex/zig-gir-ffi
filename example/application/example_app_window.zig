@@ -49,8 +49,6 @@ pub const ExampleAppWindowClass = extern struct {
     parent: ApplicationWindowClass,
 
     pub fn init(class: *ExampleAppWindowClass) void {
-        var object_class = @ptrCast(*ObjectClass, class);
-        object_class.dispose = &dispose;
         var widget_class = @ptrCast(*WidgetClass, class);
         widget_class.setTemplateFromResource("/org/gtk/exampleapp/window.ui");
         template.bindChild(widget_class, ExampleAppWindow);

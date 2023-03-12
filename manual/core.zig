@@ -634,17 +634,44 @@ pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]cons
             if (typeTag(Object).private_offset != 0) {
                 _ = GObject.typeClassAdjustPrivateOffset(class, &typeTag(Object).private_offset);
             }
-            if (@hasDecl(Class, "init")) {
+            if (comptime @hasDecl(Class, "constructed")) {
+                @ptrCast(*GObject.ObjectClass, class).constructed = &Class.constructed;
+            }
+            if (comptime @hasDecl(Class, "dispatchPropertiesChanged")) {
+                @ptrCast(*GObject.ObjectClass, class).dispatch_properties_changed = &Class.dispatchPropertiesChanged;
+            }
+            if (comptime @hasDecl(Class, "dispose")) {
+                @ptrCast(*GObject.ObjectClass, class).dispose = &Class.dispose;
+            }
+            if (comptime @hasDecl(Class, "finalize")) {
+                @ptrCast(*GObject.ObjectClass, class).finalize = &Class.finalize;
+            }
+            if (comptime @hasDecl(Class, "getProperty")) {
+                @ptrCast(*GObject.ObjectClass, class).get_property = &Class.getProperty;
+            }
+            if (comptime @hasDecl(Class, "notify")) {
+                @ptrCast(*GObject.ObjectClass, class).notify = &Class.notify;
+            }
+            if (comptime @hasDecl(Class, "setProperty")) {
+                @ptrCast(*GObject.ObjectClass, class).set_property = &Class.setProperty;
+            }
+            if (comptime @hasDecl(Class, "properties")) {
+                @ptrCast(*GObject.ObjectClass, class).installProperties(Class.properties());
+            }
+            if (comptime @hasDecl(Class, "signals")) {
+                _ = Class.signals();
+            }
+            if (comptime @hasDecl(Class, "init")) {
                 class.init();
             }
         }
     }.trampoline;
     const instance_init = struct {
         fn trampoline(self: *Object) callconv(.C) void {
-            if (@hasDecl(Object, "Private")) {
+            if (comptime @hasDecl(Object, "Private")) {
                 self.private = @intToPtr(*Object.Private, @bitCast(usize, @bitCast(isize, @ptrToInt(self)) + typeTag(Object).private_offset));
             }
-            if (@hasDecl(Object, "init")) {
+            if (comptime @hasDecl(Object, "init")) {
                 self.init();
             }
         }
@@ -670,7 +697,7 @@ pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]cons
                 const interface_init = struct {
                     const init_func = "init" ++ @typeName(Interface)[(if (std.mem.lastIndexOfScalar(u8, @typeName(Interface), '.')) |some| some + 1 else 0)..];
                     fn trampoline(self: *Interface) callconv(.C) void {
-                        if (@hasDecl(Object, init_func)) {
+                        if (comptime @hasDecl(Object, init_func)) {
                             @call(.auto, @field(Object, init_func), .{self});
                         }
                     }
