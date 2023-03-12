@@ -87,7 +87,7 @@ pub const ExampleApp = extern struct {
         flags.set(.HandlesOpen);
         var property_names = [_][*:0]const u8{ "application-id", "flags" };
         var property_values = [_]Value{ application_id.value, flags.value };
-        return core.objectNewWithProperties(@"type"(), property_names[0..], property_values[0..]).tryInto(ExampleApp).?;
+        return core.newObject(ExampleApp, property_names[0..], property_values[0..]);
     }
 
     pub fn @"type"() core.Type {

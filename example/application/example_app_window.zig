@@ -131,7 +131,7 @@ pub const ExampleAppWindow = extern struct {
         application.set(app.into(Application));
         var property_names = [_][*:0]const u8{"application"};
         var property_values = [_]core.Value{application.value};
-        return core.objectNewWithProperties(@"type"(), property_names[0..], property_values[0..]).tryInto(ExampleAppWindow).?;
+        return core.newObject(ExampleAppWindow, property_names[0..], property_values[0..]);
     }
 
     pub fn open(self: *ExampleAppWindow, file: *File) void {

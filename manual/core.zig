@@ -56,7 +56,9 @@ pub fn ValueZ(comptime T: type) type {
         pub fn init() Self {
             // var value = std.mem.zeroes(GObject.Value);
             var value: GObject.Value = .{ .g_type = .Invalid, .data = .{ .{ .v_pointer = null }, .{ .v_pointer = null } } };
-            if (comptime T == bool) {
+            if (comptime T == void) {
+                value.g_type = .None; // for internal use
+            } else if (comptime T == bool) {
                 _ = value.init(.Boolean);
             } else if (comptime T == i8) {
                 _ = value.init(.Char);
@@ -89,7 +91,7 @@ pub fn ValueZ(comptime T: type) type {
             } else if (comptime @hasDecl(T, "type")) {
                 _ = value.init(T.type());
             } else {
-                @compileError(std.fmt.comptimePrint("{s} is not typed", @typeName(T)));
+                @compileError(std.fmt.comptimePrint("cannot initialize GValue with type {s}", @typeName(T)));
             }
             return .{ .value = value };
         }
@@ -99,6 +101,7 @@ pub fn ValueZ(comptime T: type) type {
         }
 
         const is_basic = gen_is_basic: {
+            if (T == void) break :gen_is_basic true;
             if (T == bool) break :gen_is_basic true;
             if (T == i8) break :gen_is_basic true;
             if (T == u8) break :gen_is_basic true;
@@ -117,6 +120,7 @@ pub fn ValueZ(comptime T: type) type {
         };
 
         pub fn get(self: Self) if (is_basic) T else *T {
+            if (comptime T == void) ("Cannot initialize GValue with type void");
             if (comptime T == bool) return self.value.getBoolean();
             if (comptime T == i8) return self.value.getSchar();
             if (comptime T == u8) return self.value.getUchar();
@@ -145,7 +149,9 @@ pub fn ValueZ(comptime T: type) type {
         }
 
         pub fn set(self: *Self, arg_value: if (is_basic) T else *T) void {
-            if (comptime T == bool) {
+            if (comptime T == void) {
+                @compileError("cannot initialize GValue with type void");
+            } else if (comptime T == bool) {
                 self.value.setBoolean(arg_value);
             } else if (comptime T == i8) {
                 self.value.setSchar(arg_value);
@@ -400,10 +406,21 @@ pub fn ClosureZ(comptime FnPtr: type, comptime Args: type, comptime signature: [
         comptime assert(n_arg == 0);
         return struct {
             const Self = @This();
-            pub fn new(_: ?std.mem.allocator, _: FnPtr, _: Args) !*Self {}
+            pub fn new(_: ?std.mem.Allocator, _: FnPtr, _: Args) !*Self {
+                return undefined;
+            }
             pub fn invoke() callconv(.C) void {}
             pub fn setOnce(_: *Self) void {}
             pub fn deinit(_: *Self) callconv(.C) void {}
+            pub inline fn c_closure(_: *Self) ?*anyopaque {
+                return null;
+            }
+            pub inline fn c_data(_: *Self) ?*anyopaque {
+                return null;
+            }
+            pub inline fn c_destroy(_: *Self) ?*anyopaque {
+                return null;
+            }
         };
     }
 
@@ -552,6 +569,18 @@ pub fn ClosureZ(comptime FnPtr: type, comptime Args: type, comptime signature: [
         pub fn deinit(self: *Self) callconv(.C) void {
             self.allocator.destroy(self);
         }
+
+        pub inline fn c_closure(_: *Self) @TypeOf(&Self.invoke) {
+            return &Self.invoke;
+        }
+
+        pub inline fn c_data(self: *Self) *Self {
+            return self;
+        }
+
+        pub inline fn c_destroy(_: *Self) @TypeOf(&Self.deinit) {
+            return &Self.deinit;
+        }
     };
 }
 
@@ -574,14 +603,14 @@ pub const ConnectFlagsZ = struct {
 
 pub fn connect(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, flags: ConnectFlagsZ, comptime signature: []const type) usize {
     var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(flags.allocator, handler, args) catch @panic("Out of Memory");
-    var cclosure = cclosureNew(@ptrCast(GObject.Callback, &@TypeOf(closure.*).invoke), closure, @ptrCast(GObject.ClosureNotify, &@TypeOf(closure.*).deinit));
+    var cclosure = cclosureNew(@ptrCast(GObject.Callback, closure.c_closure()), closure.c_data(), @ptrCast(GObject.ClosureNotify, closure.c_destroy()));
     return GObject.signalConnectClosure(object, signal, cclosure, flags.after);
 }
 
 pub fn connectSwap(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, flags: ConnectFlagsZ, comptime signature: []const type) usize {
     comptime assert(signature.len == 1);
     var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(flags.allocator, handler, args) catch @panic("Out of Memory");
-    var cclosure = cclosureNewSwap(@ptrCast(GObject.Callback, &@TypeOf(closure.*).invoke), closure, @ptrCast(GObject.ClosureNotify, &@TypeOf(closure.*).deinit));
+    var cclosure = cclosureNewSwap(@ptrCast(GObject.Callback, closure.c_closure()), closure.c_data(), @ptrCast(GObject.ClosureNotify, closure.c_destroy()));
     return GObject.signalConnectClosure(object, signal, cclosure, flags.after);
 }
 
@@ -591,16 +620,7 @@ pub fn connectSwap(object: *GObject.Object, signal: [*:0]const u8, handler: anyt
 // --------------
 // subclass begin
 
-fn init(comptime T: type, value: *T) void {
-    const info = @typeInfo(T).Struct;
-    inline for (info.fields) |field| {
-        if (field.default_value) |some| {
-            @field(value, field.name) = @ptrCast(@Type(.{.Pointer = .{.size = .One, .is_const = true, .is_volatile = false, .alignment = @alignOf(field.type), .address_space = .generic, .child = field.type, .is_allowzero = false, .sentinel = null}}), @alignCast(@alignOf(field.type), some)).*;
-        }
-    }
-}
-
-pub fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?[]GObject.Value) *GObject.Object {
+fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?[]GObject.Value) *GObject.Object {
     if (names) |_| {
         assert(names.?.len == values.?.len);
     } else {
@@ -611,10 +631,93 @@ pub fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, value
     }.g_object_new_with_properties(object_type, if (names) |some| @intCast(c_uint, some.len) else 0, if (names) |some| some.ptr else null, if (values) |some| some.ptr else null);
 }
 
-pub fn signalNewv(signal_name: [*:0]const u8, itype: Type, signal_flags: GObject.SignalFlags, class_closure: ?*GObject.Closure, accumulator: ?GObject.SignalAccumulator, accu_data: ?*anyopaque, c_marshaller: ?GObject.ClosureMarshal, return_type: Type, param_types: ?[]Type) u32 {
+/// Wrapper for g_object_new_with_properties
+pub fn newObject(comptime T: type, names: ?[][*:0]const u8, values: ?[]GObject.Value) *T {
+    return unsafeCast(T, objectNewWithProperties(T.type(), names, values));
+}
+
+fn signalNewv(signal_name: [*:0]const u8, itype: Type, signal_flags: GObject.SignalFlags, class_closure: ?*GObject.Closure, accumulator: ?GObject.SignalAccumulator, accu_data: ?*anyopaque, c_marshaller: ?GObject.ClosureMarshal, return_type: Type, param_types: ?[]Type) u32 {
     return struct {
         pub extern fn g_signal_newv([*:0]const u8, Type, GObject.SignalFlags, ?*GObject.Closure, ?GObject.SignalAccumulator, ?*anyopaque, ?GObject.ClosureMarshal, Type, c_uint, ?[*]Type) c_uint;
     }.g_signal_newv(signal_name, itype, signal_flags, class_closure, accumulator, accu_data, c_marshaller, return_type, if (param_types) |some| @intCast(c_uint, some.len) else 0, if (param_types) |some| some.ptr else null);
+}
+
+pub const SignalFlagsZ = struct {
+    run_first: bool = false,
+    run_last: bool = false,
+    run_cleanup: bool = false,
+    no_recurse: bool = false,
+    detailed: bool = false,
+    action: bool = false,
+    no_hooks: bool = false,
+    must_collect: bool = false,
+    deprecated: bool = false,
+    accumulator_first_run: bool = false,
+};
+
+/// Wrapper for g_signal_newv
+pub fn newSignal(comptime Class: type, comptime Object: type, comptime signal_name: [:0]const u8, signal_flags: SignalFlagsZ, accumulator: anytype, accu_data: anytype) u32 {
+    assert(signal_flags.run_first or signal_flags.run_last or signal_flags.run_cleanup);
+    var flags = std.mem.zeroes(GObject.SignalFlags);
+    if (signal_flags.run_first) {
+        flags.@"|="(.RunFirst);
+    }
+    if (signal_flags.run_last) {
+        flags.@"|="(.RunLast);
+    }
+    if (signal_flags.run_cleanup) {
+        flags.@"|="(.RunCleanup);
+    }
+    if (signal_flags.no_recurse) {
+        flags.@"|="(.NoRecurse);
+    }
+    if (signal_flags.detailed) {
+        flags.@"|="(.Detailed);
+    }
+    if (signal_flags.action) {
+        flags.@"|="(.Action);
+    }
+    if (signal_flags.no_hooks) {
+        flags.@"|="(.NoHooks);
+    }
+    if (signal_flags.must_collect) {
+        flags.@"|="(.MustCollect);
+    }
+    if (signal_flags.deprecated) {
+        flags.@"|="(.Deprecated);
+    }
+    if (signal_flags.accumulator_first_run) {
+        flags.@"|="(.AccumulatorFirstRun);
+    }
+    comptime var field_name: [signal_name.len:0]u8 = undefined;
+    comptime {
+        std.mem.copy(u8, field_name[0..], signal_name[0..]);
+        for (&field_name) |*c| {
+            if (c.* == '-') {
+                c.* = '_';
+            }
+        }
+    }
+    var class_closure = GObject.signalTypeCclosureNew(Object.type(), @offsetOf(Class, &field_name));
+    var accumulator_closure = ClosureZ(@TypeOf(&accumulator), @TypeOf(accu_data), &[_]type{ bool, *GObject.SignalInvocationHint, *GObject.Value, *GObject.Value }).new(null, &accumulator, accu_data) catch @panic("Out of Memory");
+    const signal_field_type = meta.FieldType(Class, meta.stringToEnum(meta.FieldEnum(Class), &field_name).?);
+    const signal_info = @typeInfo(meta.Child(if (meta.trait.is(.Optional)(signal_field_type)) meta.Child(signal_field_type) else signal_field_type));
+    var return_type = ValueZ(signal_info.Fn.return_type.?).init().value.g_type;
+    var param_types: [signal_info.Fn.params.len - 2]Type = undefined;
+    inline for (signal_info.Fn.params[1..signal_info.Fn.params.len - 1], &param_types) |param, *ty| {
+        var is_gtyped = false;
+        if (meta.trait.isSingleItemPtr(param.type.?)) {
+            if (@hasDecl(meta.Child(param.type.?), "type")) {
+                is_gtyped = true;
+            }
+        }
+        if (is_gtyped) {
+            ty.* = meta.Child(param.type.?).type();
+        } else {
+            ty.* = ValueZ(param.type.?).init().value.g_type;
+        }
+    }
+    return signalNewv(signal_name.ptr, Object.type(), flags, class_closure, @ptrCast(?GObject.SignalAccumulator, accumulator_closure.c_closure()), accumulator_closure.c_data(), null, return_type, param_types[0..]);
 }
 
 const TypeTag = struct {
@@ -628,6 +731,16 @@ pub fn typeTag(comptime Object: type) *TypeTag {
         var tag = TypeTag{};
     };
     return &Static.tag;
+}
+
+fn init(comptime T: type, value: *T) void {
+    const info = @typeInfo(T).Struct;
+    inline for (info.fields) |field| {
+        if (field.default_value) |some| {
+            const field_const_ptr_type = @Type(.{ .Pointer = .{ .size = .One, .is_const = true, .is_volatile = false, .alignment = @alignOf(field.type), .address_space = .generic, .child = field.type, .is_allowzero = false, .sentinel = null } });
+            @field(value, field.name) = @ptrCast(field_const_ptr_type, @alignCast(@alignOf(field.type), some)).*;
+        }
+    }
 }
 
 pub const TypeFlagsZ = struct {

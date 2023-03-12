@@ -839,15 +839,15 @@ pub const FunctionInfo = struct {
                     },
                     else => unreachable,
                 }
-                try writer.print("var arg_{s} = @ptrCast({$}, &@TypeOf(closure_{s}.*).invoke);\n", .{ arg_name, arg, arg_name });
+                try writer.print("var arg_{s} = @ptrCast({$}, closure_{s}.c_closure());\n", .{ arg_name, arg, arg_name });
             }
             if (closure_info[idx].is_data) {
                 const func_arg = args[closure_info[idx].closure_func];
-                try writer.print("var arg_{s} = @ptrCast({$}, closure_{s});\n", .{ arg_name, arg, func_arg.asBase().name().? });
+                try writer.print("var arg_{s} = @ptrCast({$}, closure_{s}.c_data());\n", .{ arg_name, arg, func_arg.asBase().name().? });
             }
             if (closure_info[idx].is_destroy) {
                 const func_arg = args[closure_info[idx].closure_func];
-                try writer.print("var arg_{s} = @ptrCast({$}, &@TypeOf(closure_{s}.*).deinit);\n", .{ arg_name, arg, func_arg.asBase().name().? });
+                try writer.print("var arg_{s} = @ptrCast({$}, closure_{s}.c_destroy());\n", .{ arg_name, arg, func_arg.asBase().name().? });
             }
         }
         // prepare output

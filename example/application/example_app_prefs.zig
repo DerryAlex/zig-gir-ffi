@@ -64,7 +64,7 @@ pub const ExampleAppPrefs = extern struct {
         use_header_bar.set(true);
         var property_names = [_][*:0]const u8{ "transient-for", "use-header-bar" };
         var property_values = [_]core.Value{ transient_for.value, use_header_bar.value };
-        return core.objectNewWithProperties(@"type"(), property_names[0..], property_values[0..]).tryInto(ExampleAppPrefs).?;
+        return core.newObject(ExampleAppPrefs, property_names[0..], property_values[0..]);
     }
 
     pub fn @"type"() core.Type {
