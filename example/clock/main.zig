@@ -5,7 +5,7 @@ const core = Gtk.core;
 pub fn main() u8 {
     var app = Gtk.Application.new("org.example.clock", .FlagsNone);
     defer app.__call("unref", .{});
-    _ = app.__call("connectActivate", .{buildUi, .{}, .{}});
+    _ = app.__call("connectActivate", .{ buildUi, .{}, .{} });
     return @truncate(u8, @bitCast(u32, app.__call("run", .{std.os.argv})));
 }
 
@@ -29,7 +29,7 @@ pub fn tick(label: *Gtk.Label) bool {
     time = @divFloor(time, 60);
     const hour: u5 = @intCast(u5, @mod(time, 24));
     var buf: [13]u8 = undefined;
-    const str = std.fmt.bufPrintZ(buf[0..], "{d:0>2}:{d:0>2}:{d:0>2}UTC", .{hour, min, s}) catch @panic("No Space Left");
+    const str = std.fmt.bufPrintZ(buf[0..], "{d:0>2}:{d:0>2}:{d:0>2}UTC", .{ hour, min, s }) catch @panic("No Space Left");
     label.setLabel(str);
     return true; // true to continue, false to stop
 }

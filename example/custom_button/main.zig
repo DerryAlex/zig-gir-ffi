@@ -11,7 +11,7 @@ const GApplication = core.Application;
 pub fn main() u8 {
     var app = Application.new("org.example.custom_button", .FlagsNone);
     defer app.__call("unref", .{});
-    _ = app.__call("connectActivate", .{activate, .{}, .{}});
+    _ = app.__call("connectActivate", .{ activate, .{}, .{} });
     return @truncate(u8, @bitCast(u32, app.__call("run", .{std.os.argv})));
 }
 

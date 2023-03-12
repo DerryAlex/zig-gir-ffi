@@ -819,9 +819,7 @@ pub const FunctionInfo = struct {
                         } else {
                             std.log.warn("[Generic Callback] {s}", .{self.symbol()});
                         }
-                        if (interface.asCallable().canThrow()) {
-                            std.log.warn("[Throwable Callback] {s}", .{self.symbol()});
-                        }
+                        assert(!interface.asCallable().canThrow());
                     } else {
                         try writer.writeAll("void");
                         std.log.warn("[Generic Callback] {s}", .{self.symbol()});

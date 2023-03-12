@@ -308,7 +308,7 @@ pub inline fn unsafeCast(comptime T: type, object: anytype) *T {
 }
 
 fn CallMethod(comptime T: type, comptime method: []const u8) Expected(type, void) {
-    if (comptime @hasDecl(T, method)) {
+    if (comptime @hasDecl(T, method) and meta.declarationInfo(T, method).is_pub) {
         const method_info = @typeInfo(@TypeOf(@field(T, method)));
         comptime assert(meta.Child(method_info.Fn.params[0].type.?) == T);
         return .{ .Ok = method_info.Fn.return_type.? };
@@ -343,7 +343,7 @@ fn callMethod(self: anytype, comptime method: []const u8, args: anytype) switch 
     .Err => @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(meta.Child(@TypeOf(self))), method })),
 } {
     const Self = meta.Child(@TypeOf(self));
-    if (comptime @hasDecl(Self, method)) {
+    if (comptime @hasDecl(Self, method) and meta.declarationInfo(Self, method).is_pub) {
         return @call(.auto, @field(Self, method), .{self} ++ args);
     }
     if (comptime @hasDecl(Self, "Prerequisites")) {
@@ -598,12 +598,11 @@ fn cclosureNewSwap(callback_func: GObject.Callback, user_data: ?*anyopaque, dest
 
 pub const ConnectFlagsZ = struct {
     after: bool = false,
-    allocator: ?std.mem.Allocator = null,
 };
 
 /// Wrapper for g_signal_connect_closure
 pub fn connect(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, flags: ConnectFlagsZ, comptime signature: []const type) usize {
-    var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(flags.allocator, handler, args) catch @panic("Out of Memory");
+    var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(null, handler, args) catch @panic("Out of Memory");
     var cclosure = cclosureNew(@ptrCast(GObject.Callback, closure.c_closure()), closure.c_data(), @ptrCast(GObject.ClosureNotify, closure.c_destroy()));
     return GObject.signalConnectClosure(object, signal, cclosure, flags.after);
 }
@@ -611,7 +610,7 @@ pub fn connect(object: *GObject.Object, signal: [*:0]const u8, handler: anytype,
 /// Wrapper for g_signal_connect_closure
 pub fn connectSwap(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, flags: ConnectFlagsZ, comptime signature: []const type) usize {
     comptime assert(signature.len == 1);
-    var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(flags.allocator, handler, args) catch @panic("Out of Memory");
+    var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(null, handler, args) catch @panic("Out of Memory");
     var cclosure = cclosureNewSwap(@ptrCast(GObject.Callback, closure.c_closure()), closure.c_data(), @ptrCast(GObject.ClosureNotify, closure.c_destroy()));
     return GObject.signalConnectClosure(object, signal, cclosure, flags.after);
 }
