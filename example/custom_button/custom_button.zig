@@ -22,7 +22,7 @@ var _signals: [1]u32 = undefined;
 
 pub const CustomButtonClass = extern struct {
     parent: ButtonClass,
-    zero_reached: ?*const fn (*CustomButton, ?*anyopaque) void,
+    zero_reached: ?*const fn (*CustomButton) void,
 
     pub fn init(self: *CustomButtonClass) void {
         var button_class = @ptrCast(*Gtk.ButtonClass, self);

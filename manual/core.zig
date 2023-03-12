@@ -705,8 +705,8 @@ pub fn newSignal(comptime Class: type, comptime Object: type, comptime signal_na
     const signal_field_type = meta.FieldType(Class, meta.stringToEnum(meta.FieldEnum(Class), &field_name).?);
     const signal_info = @typeInfo(meta.Child(if (meta.trait.is(.Optional)(signal_field_type)) meta.Child(signal_field_type) else signal_field_type));
     var return_type = ValueZ(signal_info.Fn.return_type.?).init().value.g_type;
-    var param_types: [signal_info.Fn.params.len - 2]Type = undefined;
-    inline for (signal_info.Fn.params[1..signal_info.Fn.params.len - 1], &param_types) |param, *ty| {
+    var param_types: [signal_info.Fn.params.len - 1]Type = undefined;
+    inline for (signal_info.Fn.params[1..], &param_types) |param, *ty| {
         var is_gtyped = false;
         if (meta.trait.isSingleItemPtr(param.type.?)) {
             if (@hasDecl(meta.Child(param.type.?), "type")) {
