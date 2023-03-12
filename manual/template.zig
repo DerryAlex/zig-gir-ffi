@@ -12,14 +12,14 @@ pub fn bindChild(class: *WidgetClass, comptime Object: type) void {
         if (comptime name.len <= 3 or name[0] != 't' or (name[1] != 'c' and name[1] != 'i') or name[2] != '_') continue;
         comptime var name_c: [name.len - 3:0]u8 = undefined;
         comptime std.mem.copy(u8, name_c[0..], name[3..]);
-        class.bindTemplateChildFull(&name_c, if (name[1] == 'i') .True else .False, @offsetOf(Object, name));
+        class.bindTemplateChildFull(&name_c, name[1] == 'i', @offsetOf(Object, name));
     }
     if (@hasDecl(Object, "Private")) {
         inline for (comptime meta.fieldNames(Object.Private)) |name| {
             if (comptime name.len <= 3 or name[0] != 't' or (name[1] != 'c' and name[1] != 'i') or name[2] != '_') continue;
             comptime var name_c: [name.len - 3:0]u8 = undefined;
             comptime std.mem.copy(u8, name_c[0..], name[3..]);
-            class.bindTemplateChildFull(&name_c, if (name[1] == 'i') .True else .False, @offsetOf(Object.Private, name) + core.typeTag(Object).private_offset);
+            class.bindTemplateChildFull(&name_c, name[1] == 'i', @offsetOf(Object.Private, name) + core.typeTag(Object).private_offset);
         }
     }
 }

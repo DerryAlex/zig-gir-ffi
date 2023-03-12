@@ -9,38 +9,9 @@ const meta = std.meta;
 const assert = std.debug.assert;
 
 // ----------
-// misc begin
-
-pub fn FnReturnType(comptime func: anytype) type {
-    const fn_info = @typeInfo(@TypeOf(func));
-    return if (fn_info.Fn.return_type) |some| some else void;
-}
-
-pub fn CallReturnType(comptime Object: type, comptime method: []const u8) type {
-    if (Object.__Call(method)) |some| return some else @compileError(std.fmt.comptimePrint("{s}: No such method {s}", .{@typeName(Object), method}));
-}
-
-// misc end
-// --------
-
-// ----------
 // type begin
 
-pub const Boolean = enum(c_int) {
-    False = 0,
-    True = 1,
-
-    pub inline fn toBool(self: Boolean) bool {
-        return @enumToInt(self) != @enumToInt(Boolean.False);
-    }
-
-    pub fn format(self: Boolean, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
-        try writer.print("{}", self.toBool());
-    }
-};
-
+/// A numerical value which represents the unique identifier of a registered type
 pub const Type = enum(usize) {
     Invalid = 0,
     None = 4,
@@ -70,56 +41,7 @@ pub const Type = enum(usize) {
 /// UCS-4
 pub const Unichar = u32;
 
-// type end
-// --------
-
-pub fn Expected(comptime T: type, comptime E: type) type {
-    return union(enum) {
-        Ok: T,
-        Err: E,
-    };
-}
-
-pub fn Flags(comptime T: type) type {
-    return struct {
-        value: T = std.mem.zeroes(T),
-
-        const Self = @This();
-
-        pub inline fn @"|"(self: Self, rhs: Self) Self {
-            return .{ .value = @intToEnum(T, @enumToInt(self.value) | @enumToInt(rhs.value)) };
-        }
-
-        pub inline fn @"&"(self: Self, rhs: Self) Self {
-            return .{ .value = @intToEnum(T, @enumToInt(self.value) & @enumToInt(rhs.value)) };
-        }
-
-        pub inline fn @"^"(self: Self, rhs: Self) Self {
-            return .{ .value = @intToEnum(T, @enumToInt(self.value) ^ @enumToInt(rhs.value)) };
-        }
-
-        pub inline fn @"-"(self: Self, rhs: Self) Self {
-            return .{ .value = @intToEnum(T, @enumToInt(self.value) & ~@enumToInt(rhs.value)) };
-        }
-
-        pub inline fn @"~"(self: Self) Self {
-            return .{ .value = @intToEnum(T, ~@enumToInt(self.value)) };
-        }
-
-        pub inline fn isEmpty(self: Self) bool {
-            return @enumToInt(self.value) == 0;
-        }
-
-        pub inline fn intersects(self: Self, rhs: Self) bool {
-            return @enumToInt(self.value) & @enumToInt(rhs.value) != 0;
-        }
-
-        pub inline fn contains(self: Self, rhs: Self) bool {
-            return @enumToInt(self.value) & @enumToInt(rhs.value) == @enumToInt(rhs.value);
-        }
-    };
-}
-
+/// Wrapper for GValue
 pub fn ValueZ(comptime T: type) type {
     return struct {
         value: GObject.Value,
@@ -134,7 +56,7 @@ pub fn ValueZ(comptime T: type) type {
         pub fn init() Self {
             // var value = std.mem.zeroes(GObject.Value);
             var value: GObject.Value = .{ .g_type = .Invalid, .data = .{ .{ .v_pointer = null }, .{ .v_pointer = null } } };
-            if (comptime T == Boolean) {
+            if (comptime T == bool) {
                 _ = value.init(.Boolean);
             } else if (comptime T == i8) {
                 _ = value.init(.Char);
@@ -167,7 +89,7 @@ pub fn ValueZ(comptime T: type) type {
             } else if (comptime @hasDecl(T, "type")) {
                 _ = value.init(T.type());
             } else {
-                @compileError(std.fmt.comptimePrint("Unsupported type {s} for GObject.Value", @typeName(T)));
+                @compileError(std.fmt.comptimePrint("{s} is not typed", @typeName(T)));
             }
             return .{ .value = value };
         }
@@ -177,6 +99,7 @@ pub fn ValueZ(comptime T: type) type {
         }
 
         const is_basic = gen_is_basic: {
+            if (T == bool) break :gen_is_basic true;
             if (T == i8) break :gen_is_basic true;
             if (T == u8) break :gen_is_basic true;
             if (T == i16) break :gen_is_basic true;
@@ -187,14 +110,14 @@ pub fn ValueZ(comptime T: type) type {
             if (T == u64) break :gen_is_basic true;
             if (T == f32) break :gen_is_basic true;
             if (T == f64) break :gen_is_basic true;
+            if (meta.trait.is(.Enum)(T)) break :gen_is_basic true; // Enum(or Flags) or Type
             if (T == [*:0]const u8) break :gen_is_basic true; // String
             if (meta.trait.isSingleItemPtr(T)) break :gen_is_basic true; // Pointer
-            if (meta.trait.is(.Enum)(T)) break :gen_is_basic true; // Enum(or Flags) or Boolean or Type
             break :gen_is_basic false;
         };
 
         pub fn get(self: Self) if (is_basic) T else *T {
-            if (comptime T == Boolean) return self.value.getBoolean();
+            if (comptime T == bool) return self.value.getBoolean();
             if (comptime T == i8) return self.value.getSchar();
             if (comptime T == u8) return self.value.getUchar();
             if (comptime T == Int) return self.value.getInt();
@@ -213,8 +136,8 @@ pub fn ValueZ(comptime T: type) type {
                     return @intToEnum(T, self.value.getFlags());
                 }
             }
-            if (comptime meta.trait.isSingleItemPtr(T)) return @ptrCast(T, self.gvalue.getPointer());
             if (comptime T == [*:0]const u8) return self.value.getString();
+            if (comptime meta.trait.isSingleItemPtr(T)) return @ptrCast(T, self.gvalue.getPointer());
             if (comptime T == GLib.Variant) return self.value.getVariant().?;
             if (comptime T == GObject.ParamSpec) return self.value.getParam();
             if (comptime @hasDecl(T, "__call")) return downCast(T, self.value.getObject()).?;
@@ -222,7 +145,7 @@ pub fn ValueZ(comptime T: type) type {
         }
 
         pub fn set(self: *Self, arg_value: if (is_basic) T else *T) void {
-            if (comptime T == Boolean) {
+            if (comptime T == bool) {
                 self.value.setBoolean(arg_value);
             } else if (comptime T == i8) {
                 self.value.setSchar(arg_value);
@@ -269,35 +192,104 @@ pub fn ValueZ(comptime T: type) type {
     };
 }
 
-// ---------
-// OOP begin
+// --------------------
 
-/// U is subclass of V?
-fn isA(comptime U: type, comptime V: type) bool {
-    if (U == V) return true;
-    if (@hasDecl(U, "Prerequisites")) {
-        for (U.Prerequisites) |Prerequisite| {
-            if (isA(Prerequisite, V)) return true;
+/// Type for reporting recoverable runtime errors (`E` = `*GLib.Error`)
+pub fn Expected(comptime T: type, comptime E: type) type {
+    return union(enum) {
+        Ok: T,
+        Err: E,
+    };
+}
+
+/// Helper for C style bitmask
+pub fn Flags(comptime T: type) type {
+    return struct {
+        pub inline fn @"|"(self: T, rhs: T) T {
+            return @intToEnum(T, @enumToInt(self) | @enumToInt(rhs));
         }
-    }
-    if (@hasDecl(U, "Interfaces")) {
-        for (U.Interfaces) |Interface| {
-            if (isA(Interface, V)) return true;
+
+        pub inline fn @"|="(self: *T, rhs: T) void {
+            self.* = @intToEnum(T, @enumToInt(self.*) | @enumToInt(rhs));
         }
-    }
-    if (@hasDecl(U, "Parent")) {
-        if (isA(U.Parent, V)) return true;
-    }
-    return false;
+
+        pub inline fn @"&"(self: T, rhs: T) T {
+            return @intToEnum(T, @enumToInt(self) & @enumToInt(rhs));
+        }
+
+        pub inline fn @"&="(self: *T, rhs: T) void {
+            self.* = @intToEnum(T, @enumToInt(self.*) & @enumToInt(rhs));
+        }
+
+        pub inline fn @"^"(self: T, rhs: T) T {
+            return @intToEnum(T, @enumToInt(self) ^ @enumToInt(rhs));
+        }
+
+        pub inline fn @"^="(self: *T, rhs: T) void {
+            self.* = @intToEnum(T, @enumToInt(self.*) ^ @enumToInt(rhs));
+        }
+
+        pub inline fn @"-"(self: T, rhs: T) T {
+            return @intToEnum(T, @enumToInt(self) & ~@enumToInt(rhs));
+        }
+
+        pub inline fn @"-="(self: *T, rhs: T) void {
+            self.* = @intToEnum(T, @enumToInt(self.*) & ~@enumToInt(rhs));
+        }
+
+        pub inline fn @"~"(self: T) T {
+            return @intToEnum(T, ~@enumToInt(self));
+        }
+
+        pub inline fn empty(self: T) bool {
+            return @enumToInt(self) == 0;
+        }
+
+        pub inline fn intersects(self: T, rhs: T) bool {
+            return @enumToInt(self) & @enumToInt(rhs) != 0;
+        }
+
+        pub inline fn contains(self: T, rhs: T) bool {
+            return @enumToInt(self) & @enumToInt(rhs) == @enumToInt(rhs);
+        }
+    };
+}
+
+// type end
+// --------
+
+// ---------------------
+// OOP inheritance begin
+
+pub fn isA(comptime T: type) meta.trait.TraitFn {
+    return struct {
+        pub fn trait(comptime Ty: type) bool {
+            if (Ty == T) return true;
+            if (@hasDecl(Ty, "Prerequisites")) {
+                for (Ty.Prerequisites) |Prerequisite| {
+                    if (trait(Prerequisite)) return true;
+                }
+            }
+            if (@hasDecl(Ty, "Interfaces")) {
+                for (Ty.Interfaces) |Interface| {
+                    if (trait(Interface)) return true;
+                }
+            }
+            if (@hasDecl(Ty, "Parent")) {
+                if (trait(Ty.Parent)) return true;
+            }
+            return false;
+        }
+    }.trait;
 }
 
 pub inline fn upCast(comptime T: type, object: anytype) *T {
-    comptime assert(isA(meta.Child(@TypeOf(object)), T));
+    comptime assert(isA(T)(meta.Child(@TypeOf(object))));
     return unsafeCast(T, object);
 }
 
 pub inline fn downCast(comptime T: type, object: anytype) ?*T {
-    comptime assert(isA(T, meta.Child(@TypeOf(object))));
+    comptime assert(isA(meta.Child(@TypeOf(object)))(T));
     return dynamicCast(T, object);
 }
 
@@ -309,109 +301,124 @@ pub inline fn unsafeCast(comptime T: type, object: anytype) *T {
     return @ptrCast(*T, @alignCast(@alignOf(*T), object));
 }
 
-pub fn CallInherited(comptime T: type, comptime method: []const u8) ?type {
-    if (@hasDecl(T, "Prerequisites")) {
-        for (T.Prerequisites) |Prerequisite| {
-            if (Prerequisite.__Call(method)) |some| return some;
-        }
+fn CallMethod(comptime T: type, comptime method: []const u8) Expected(type, void) {
+    if (comptime @hasDecl(T, method)) {
+        const method_info = @typeInfo(@TypeOf(@field(T, method)));
+        comptime assert(meta.Child(method_info.Fn.params[0].type.?) == T);
+        return .{ .Ok = method_info.Fn.return_type.? };
     }
-    if (@hasDecl(T, "Interfaces")) {
-        for (T.Interfaces) |Interface| {
-            if (Interface.__Call(method)) |some| return some;
-        }
-    }
-    if (@hasDecl(T, "Parent")) {
-        if (T.Parent.__Call(method)) |some| return some;
-    }
-    return null;
-}
-
-pub fn callInherited(self: anytype, comptime method: []const u8, args: anytype) CallInherited(meta.Child(@TypeOf(self)), method).? {
-    const T = meta.Child(@TypeOf(self));
-    if (@hasDecl(T, "Prerequisites")) {
+    if (comptime @hasDecl(T, "Prerequisites")) {
         inline for (T.Prerequisites) |Prerequisite| {
-            if (Prerequisite.__Call(method)) |_| {
-                return upCast(Prerequisite, self).__call(method, args);
+            switch (comptime CallMethod(Prerequisite, method)) {
+                .Ok => |Ty| return .{ .Ok = Ty },
+                .Err => {},
             }
         }
     }
-    if (@hasDecl(T, "Interfaces")) {
+    if (comptime @hasDecl(T, "Interfaces")) {
         inline for (T.Interfaces) |Interface| {
-            if (Interface.__Call(method)) |_| {
-                return upCast(Interface, self).__call(method, args);
+            switch (comptime CallMethod(Interface, method)) {
+                .Ok => |Ty| return .{ .Ok = Ty },
+                .Err => {},
             }
         }
     }
-    if (@hasDecl(T, "Parent")) {
-        if (T.Parent.__Call(method)) |_| {
-            return upCast(T.Parent, self).__call(method, args);
+    if (comptime @hasDecl(T, "Parent")) {
+        switch (comptime CallMethod(T.Parent, method)) {
+            .Ok => |Ty| return .{ .Ok = Ty },
+            .Err => {},
         }
     }
+    return .{ .Err = {} };
 }
 
-// OOP end
-// -------
+fn callMethod(self: anytype, comptime method: []const u8, args: anytype) switch (CallMethod(meta.Child(@TypeOf(self)), method)) {
+    .Ok => |T| T,
+    .Err => @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(meta.Child(@TypeOf(self))), method })),
+} {
+    const Self = meta.Child(@TypeOf(self));
+    if (comptime @hasDecl(Self, method)) {
+        return @call(.auto, @field(Self, method), .{self} ++ args);
+    }
+    if (comptime @hasDecl(Self, "Prerequisites")) {
+        inline for (Self.Prerequisites) |Prerequisite| {
+            switch (comptime CallMethod(Prerequisite, method)) {
+                .Ok => |_| return callMethod(upCast(Prerequisite, self), method, args),
+                .Err => {},
+            }
+        }
+    }
+    if (comptime @hasDecl(Self, "Interfaces")) {
+        inline for (Self.Interfaces) |Interface| {
+            switch (comptime CallMethod(Interface, method)) {
+                .Ok => |_| return callMethod(upCast(Interface, self), method, args),
+                .Err => {},
+            }
+        }
+    }
+    if (comptime @hasDecl(Self, "Parent")) {
+        switch (comptime CallMethod(Self.Parent, method)) {
+            .Ok => |_| return callMethod(upCast(Self.Parent, self), method, args),
+            .Err => {},
+        }
+    }
+    unreachable;
+}
+
+/// Helper for object
+pub fn Extend(comptime Self: type) type {
+    return struct {
+        pub fn __call(self: *Self, comptime method: []const u8, args: anytype) switch (CallMethod(Self, method)) {
+            .Ok => |T| T,
+            .Err => @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(Self), method })),
+        } {
+            return callMethod(self, method, args);
+        }
+
+        pub fn into(self: *Self, comptime T: type) *T {
+            return upCast(T, self);
+        }
+
+        pub fn tryInto(self: *Self, comptime T: type) ?*T {
+            return downCast(T, self);
+        }
+    };
+}
+
+// OOP inheritance end
+// -------------------
 
 // -------------
 // closure begin
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
-fn cclosureNew(callback_func: GObject.Callback, user_data: ?*anyopaque, destroy_data: GObject.ClosureNotify) *GObject.Closure {
-    return struct {
-        pub extern fn g_cclosure_new(GObject.Callback, ?*anyopaque, GObject.ClosureNotify) *GObject.Closure;
-    }.g_cclosure_new(callback_func, user_data, destroy_data);
-}
-
-fn cclosureNewSwap(callback_func: GObject.Callback, user_data: ?*anyopaque, destroy_data: GObject.ClosureNotify) *GObject.Closure {
-    return struct {
-        pub extern fn g_cclosure_new_swap(GObject.Callback, ?*anyopaque, GObject.ClosureNotify) *GObject.Closure;
-    }.g_cclosure_new_swap(callback_func, user_data, destroy_data);
-}
-
-pub fn ClosureZ(comptime Fn: type, comptime Args: type, comptime signature: []const type) type {
+pub fn ClosureZ(comptime FnPtr: type, comptime Args: type, comptime signature: []const type) type {
     comptime assert(meta.trait.isTuple(Args));
     const n_arg = @typeInfo(Args).Struct.fields.len;
-    if (meta.trait.isPtrTo(.Void)(Fn)) {
+    if (comptime meta.trait.isPtrTo(.Void)(FnPtr)) {
         comptime assert(n_arg == 0);
         return struct {
-            handler: Fn,
-            args: Args,
-            once: bool,
-            allocator: std.mem.Allocator,
-
             const Self = @This();
-
-            pub fn new(allocator: ?std.mem.allocator, handler: Fn, args: Args) !*Self {
-                const real_allocator = if (allocator) |some| some else gpa.allocator();
-                var closure = try real_allocator.create(Self);
-                closure.handler = handler;
-                closure.args = args;
-                closure.once = false;
-                closure.allocator = real_allocator;
-                return closure;
-            }
-
-            pub fn invoke() void {}
-
-            pub fn deinit(self: *Self) void {
-                self.allocator.destroy(self);
-            }
+            pub fn new(_: ?std.mem.allocator, _: FnPtr, _: Args) !*Self {}
+            pub fn invoke() callconv(.C) void {}
+            pub fn setOnce(_: *Self) void {}
+            pub fn deinit(_: *Self) callconv(.C) void {}
         };
     }
 
-    comptime assert(meta.trait.isPtrTo(.Fn)(Fn));
+    comptime assert(meta.trait.isPtrTo(.Fn)(FnPtr));
     comptime assert(1 <= signature.len and signature.len <= 7);
-    const n_param = @typeInfo(meta.Child(Fn)).Fn.params.len;
+    const n_param = @typeInfo(meta.Child(FnPtr)).Fn.params.len;
     return struct {
-        handler: Fn,
+        handler: FnPtr,
         args: Args,
         once: bool,
         allocator: std.mem.Allocator,
 
         const Self = @This();
 
-        pub fn new(allocator: ?std.mem.Allocator, handler: Fn, args: Args) !*Self {
+        pub fn new(allocator: ?std.mem.Allocator, handler: FnPtr, args: Args) !*Self {
             const real_allocator = if (allocator) |some| some else gpa.allocator();
             var closure = try real_allocator.create(Self);
             closure.handler = handler;
@@ -538,21 +545,26 @@ pub fn ClosureZ(comptime Fn: type, comptime Args: type, comptime signature: []co
             }
         } else struct {};
 
-        pub fn deinit(self: *Self) void {
+        pub fn setOnce(self: *Self) void {
+            self.once = true;
+        }
+
+        pub fn deinit(self: *Self) callconv(.C) void {
             self.allocator.destroy(self);
         }
-
-        // for internal use
-        pub fn toClosure(self: *Self) *GObject.Closure {
-            return cclosureNew(@ptrCast(GObject.Callback, &Self.invoke), self, @ptrCast(GObject.ClosureNotify, &Self.deinit));
-        }
-
-        // for internal use
-        pub fn toClosureSwap(self: *Self) *GObject.Closure {
-            comptime assert(signature.len == 1);
-            return cclosureNewSwap(@ptrCast(GObject.Callback, &Self.invoke), self, @ptrCast(GObject.ClosureNotify, &Self.deinit));
-        }
     };
+}
+
+fn cclosureNew(callback_func: GObject.Callback, user_data: ?*anyopaque, destroy_data: GObject.ClosureNotify) *GObject.Closure {
+    return struct {
+        pub extern fn g_cclosure_new(GObject.Callback, ?*anyopaque, GObject.ClosureNotify) *GObject.Closure;
+    }.g_cclosure_new(callback_func, user_data, destroy_data);
+}
+
+fn cclosureNewSwap(callback_func: GObject.Callback, user_data: ?*anyopaque, destroy_data: GObject.ClosureNotify) *GObject.Closure {
+    return struct {
+        pub extern fn g_cclosure_new_swap(GObject.Callback, ?*anyopaque, GObject.ClosureNotify) *GObject.Closure;
+    }.g_cclosure_new_swap(callback_func, user_data, destroy_data);
 }
 
 pub const ConnectFlagsZ = struct {
@@ -562,13 +574,15 @@ pub const ConnectFlagsZ = struct {
 
 pub fn connect(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, flags: ConnectFlagsZ, comptime signature: []const type) usize {
     var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(flags.allocator, handler, args) catch @panic("Out of Memory");
-    return GObject.signalConnectClosure(object, signal, closure.toClosure(), @intToEnum(Boolean, @boolToInt(flags.after)));
+    var cclosure = cclosureNew(@ptrCast(GObject.Callback, &@TypeOf(closure.*).invoke), closure, @ptrCast(GObject.ClosureNotify, &@TypeOf(closure.*).deinit));
+    return GObject.signalConnectClosure(object, signal, cclosure, flags.after);
 }
 
 pub fn connectSwap(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, flags: ConnectFlagsZ, comptime signature: []const type) usize {
     comptime assert(signature.len == 1);
     var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(flags.allocator, handler, args) catch @panic("Out of Memory");
-    return GObject.signalConnectClosure(object, signal, closure.toClosureSwap(), @intToEnum(Boolean, @boolToInt(flags.after)));
+    var cclosure = cclosureNewSwap(@ptrCast(GObject.Callback, &@TypeOf(closure.*).invoke), closure, @ptrCast(GObject.ClosureNotify, &@TypeOf(closure.*).deinit));
+    return GObject.signalConnectClosure(object, signal, cclosure, flags.after);
 }
 
 // closure end
@@ -578,11 +592,20 @@ pub fn connectSwap(object: *GObject.Object, signal: [*:0]const u8, handler: anyt
 // subclass begin
 
 pub fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?[]GObject.Value) *GObject.Object {
-    assert((names == null) == (values == null));
-    if (names) |_| assert(names.?.len == values.?.len);
+    if (names) |_| {
+        assert(names.?.len == values.?.len);
+    } else {
+        assert(values == null);
+    }
     return struct {
         pub extern fn g_object_new_with_properties(Type, c_uint, ?[*][*:0]const u8, ?[*]GObject.Value) *GObject.Object;
     }.g_object_new_with_properties(object_type, if (names) |some| @intCast(c_uint, some.len) else 0, if (names) |some| some.ptr else null, if (values) |some| some.ptr else null);
+}
+
+pub fn signalNewv(signal_name: [*:0]const u8, itype: Type, signal_flags: GObject.SignalFlags, class_closure: ?*GObject.Closure, accumulator: ?GObject.SignalAccumulator, accu_data: ?*anyopaque, c_marshaller: ?GObject.ClosureMarshal, return_type: Type, param_types: ?[]Type) u32 {
+    return struct {
+        pub extern fn g_signal_newv([*:0]const u8, Type, GObject.SignalFlags, ?*GObject.Closure, ?GObject.SignalAccumulator, ?*anyopaque, ?GObject.ClosureMarshal, Type, c_uint, ?[*]Type) c_uint;
+    }.g_signal_newv(signal_name, itype, signal_flags, class_closure, accumulator, accu_data, c_marshaller, return_type, if (param_types) |some| @intCast(c_uint, some.len) else 0, if (param_types) |some| some.ptr else null);
 }
 
 const TypeTag = struct {
@@ -627,18 +650,18 @@ pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]cons
         }
     }.trampoline;
     if (GLib.onceInitEnter(&typeTag(Object).type_id)) {
-        var _flags: Flags(GObject.TypeFlags) = .{};
+        var _flags: GObject.TypeFlags = .None;
         if (flags.abstract) {
-            _flags = _flags.@"|"(.{ .value = .Abstract });
+            _flags.@"|="(.Abstract);
         }
         if (flags.value_abstract) {
-            _flags = _flags.@"|"(.{ .value = .ValueAbstract });
+            _flags.@"|="(.ValueAbstract);
         }
         if (flags.final) {
-            _flags = _flags.@"|"(.{ .value = .Final });
+            _flags.@"|="(.Final);
         }
         var info: GObject.TypeInfo = .{ .class_size = @sizeOf(Class), .base_init = null, .base_finalize = null, .class_init = @ptrCast(GObject.ClassInitFunc, &class_init), .class_finalize = null, .class_data = null, .instance_size = @sizeOf(Object), .n_preallocs = 0, .instance_init = @ptrCast(GObject.InstanceInitFunc, &instance_init), .value_table = null };
-        const type_id = GObject.typeRegisterStatic(Object.Parent.type(), name, &info, _flags.value);
+        const type_id = GObject.typeRegisterStatic(Object.Parent.type(), name, &info, _flags);
         if (@hasDecl(Object, "Private")) {
             typeTag(Object).private_offset = GObject.typeAddInstancePrivate(type_id, @sizeOf(Object.Private));
         }

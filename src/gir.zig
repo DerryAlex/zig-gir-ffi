@@ -827,19 +827,19 @@ pub const FunctionInfo = struct {
                     std.log.warn("[Generic Callback] {s}", .{self.symbol()});
                 }
                 try writer.print("}}).new(null, argz_{s}, argz_{s}_args) catch @panic(\"Out of Memory\");\n", .{ arg_name, arg_name });
-                try writer.print("var arg_{s} = @ptrCast({$}, &@TypeOf(closure_{s}).invoke);\n", .{ arg_name, arg, arg_name });
                 switch (closure_info[idx].scope) {
                     .Call => {
                         try writer.print("defer closure_{s}.deinit();\n", .{arg_name});
                     },
                     .Async => {
-                        try writer.print("closure_{s}.once = true;\n", .{arg_name});
+                        try writer.print("closure_{s}.setOnce();\n", .{arg_name});
                     },
                     .Notified, .Forever => {
                         // no op
                     },
                     else => unreachable,
                 }
+                try writer.print("var arg_{s} = @ptrCast({$}, &@TypeOf(closure_{s}.*).invoke);\n", .{ arg_name, arg, arg_name });
             }
             if (closure_info[idx].is_data) {
                 const func_arg = args[closure_info[idx].closure_func];
@@ -847,7 +847,7 @@ pub const FunctionInfo = struct {
             }
             if (closure_info[idx].is_destroy) {
                 const func_arg = args[closure_info[idx].closure_func];
-                try writer.print("var arg_{s} = @ptrCast({$}, &@TypeOf(closure_{s}).deinit);\n", .{ arg_name, arg, func_arg.asBase().name().? });
+                try writer.print("var arg_{s} = @ptrCast({$}, &@TypeOf(closure_{s}.*).deinit);\n", .{ arg_name, arg, func_arg.asBase().name().? });
             }
         }
         // prepare output
@@ -868,9 +868,6 @@ pub const FunctionInfo = struct {
         try writer.print("; }}.{s};\n", .{self.symbol()});
         try writer.writeAll("const ret = ffi_fn");
         try self.asCallable().format_helper(writer, false, false, false);
-        if (return_bool) {
-            try writer.writeAll(".toBool()");
-        }
         try writer.writeAll(";\n");
         if (skip_return) {
             try writer.writeAll("_ = ret;\n");
@@ -1102,7 +1099,11 @@ pub const RegisteredTypeInfo = struct {
             try writer.writeAll("pub fn @\"type\"() core.Type {\n");
             const init_fn = self.typeInit();
             if (std.mem.eql(u8, "intern", init_fn)) {
-                try writer.print("return @intToEnum(core.Type, {});", .{self.gType()});
+                if (self.gType() < 256 * 4) {
+                    try writer.print("return @intToEnum(core.Type, {});", .{self.gType()});
+                } else {
+                    try writer.writeAll("@panic(\"Internal type\");");
+                }            
             } else {
                 try writer.print("const ffi_fn = struct {{ extern \"c\" fn {s}() core.Type; }}.{s};\n", .{ init_fn, init_fn });
                 try writer.writeAll("return ffi_fn();\n");
@@ -1237,6 +1238,7 @@ pub const EnumInfo = struct {
         }
         if (option_is_flag) {
             try writer.writeAll("_,\n");
+            try writer.writeAll("pub usingnamespace core.Flags(@This());\n");
         }
         var m_iter = self.methodIter();
         while (m_iter.next()) |method| {
@@ -1661,16 +1663,7 @@ pub const ObjectInfo = struct {
         while (s_iter.next()) |signal| {
             try writer.print("{}", .{signal});
         }
-        try helper.emitCall(self, writer);
-        // cast
-        {
-            try writer.print("pub fn into(self: *{s}, comptime T: type) *T {{\n", .{name});
-            try writer.writeAll("return core.upCast(T, self);\n");
-            try writer.writeAll("}\n");
-            try writer.print("pub fn tryInto(self: *{s}, comptime T: type) ?*T {{\n", .{name});
-            try writer.writeAll("return core.downCast(T, self);\n");
-            try writer.writeAll("}\n");
-        }
+        try writer.writeAll("pub usingnamespace core.Extend(@This());\n");
         try self.asRegisteredType().format_helper(writer);
         try writer.writeAll("};\n");
     }
@@ -1859,16 +1852,7 @@ pub const InterfaceInfo = struct {
         while (s_iter.next()) |signal| {
             try writer.print("{}", .{signal});
         }
-        try helper.emitCall(self, writer);
-        // cast
-        {
-            try writer.print("pub fn into(self: *{s}, comptime T: type) *T {{\n", .{name});
-            try writer.writeAll("return core.upCast(T, self);\n");
-            try writer.writeAll("}\n");
-            try writer.print("pub fn tryInto(self: *{s}, comptime T: type) ?*T {{\n", .{name});
-            try writer.writeAll("return core.downCast(T, self);\n");
-            try writer.writeAll("}\n");
-        }
+        try writer.writeAll("pub usingnamespace core.Extend(@This());\n");
         try self.asRegisteredType().format_helper(writer);
         try writer.writeAll("};\n");
     }
@@ -2251,7 +2235,7 @@ pub const TypeInfo = struct {
                     }
                     try writer.writeAll("*");
                 }
-                try writer.writeAll("core.Boolean");
+                try writer.writeAll("bool");
             },
             .Int8 => {
                 if (self.isPointer()) {

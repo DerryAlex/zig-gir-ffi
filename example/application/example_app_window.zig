@@ -78,14 +78,14 @@ pub const ExampleAppWindowClass = extern struct {
         var match_end: TextIter = undefined;
         if (start.forwardSearch(text, .CaseInsensitive, &match_start, &match_end, null)) {
             buffer.selectRange(&match_start, &match_end);
-            _ = view.scrollToIter(&match_start, 0, .False, 0, 0);
+            _ = view.scrollToIter(&match_start, 0, false, 0, 0);
         }
     }
 
     // template callback
     pub fn TCvisible_child_changed(stack: *Stack, _: *ParamSpec, self: *ExampleAppWindow) callconv(.C) void {
         if (stack.__call("inDestruction", .{})) return;
-        self.tc_searchbar.setSearchMode(.False);
+        self.tc_searchbar.setSearchMode(false);
         self.updateWords();
         self.updateLines();
     }
@@ -105,6 +105,7 @@ pub const ExampleAppWindow = extern struct {
     tc_lines_label: *Label, // template child
 
     pub const Parent = ApplicationWindow;
+    pub usingnamespace core.Extend(ExampleAppWindow);
 
     pub fn init(self: *ExampleAppWindow) void {
         self.__call("initTemplate", .{});
@@ -139,11 +140,11 @@ pub const ExampleAppWindow = extern struct {
         var basename = file.getBasename().?;
         defer core.free(basename);
         var scrolled = ScrolledWindow.new();
-        scrolled.__call("setHexpand", .{.True});
-        scrolled.__call("setVexpand", .{.True});
+        scrolled.__call("setHexpand", .{true});
+        scrolled.__call("setVexpand", .{true});
         var view = TextView.new();
-        view.setEditable(.False);
-        view.setCursorVisible(.False);
+        view.setEditable(false);
+        view.setCursorVisible(false);
         scrolled.setChild(view.into(Widget));
         _ = self.tc_stack.addTitled(scrolled.into(Widget), basename, basename);
         var buffer = view.getBuffer();
@@ -168,7 +169,7 @@ pub const ExampleAppWindow = extern struct {
         buffer.getStartIter(&start_iter);
         buffer.getEndIter(&end_iter);
         buffer.applyTag(tag, &start_iter, &end_iter);
-        self.tc_search.__call("setSensitive", .{.True});
+        self.tc_search.__call("setSensitive", .{true});
         self.updateWords();
         self.updateLines();
     }
@@ -204,7 +205,7 @@ pub const ExampleAppWindow = extern struct {
             }
             end = start;
             if (!end.forwardWordEnd()) break :outer;
-            var word = buffer.getText(&start, &end, .False);
+            var word = buffer.getText(&start, &end, false);
             defer core.free(word);
             strings.put(core.utf8Strdown(word, -1), {}) catch @panic("");
             start = end;
@@ -233,24 +234,6 @@ pub const ExampleAppWindow = extern struct {
         var buf: [22]u8 = undefined;
         _ = std.fmt.bufPrintZ(buf[0..], "{d}", .{count}) catch @panic("");
         self.tc_lines.setText(@ptrCast([*:0]const u8, &buf));
-    }
-
-    pub fn __Call(comptime method: []const u8) ?type {
-        if (std.mem.eql(u8, method, "open")) return void;
-        return core.CallInherited(@This(), method);
-    }
-
-    pub fn __call(self: *ExampleAppWindow, comptime method: []const u8, args: anytype) core.CallReturnType(@This(), method) {
-        if (comptime std.mem.eql(u8, method, "open")) return @call(.auto, open, .{self} ++ args);
-        return core.callInherited(self, method, args);
-    }
-
-    pub fn into(self: *ExampleAppWindow, comptime T: type) *T {
-        return core.upCast(T, self);
-    }
-
-    pub fn tryInto(self: *ExampleAppWindow, comptime T: type) ?*T {
-        return core.downCast(T, self);
     }
 
     pub fn @"type"() core.Type {

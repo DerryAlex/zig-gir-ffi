@@ -76,6 +76,7 @@ pub const ExampleApp = extern struct {
     parent: Parent,
 
     pub const Parent = Application;
+    pub usingnamespace core.Extend(ExampleApp);
 
     pub fn new() *ExampleApp {
         var application_id = core.ValueZ([*:0]const u8).init();
@@ -87,22 +88,6 @@ pub const ExampleApp = extern struct {
         var property_names = [_][*:0]const u8{ "application-id", "flags" };
         var property_values = [_]Value{ application_id.value, flags.value };
         return core.objectNewWithProperties(@"type"(), property_names[0..], property_values[0..]).tryInto(ExampleApp).?;
-    }
-
-    pub fn __Call(comptime method: []const u8) ?type {
-        return core.CallInherited(@This(), method);
-    }
-
-    pub fn __call(self: *ExampleApp, comptime method: []const u8, args: anytype) core.CallReturnType(@This(), method) {
-        return core.callInherited(self, method, args);
-    }
-
-    pub fn into(self: *ExampleApp, comptime T: type) *T {
-        return core.upCast(T, self);
-    }
-
-    pub fn tryInto(self: *ExampleApp, comptime T: type) ?*T {
-        return core.downCast(T, self);
     }
 
     pub fn @"type"() core.Type {
