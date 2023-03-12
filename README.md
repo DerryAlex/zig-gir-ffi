@@ -4,12 +4,7 @@ GObject Introspection for zig. Generated [GTK4 binding](https://github.com/Derry
 
 ## Documentation
 
-- Basics
-- [Custom Widget](./doc/custom_widget/)
-- Custom Widget II
-- Custom Interface
-- Main Event Loop
-- ...
+- [Examples](./example)
 - [GTK Documentation](https://docs.gtk.org/)
 - [Zig Language Reference](https://ziglang.org/documentation/master/)
 
