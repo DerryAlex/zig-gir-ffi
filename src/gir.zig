@@ -2139,7 +2139,7 @@ pub const PropertyInfo = struct {
                 try writer.writeAll("}");
             }
             try writer.print("pub fn connect{c}{s}Notify(self: *{s}, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
-            try writer.print("return core.connect(self.into(core.Object), \"notify::{s}\", handler, args, flags, &[_]type{{ void, {s}, core.ParamSpec }});\n", .{ raw_name, container_name });
+            try writer.print("return core.connect(self.into(core.Object), \"notify::{s}\", handler, args, flags, &[_]type{{ void, *{s}, *core.ParamSpec }});\n", .{ raw_name, container_name });
             try writer.writeAll("}\n");
             try writer.print("pub fn connect{c}{s}NotifySwap(self: *{s}, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
             try writer.print("return core.connectSwap(self.into(core.Object), \"notify::{s}\", handler, args, flags, &[_]type{{ void }});\n", .{raw_name});

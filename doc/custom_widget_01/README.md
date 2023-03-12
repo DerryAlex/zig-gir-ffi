@@ -63,10 +63,9 @@ pub const ExampleAppPrefs = extern struct {
 };
 ```
 
-The layout should be `extern`. The first member should be `parent`. We may have a `PrivateImpl`. All fields of `Impl` and `PrivateImpl` except `parent` will be zero-initialized.
+The layout should be `extern`. The first member should be `parent`. We may have a `PrivateImpl`.
 
-- `@"type"` should be defined. `core.RegisterType` can be used, which will set `private` and register interface overrides.
+- `@"type"` should be defined.
 - `Parent` should be declared.
 - `Private` may be declared.
-- `Interfaces` may be declared. (e.g. `Interfaces = [_]type{ A.IFx, B.IFy };` and override interface virtual functions in `initIFx(*IFx), initIFy(*IFy)`)
 

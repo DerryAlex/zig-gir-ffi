@@ -591,6 +591,15 @@ pub fn connectSwap(object: *GObject.Object, signal: [*:0]const u8, handler: anyt
 // --------------
 // subclass begin
 
+fn init(comptime T: type, value: *T) void {
+    const info = @typeInfo(T).Struct;
+    inline for (info.fields) |field| {
+        if (field.default_value) |some| {
+            @field(value, field.name) = @ptrCast(@Type(.{.Pointer = .{.size = .One, .is_const = true, .is_volatile = false, .alignment = @alignOf(field.type), .address_space = .generic, .child = field.type, .is_allowzero = false, .sentinel = null}}), @alignCast(@alignOf(field.type), some)).*;
+        }
+    }
+}
+
 pub fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?[]GObject.Value) *GObject.Object {
     if (names) |_| {
         assert(names.?.len == values.?.len);
@@ -627,7 +636,7 @@ pub const TypeFlagsZ = struct {
     final: bool = false,
 };
 
-/// Convenience wrapper for g_type_register_static
+/// Wrapper for g_type_register_static
 pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]const u8, flags: TypeFlagsZ) Type {
     const class_init = struct {
         fn trampoline(class: *Class) callconv(.C) void {
@@ -661,6 +670,7 @@ pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]cons
             if (comptime @hasDecl(Class, "signals")) {
                 _ = Class.signals();
             }
+            init(Class, class);
             if (comptime @hasDecl(Class, "init")) {
                 class.init();
             }
@@ -670,7 +680,9 @@ pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]cons
         fn trampoline(self: *Object) callconv(.C) void {
             if (comptime @hasDecl(Object, "Private")) {
                 self.private = @intToPtr(*Object.Private, @bitCast(usize, @bitCast(isize, @ptrToInt(self)) + typeTag(Object).private_offset));
+                init(Object.Private, self.private);
             }
+            init(Object, self);
             if (comptime @hasDecl(Object, "init")) {
                 self.init();
             }
@@ -711,11 +723,17 @@ pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]cons
     return typeTag(Object).type_id;
 }
 
-/// Convenience wrapper for g_type_register_static
+/// Wrapper for g_type_register_static
 pub fn registerInterface(comptime Interface: type, name: [*:0]const u8) Type {
     const class_init = struct {
         pub fn trampoline(self: *Interface) callconv(.C) void {
-            if (@hasDecl(Interface, "init")) {
+            if (comptime @hasDecl(Interface, "properties")) {
+                for (Interface.properties()) |property| {
+                    GObject.Object.interfaceInstallProperty(@ptrCast(*GObject.TypeInterface, self), property);
+                }
+            }
+            init(Interface, self);
+            if (comptime @hasDecl(Interface, "init")) {
                 self.init();
             }
         }
@@ -723,7 +741,7 @@ pub fn registerInterface(comptime Interface: type, name: [*:0]const u8) Type {
     if (GLib.onceInitEnter(&typeTag(Interface).type_id)) {
         var info: GObject.TypeInfo = .{ .class_size = @sizeOf(Interface), .base_init = null, .base_finalize = null, .class_init = @ptrCast(GObject.ClassInitFunc, &class_init), .class_finalize = null, .class_data = null, .instance_size = 0, .n_preallocs = 0, .instance_init = null, .value_table = null };
         const type_id = GObject.typeRegisterStatic(.Interface, name, &info, .None);
-        if (@hasDecl(Interface, "Prerequisites")) {
+        if (comptime @hasDecl(Interface, "Prerequisites")) {
             inline for (Interface.Prerequisites) |Prerequisite| {
                 GObject.typeInterfaceAddPrerequisite(type_id, Prerequisite.type());
             }

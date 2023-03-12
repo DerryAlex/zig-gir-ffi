@@ -5,7 +5,7 @@ const Gtk = @import("Gtk.zig");
 const core = Gtk.core;
 const WidgetClass = Gtk.WidgetClass;
 
-/// Convenience wrapper for gtk_widget_class_bind_template_child
+/// Wrapper for gtk_widget_class_bind_template_child
 /// Template child should be named `"tc_" ++ name` or `"ti_" ++ name`(internal child)
 pub fn bindChild(class: *WidgetClass, comptime Object: type) void {
     inline for (comptime meta.fieldNames(Object)) |name| {
@@ -24,7 +24,7 @@ pub fn bindChild(class: *WidgetClass, comptime Object: type) void {
     }
 }
 
-/// Convenience wrapper for gtk_widget_class_bind_template_callback
+/// Wrapper for gtk_widget_class_bind_template_callback
 /// Template callback should be named `"TC" ++ name`
 pub fn bindCallback(class: *WidgetClass, comptime Class: type) void {
     inline for (comptime meta.declarations(Class)) |decl| {
