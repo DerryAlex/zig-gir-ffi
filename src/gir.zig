@@ -798,6 +798,13 @@ pub const FunctionInfo = struct {
                 if (arg_type.interface()) |interface| {
                     defer interface.deinit();
                     if (interface.type() == .Callback) {
+                        const cb_return_type = interface.asCallable().returnType();
+                        defer cb_return_type.asBase().deinit();
+                        if (interface.asCallable().mayReturnNull() or cb_return_type.tag() == .GList or cb_return_type.tag() == .GSList) {
+                            try writer.print("{&?}", .{cb_return_type});
+                        } else {
+                            try writer.print("{&}", .{cb_return_type});
+                        }
                         var callback_args = interface.asCallable().argsAlloc(allocator) catch @panic("Out of Memory");
                         defer {
                             for (callback_args) |cb_arg| {
@@ -805,14 +812,11 @@ pub const FunctionInfo = struct {
                             }
                         }
                         if (callback_args.len > 0) {
-                            for (callback_args[0 .. callback_args.len - 1], 0..) |cb_arg, cb_idx| {
-                                if (cb_idx > 0) {
-                                    try writer.writeAll(", ");
-                                }
+                            for (callback_args[0 .. callback_args.len - 1]) |cb_arg| {
+                                try writer.writeAll(", ");
                                 try writer.print("{$}", .{cb_arg});
                             }
                         } else {
-                            try writer.writeAll("void");
                             std.log.warn("[Generic Callback] {s}", .{self.symbol()});
                         }
                         if (interface.asCallable().canThrow()) {
