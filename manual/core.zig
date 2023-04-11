@@ -120,7 +120,7 @@ pub fn ValueZ(comptime T: type) type {
         };
 
         pub fn get(self: Self) if (is_basic) T else *T {
-            if (comptime T == void) ("Cannot initialize GValue with type void");
+            if (comptime T == void) @compileError("Cannot initialize GValue with type void");
             if (comptime T == bool) return self.value.getBoolean();
             if (comptime T == i8) return self.value.getSchar();
             if (comptime T == u8) return self.value.getUchar();
@@ -150,7 +150,7 @@ pub fn ValueZ(comptime T: type) type {
 
         pub fn set(self: *Self, arg_value: if (is_basic) T else *T) void {
             if (comptime T == void) {
-                @compileError("cannot initialize GValue with type void");
+                @compileError("Cannot initialize GValue with type void");
             } else if (comptime T == bool) {
                 self.value.setBoolean(arg_value);
             } else if (comptime T == i8) {
@@ -195,16 +195,6 @@ pub fn ValueZ(comptime T: type) type {
                 self.value.setBoxed(arg_value);
             }
         }
-    };
-}
-
-// --------------------
-
-/// Type for reporting recoverable runtime errors (`E` = `*GLib.Error`)
-pub fn Expected(comptime T: type, comptime E: type) type {
-    return union(enum) {
-        Ok: T,
-        Err: E,
     };
 }
 
@@ -264,6 +254,24 @@ pub fn Flags(comptime T: type) type {
 // type end
 // --------
 
+// -----------
+// error begin
+
+var err: ?*GLib.Error = null;
+
+pub fn setError(_err: *GLib.Error) void {
+    if (err != null) unreachable;
+    err = _err;
+}
+
+pub fn getError() *GLib.Error {
+    defer err = null;
+    return err.?;
+}
+
+// error end
+// ---------
+
 // ---------------------
 // OOP inheritance begin
 
@@ -307,7 +315,7 @@ pub inline fn unsafeCast(comptime T: type, object: anytype) *T {
     return @ptrCast(*T, @alignCast(@alignOf(*T), object));
 }
 
-fn CallMethod(comptime T: type, comptime method: []const u8) Expected(type, void) {
+fn CallMethod(comptime T: type, comptime method: []const u8) union(enum) { Ok: type, Err: void, } {
     if (comptime @hasDecl(T, method) and meta.declarationInfo(T, method).is_pub) {
         const method_info = @typeInfo(@TypeOf(@field(T, method)));
         comptime assert(meta.Child(method_info.Fn.params[0].type.?) == T);

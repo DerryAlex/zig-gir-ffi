@@ -700,8 +700,10 @@ pub const FunctionInfo = struct {
                 }
             }
             try writer.writeAll(") ");
-            if (throw_bool or throw_error) {
-                try writer.writeAll("core.Expected(");
+            if (throw_error) {
+                try writer.writeAll("error{GError}!");
+            } else if (throw_bool) {
+                try writer.writeAll("error{BooleanError}!");
             }
             if (n_out_param > 0) {
                 try writer.writeAll("struct {\n");
@@ -758,11 +760,6 @@ pub const FunctionInfo = struct {
                     try writer.writeAll(",\n");
                 }
                 try writer.writeAll("}");
-            }
-            if (throw_error) {
-                try writer.writeAll(", *core.Error)");
-            } else if (throw_bool) {
-                try writer.writeAll(", void)");
             }
         }
         try writer.writeAll(" {\n");
@@ -865,7 +862,7 @@ pub const FunctionInfo = struct {
             }
             try writer.print("var arg_{s} = &out_{s};\n", .{ arg_name, arg_name });
         }
-        try writer.print("const ffi_fn = struct {{ extern \"c\" fn {s}", .{self.symbol()});
+        try writer.print("const ffi_fn = struct {{ extern fn {s}", .{self.symbol()});
         try self.asCallable().format_helper(writer, true, false, false);
         try writer.print("; }}.{s};\n", .{self.symbol()});
         try writer.writeAll("const ret = ffi_fn");
@@ -878,14 +875,14 @@ pub const FunctionInfo = struct {
             if (throw_bool) {
                 try writer.writeAll("_ = ret;\n");
             }
-            try writer.writeAll("if (_error) |some| return .{.Err = some};\n");
-            try writer.writeAll("return .{.Ok = ");
+            try writer.writeAll("if (_error) |some| {\n");
+            try writer.writeAll("    core.setError(some);\n");
+            try writer.writeAll("    return error.GError;\n");
+            try writer.writeAll("}\n");
         } else if (throw_bool) {
-            try writer.writeAll("if (ret) return .{.Err = {}};\n");
-            try writer.writeAll("return .{.Ok = ");
-        } else {
-            try writer.writeAll("return ");
+            try writer.writeAll("if (ret) return error.BooleanError;\n");
         }
+        try writer.writeAll("return ");
         if (n_out_param > 0) {
             try writer.writeAll(".{ .ret = ");
         }
@@ -914,11 +911,7 @@ pub const FunctionInfo = struct {
             }
             try writer.writeAll("}");
         }
-        if (throw_bool or throw_error) {
-            try writer.writeAll("};\n");
-        } else {
-            try writer.writeAll(";\n");
-        }
+        try writer.writeAll(";\n");
         try writer.writeAll("}\n");
     }
 };

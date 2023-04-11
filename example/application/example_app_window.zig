@@ -146,19 +146,15 @@ pub const ExampleAppWindow = extern struct {
         scrolled.setChild(view.into(Widget));
         _ = self.tc_stack.addTitled(scrolled.into(Widget), basename, basename);
         var buffer = view.getBuffer();
-        var contents = file.loadContents(null);
-        switch (contents) {
-            .Ok => |ok| {
-                defer core.free(ok.contents.ptr);
-                defer core.free(ok.etag_out);
-                buffer.setText(@ptrCast([*:0]const u8, ok.contents.ptr), @intCast(i32, ok.contents.len));
-            },
-            .Err => |err| {
-                defer err.free();
-                std.log.warn("{s}", .{err.message.?});
-                return;
-            },
-        }
+        var contents = file.loadContents(null) catch {
+            var err = core.getError();
+            defer err.free();
+            std.log.warn("{s}", .{err.message.?});
+            return;
+        };
+        defer core.free(contents.contents.ptr);
+        defer core.free(contents.etag_out);
+        buffer.setText(@ptrCast([*:0]const u8, contents.contents.ptr), @intCast(i32, contents.contents.len));
         var tag = TextTag.new(null);
         _ = buffer.getTagTable().add(tag);
         self.settings.bind("font", tag.into(Object), "font", .Default);
