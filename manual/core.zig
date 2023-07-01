@@ -135,17 +135,17 @@ pub fn ValueZ(comptime T: type) type {
             if (comptime T == Type) return self.value.getGtype();
             if (comptime meta.trait.is(.Enum)(T)) {
                 if (@typeInfo(T).Enum.is_exhaustive) {
-                    return @intToEnum(T, self.value.getEnum());
+                    return @enumFromInt(self.value.getEnum());
                 } else {
-                    return @intToEnum(T, self.value.getFlags());
+                    return @enumFromInt(self.value.getFlags());
                 }
             }
             if (comptime T == [*:0]const u8) return self.value.getString();
-            if (comptime meta.trait.isSingleItemPtr(T)) return @ptrCast(T, self.gvalue.getPointer());
+            if (comptime meta.trait.isSingleItemPtr(T)) return @ptrCast(self.gvalue.getPointer());
             if (comptime T == GLib.Variant) return self.value.getVariant().?;
             if (comptime T == GObject.ParamSpec) return self.value.getParam();
             if (comptime @hasDecl(T, "__call")) return downCast(T, self.value.getObject()).?;
-            return @ptrCast(*T, self.value.getBoxed().?);
+            return @ptrCast(self.value.getBoxed().?);
         }
 
         pub fn set(self: *Self, arg_value: if (is_basic) T else *T) void {
@@ -177,9 +177,9 @@ pub fn ValueZ(comptime T: type) type {
                 self.value.setGtype(arg_value);
             } else if (comptime meta.trait.is(.Enum)(T)) {
                 if (@typeInfo(T).Enum.is_exhaustive) {
-                    self.value.setEnum(@enumToInt(arg_value));
+                    self.value.setEnum(@intFromEnum(arg_value));
                 } else {
-                    self.value.setFlags(@enumToInt(arg_value));
+                    self.value.setFlags(@intFromEnum(arg_value));
                 }
             } else if (comptime T == [*:0]const u8) {
                 self.value.setString(arg_value);
@@ -202,51 +202,51 @@ pub fn ValueZ(comptime T: type) type {
 pub fn Flags(comptime T: type) type {
     return struct {
         pub inline fn @"|"(self: T, rhs: T) T {
-            return @intToEnum(T, @enumToInt(self) | @enumToInt(rhs));
+            return @enumFromInt(@intFromEnum(self) | @intFromEnum(rhs));
         }
 
         pub inline fn @"|="(self: *T, rhs: T) void {
-            self.* = @intToEnum(T, @enumToInt(self.*) | @enumToInt(rhs));
+            self.* = @enumFromInt(@intFromEnum(self.*) | @intFromEnum(rhs));
         }
 
         pub inline fn @"&"(self: T, rhs: T) T {
-            return @intToEnum(T, @enumToInt(self) & @enumToInt(rhs));
+            return @enumFromInt(@intFromEnum(self) & @intFromEnum(rhs));
         }
 
         pub inline fn @"&="(self: *T, rhs: T) void {
-            self.* = @intToEnum(T, @enumToInt(self.*) & @enumToInt(rhs));
+            self.* = @enumFromInt(@intFromEnum(self.*) & @intFromEnum(rhs));
         }
 
         pub inline fn @"^"(self: T, rhs: T) T {
-            return @intToEnum(T, @enumToInt(self) ^ @enumToInt(rhs));
+            return @enumFromInt(@intFromEnum(self) ^ @intFromEnum(rhs));
         }
 
         pub inline fn @"^="(self: *T, rhs: T) void {
-            self.* = @intToEnum(T, @enumToInt(self.*) ^ @enumToInt(rhs));
+            self.* = @enumFromInt(@intFromEnum(self.*) ^ @intFromEnum(rhs));
         }
 
         pub inline fn @"-"(self: T, rhs: T) T {
-            return @intToEnum(T, @enumToInt(self) & ~@enumToInt(rhs));
+            return @enumFromInt(@intFromEnum(self) & ~@intFromEnum(rhs));
         }
 
         pub inline fn @"-="(self: *T, rhs: T) void {
-            self.* = @intToEnum(T, @enumToInt(self.*) & ~@enumToInt(rhs));
+            self.* = @enumFromInt(@intFromEnum(self.*) & ~@intFromEnum(rhs));
         }
 
         pub inline fn @"~"(self: T) T {
-            return @intToEnum(T, ~@enumToInt(self));
+            return @enumFromInt(~@intFromEnum(self));
         }
 
         pub inline fn empty(self: T) bool {
-            return @enumToInt(self) == 0;
+            return @intFromEnum(self) == 0;
         }
 
         pub inline fn intersects(self: T, rhs: T) bool {
-            return @enumToInt(self) & @enumToInt(rhs) != 0;
+            return @intFromEnum(self) & @intFromEnum(rhs) != 0;
         }
 
         pub inline fn contains(self: T, rhs: T) bool {
-            return @enumToInt(self) & @enumToInt(rhs) == @enumToInt(rhs);
+            return @intFromEnum(self) & @intFromEnum(rhs) == @intFromEnum(rhs);
         }
     };
 }
@@ -312,10 +312,13 @@ pub inline fn dynamicCast(comptime T: type, object: anytype) ?*T {
 }
 
 pub inline fn unsafeCast(comptime T: type, object: anytype) *T {
-    return @ptrCast(*T, @alignCast(@alignOf(*T), object));
+    return @ptrCast(@alignCast(object));
 }
 
-fn CallMethod(comptime T: type, comptime method: []const u8) union(enum) { Ok: type, Err: void, } {
+fn CallMethod(comptime T: type, comptime method: []const u8) union(enum) {
+    Ok: type,
+    Err: void,
+} {
     if (comptime @hasDecl(T, method) and meta.declarationInfo(T, method).is_pub) {
         const method_info = @typeInfo(@TypeOf(@field(T, method)));
         comptime assert(meta.Child(method_info.Fn.params[0].type.?) == T);
@@ -611,7 +614,7 @@ pub const ConnectFlagsZ = struct {
 /// Wrapper for g_signal_connect_closure
 pub fn connect(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, flags: ConnectFlagsZ, comptime signature: []const type) usize {
     var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(null, handler, args) catch @panic("Out of Memory");
-    var cclosure = cclosureNew(@ptrCast(GObject.Callback, closure.c_closure()), closure.c_data(), @ptrCast(GObject.ClosureNotify, closure.c_destroy()));
+    var cclosure = cclosureNew(@ptrCast(closure.c_closure()), closure.c_data(), @ptrCast(closure.c_destroy()));
     return GObject.signalConnectClosure(object, signal, cclosure, flags.after);
 }
 
@@ -619,7 +622,7 @@ pub fn connect(object: *GObject.Object, signal: [*:0]const u8, handler: anytype,
 pub fn connectSwap(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, flags: ConnectFlagsZ, comptime signature: []const type) usize {
     comptime assert(signature.len == 1);
     var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(null, handler, args) catch @panic("Out of Memory");
-    var cclosure = cclosureNewSwap(@ptrCast(GObject.Callback, closure.c_closure()), closure.c_data(), @ptrCast(GObject.ClosureNotify, closure.c_destroy()));
+    var cclosure = cclosureNewSwap(@ptrCast(closure.c_closure()), closure.c_data(), @ptrCast(closure.c_destroy()));
     return GObject.signalConnectClosure(object, signal, cclosure, flags.after);
 }
 
@@ -637,7 +640,7 @@ fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?
     }
     return struct {
         pub extern fn g_object_new_with_properties(Type, c_uint, ?[*][*:0]const u8, ?[*]GObject.Value) *GObject.Object;
-    }.g_object_new_with_properties(object_type, if (names) |some| @intCast(c_uint, some.len) else 0, if (names) |some| some.ptr else null, if (values) |some| some.ptr else null);
+    }.g_object_new_with_properties(object_type, if (names) |some| @intCast(some.len) else 0, if (names) |some| some.ptr else null, if (values) |some| some.ptr else null);
 }
 
 /// Wrapper for g_object_new_with_properties
@@ -649,7 +652,7 @@ fn signalNewv(signal_name: [*:0]const u8, itype: Type, signal_flags: GObject.Sig
     var accumulator_closure = ClosureZ(@TypeOf(&accumulator), @TypeOf(accu_data), &[_]type{ bool, *GObject.SignalInvocationHint, *GObject.Value, *GObject.Value }).new(null, &accumulator, accu_data) catch @panic("Out of Memory");
     return struct {
         pub extern fn g_signal_newv([*:0]const u8, Type, GObject.SignalFlags, ?*GObject.Closure, ?GObject.SignalAccumulator, ?*anyopaque, ?GObject.ClosureMarshal, Type, c_uint, ?[*]Type) c_uint;
-    }.g_signal_newv(signal_name, itype, signal_flags, class_closure, @ptrCast(?GObject.SignalAccumulator, accumulator_closure.c_closure()), accumulator_closure.c_data(), c_marshaller, return_type, if (param_types) |some| @intCast(c_uint, some.len) else 0, if (param_types) |some| some.ptr else null);
+    }.g_signal_newv(signal_name, itype, signal_flags, class_closure, @ptrCast(accumulator_closure.c_closure()), accumulator_closure.c_data(), c_marshaller, return_type, if (param_types) |some| @intCast(some.len) else 0, if (param_types) |some| some.ptr else null);
 }
 
 pub const SignalFlagsZ = struct {
@@ -747,7 +750,7 @@ fn init(comptime T: type, value: *T) void {
     inline for (info.fields) |field| {
         if (field.default_value) |some| {
             const field_const_ptr_type = @Type(.{ .Pointer = .{ .size = .One, .is_const = true, .is_volatile = false, .alignment = @alignOf(field.type), .address_space = .generic, .child = field.type, .is_allowzero = false, .sentinel = null } });
-            @field(value, field.name) = @ptrCast(field_const_ptr_type, @alignCast(@alignOf(field.type), some)).*;
+            @field(value, field.name) = @as(field_const_ptr_type, @ptrCast(@alignCast(some))).*;
         }
     }
 }
@@ -766,22 +769,22 @@ pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]cons
                 _ = GObject.typeClassAdjustPrivateOffset(class, &typeTag(Object).private_offset);
             }
             if (comptime @hasDecl(Class, "constructed")) {
-                @ptrCast(*GObject.ObjectClass, class).constructed = &Class.constructed;
+                @as(*GObject.ObjectClass, @ptrCast(class)).constructed = &Class.constructed;
             }
             if (comptime @hasDecl(Class, "dispose")) {
-                @ptrCast(*GObject.ObjectClass, class).dispose = &Class.dispose;
+                @as(*GObject.ObjectClass, @ptrCast(class)).dispose = &Class.dispose;
             }
             if (comptime @hasDecl(Class, "finalize")) {
-                @ptrCast(*GObject.ObjectClass, class).finalize = &Class.finalize;
+                @as(*GObject.ObjectClass, @ptrCast(class)).finalize = &Class.finalize;
             }
             if (comptime @hasDecl(Class, "getProperty")) {
-                @ptrCast(*GObject.ObjectClass, class).get_property = &Class.getProperty;
+                @as(*GObject.ObjectClass, @ptrCast(class)).get_property = &Class.getProperty;
             }
             if (comptime @hasDecl(Class, "setProperty")) {
-                @ptrCast(*GObject.ObjectClass, class).set_property = &Class.setProperty;
+                @as(*GObject.ObjectClass, @ptrCast(class)).set_property = &Class.setProperty;
             }
             if (comptime @hasDecl(Class, "properties")) {
-                @ptrCast(*GObject.ObjectClass, class).installProperties(Class.properties());
+                @as(*GObject.ObjectClass, @ptrCast(class)).installProperties(Class.properties());
             }
             if (comptime @hasDecl(Class, "signals")) {
                 _ = Class.signals();
@@ -795,7 +798,7 @@ pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]cons
     const instance_init = struct {
         fn trampoline(self: *Object) callconv(.C) void {
             if (comptime @hasDecl(Object, "Private")) {
-                self.private = @intToPtr(*Object.Private, @bitCast(usize, @bitCast(isize, @ptrToInt(self)) + typeTag(Object).private_offset));
+                self.private = @ptrFromInt(@as(usize, @bitCast(@as(isize, @bitCast(@intFromPtr(self))) + typeTag(Object).private_offset)));
                 init(Object.Private, self.private);
             }
             init(Object, self);
@@ -815,7 +818,7 @@ pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]cons
         if (flags.final) {
             _flags.@"|="(.Final);
         }
-        var info: GObject.TypeInfo = .{ .class_size = @sizeOf(Class), .base_init = null, .base_finalize = null, .class_init = @ptrCast(GObject.ClassInitFunc, &class_init), .class_finalize = null, .class_data = null, .instance_size = @sizeOf(Object), .n_preallocs = 0, .instance_init = @ptrCast(GObject.InstanceInitFunc, &instance_init), .value_table = null };
+        var info: GObject.TypeInfo = .{ .class_size = @sizeOf(Class), .base_init = null, .base_finalize = null, .class_init = @ptrCast(&class_init), .class_finalize = null, .class_data = null, .instance_size = @sizeOf(Object), .n_preallocs = 0, .instance_init = @ptrCast(&instance_init), .value_table = null };
         const type_id = GObject.typeRegisterStatic(Object.Parent.type(), name, &info, _flags);
         if (@hasDecl(Object, "Private")) {
             typeTag(Object).private_offset = GObject.typeAddInstancePrivate(type_id, @sizeOf(Object.Private));
@@ -830,11 +833,11 @@ pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]cons
                         }
                     }
                 }.trampoline;
-                var interface_info: GObject.InterfaceInfo = .{ .interface_init = @ptrCast(GObject.InterfaceInitFunc, &interface_init), .interface_finalize = null, .interface_data = null };
+                var interface_info: GObject.InterfaceInfo = .{ .interface_init = @ptrCast(&interface_init), .interface_finalize = null, .interface_data = null };
                 GObject.typeAddInterfaceStatic(type_id, Interface.type(), &interface_info);
             }
         }
-        GLib.onceInitLeave(&typeTag(Object).type_id, @enumToInt(type_id));
+        GLib.onceInitLeave(&typeTag(Object).type_id, @intFromEnum(type_id));
     }
     return typeTag(Object).type_id;
 }
@@ -845,7 +848,7 @@ pub fn registerInterface(comptime Interface: type, name: [*:0]const u8) Type {
         pub fn trampoline(self: *Interface) callconv(.C) void {
             if (comptime @hasDecl(Interface, "properties")) {
                 for (Interface.properties()) |property| {
-                    GObject.Object.interfaceInstallProperty(@ptrCast(*GObject.TypeInterface, self), property);
+                    GObject.Object.interfaceInstallProperty(@ptrCast(self), property);
                 }
             }
             init(Interface, self);
@@ -855,14 +858,14 @@ pub fn registerInterface(comptime Interface: type, name: [*:0]const u8) Type {
         }
     }.trampoline;
     if (GLib.onceInitEnter(&typeTag(Interface).type_id)) {
-        var info: GObject.TypeInfo = .{ .class_size = @sizeOf(Interface), .base_init = null, .base_finalize = null, .class_init = @ptrCast(GObject.ClassInitFunc, &class_init), .class_finalize = null, .class_data = null, .instance_size = 0, .n_preallocs = 0, .instance_init = null, .value_table = null };
+        var info: GObject.TypeInfo = .{ .class_size = @sizeOf(Interface), .base_init = null, .base_finalize = null, .class_init = @ptrCast(&class_init), .class_finalize = null, .class_data = null, .instance_size = 0, .n_preallocs = 0, .instance_init = null, .value_table = null };
         const type_id = GObject.typeRegisterStatic(.Interface, name, &info, .None);
         if (comptime @hasDecl(Interface, "Prerequisites")) {
             inline for (Interface.Prerequisites) |Prerequisite| {
                 GObject.typeInterfaceAddPrerequisite(type_id, Prerequisite.type());
             }
         }
-        GLib.onceInitLeave(&typeTag(Interface).type_id, @enumToInt(type_id));
+        GLib.onceInitLeave(&typeTag(Interface).type_id, @intFromEnum(type_id));
     }
     return typeTag(Interface).type_id;
 }

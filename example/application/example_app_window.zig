@@ -41,7 +41,7 @@ pub const CstrContext = struct {
     }
 
     pub fn eql(_: CstrContext, a: [*:0]u8, b: [*:0]u8) bool {
-        return std.cstr.cmp(a, b) == 0;
+        return std.mem.orderZ(u8, a, b) == .eq;
     }
 };
 
@@ -49,7 +49,7 @@ pub const ExampleAppWindowClass = extern struct {
     parent: ApplicationWindowClass,
 
     pub fn init(class: *ExampleAppWindowClass) void {
-        var widget_class = @ptrCast(*WidgetClass, class);
+        var widget_class: *WidgetClass = @ptrCast(class);
         widget_class.setTemplateFromResource("/org/gtk/exampleapp/window.ui");
         template.bindChild(widget_class, ExampleAppWindow);
         template.bindCallback(widget_class, ExampleAppWindowClass);
@@ -58,7 +58,7 @@ pub const ExampleAppWindowClass = extern struct {
     // @override
     pub fn dispose(arg_object: *Object) callconv(.C) void {
         var self = arg_object.tryInto(ExampleAppWindow).?;
-        self.settings.__call("unref", .{}); // TODO: once
+        self.settings.__call("unref", .{});
         self.__call("disposeTemplate", .{ExampleAppWindow.type()});
         self.__call("disposeV", .{ExampleAppWindow.Parent.type()});
     }
@@ -154,7 +154,7 @@ pub const ExampleAppWindow = extern struct {
         };
         defer core.free(contents.contents.ptr);
         defer core.free(contents.etag_out);
-        buffer.setText(@ptrCast([*:0]const u8, contents.contents.ptr), @intCast(i32, contents.contents.len));
+        buffer.setText(@ptrCast(contents.contents.ptr), @intCast(contents.contents.len));
         var tag = TextTag.new(null);
         _ = buffer.getTagTable().add(tag);
         self.settings.bind("font", tag.into(Object), "font", .Default);
@@ -182,7 +182,7 @@ pub const ExampleAppWindow = extern struct {
         buffer.getStartIter(&start);
         var gpa = std.heap.GeneralPurposeAllocator(.{}){};
         defer {
-            if (gpa.deinit()) @panic("");
+            _ = gpa.deinit();
         }
         const allocator = gpa.allocator();
         var strings = std.HashMap([*:0]u8, void, CstrContext, std.hash_map.default_max_load_percentage).init(allocator);
@@ -227,7 +227,7 @@ pub const ExampleAppWindow = extern struct {
         var count = buffer.getLineCount();
         var buf: [22]u8 = undefined;
         _ = std.fmt.bufPrintZ(buf[0..], "{d}", .{count}) catch @panic("");
-        self.tc_lines.setText(@ptrCast([*:0]const u8, &buf));
+        self.tc_lines.setText(@ptrCast(&buf));
     }
 
     pub fn @"type"() core.Type {

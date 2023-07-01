@@ -25,19 +25,19 @@ pub const CustomButtonClass = extern struct {
     zero_reached: ?*const fn (self: *CustomButton) callconv(.C) void,
 
     pub fn init(class: *CustomButtonClass) void {
-        var button_class = @ptrCast(*Gtk.ButtonClass, class);
+        var button_class: *Gtk.ButtonClass = @ptrCast(class);
         button_class.clicked = &clicked;
     }
 
     pub fn properties() []*ParamSpec {
-        _properties[@enumToInt(Properties.Number)] = core.paramSpecInt("number", null, null, 0, 10, 10, .Readwrite);
+        _properties[@intFromEnum(Properties.Number)] = core.paramSpecInt("number", null, null, 0, 10, 10, .Readwrite);
         return _properties[0..];
     }
 
     // @override
     pub fn setProperty(arg_object: *Object, arg_property_id: u32, arg_value: *Value, _: *ParamSpec) callconv(.C) void {
         var self = arg_object.tryInto(CustomButton).?;
-        switch (@intToEnum(Properties, arg_property_id)) {
+        switch (@as(Properties, @enumFromInt(arg_property_id))) {
             .Number => {
                 self.setNumber(arg_value.getInt());
             },
@@ -47,7 +47,7 @@ pub const CustomButtonClass = extern struct {
     // @override
     pub fn getProperty(arg_object: *Object, arg_property_id: u32, arg_value: *Value, _: *ParamSpec) callconv(.C) void {
         var self = arg_object.tryInto(CustomButton).?;
-        switch (@intToEnum(Properties, arg_property_id)) {
+        switch (@as(Properties, @enumFromInt(arg_property_id))) {
             .Number => {
                 arg_value.setInt(self.getNumber());
             },
@@ -59,7 +59,7 @@ pub const CustomButtonClass = extern struct {
         flags.@"|="(.RunLast);
         flags.@"|="(.NoRecurse);
         flags.@"|="(.NoHooks);
-        _signals[@enumToInt(Signals.ZeroReached)] = core.newSignal(CustomButtonClass, CustomButton, "zero-reached", .{ .run_last = true, .no_recurse = true, .no_hooks = true }, {}, .{});
+        _signals[@intFromEnum(Signals.ZeroReached)] = core.newSignal(CustomButtonClass, CustomButton, "zero-reached", .{ .run_last = true, .no_recurse = true, .no_hooks = true }, {}, .{});
         return _signals[0..];
     }
 
@@ -109,9 +109,9 @@ pub const CustomButton = extern struct {
             defer instance.deinit();
             instance.set(self);
             var params = [_]Value{instance.value};
-            _ = core.signalEmitv(&params, _signals[@enumToInt(Signals.ZeroReached)], 0, null);
+            _ = core.signalEmitv(&params, _signals[@intFromEnum(Signals.ZeroReached)], 0, null);
         }
-        self.__call("notifyByPspec", .{_properties[@enumToInt(Properties.Number)]});
+        self.__call("notifyByPspec", .{_properties[@intFromEnum(Properties.Number)]});
     }
 
     pub fn connectNumberNotify(self: *CustomButton, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlagsZ) usize {

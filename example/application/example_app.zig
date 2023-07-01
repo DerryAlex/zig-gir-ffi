@@ -20,7 +20,7 @@ pub const ExampleAppClass = extern struct {
     parent: ApplicationClass,
 
     pub fn init(class: *ExampleAppClass) void {
-        var gapplication_class = @ptrCast(*GApplicationClass, class);
+        var gapplication_class: *GApplicationClass = @ptrCast(class);
         gapplication_class.activate = &activate;
         gapplication_class.open = &open;
         gapplication_class.startup = &startup;
@@ -39,7 +39,7 @@ pub const ExampleAppClass = extern struct {
         _ = arg_hint;
         var windows = self.__call("getWindows", .{});
         var win = if (windows) |some| core.dynamicCast(ExampleAppWindow, some.data.?).? else ExampleAppWindow.new(self);
-        for (arg_files[0..@intCast(usize, arg_n_files)]) |file| {
+        for (arg_files[0..@intCast(arg_n_files)]) |file| {
             win.__call("open", .{file});
         }
         win.__call("present", .{});

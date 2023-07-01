@@ -63,8 +63,8 @@ pub fn main() !void {
         try writer.print("const meta = std.meta;\n", .{});
         try writer.print("const assert = std.debug.assert;\n", .{});
         const n = c.g_irepository_get_n_infos(repository, namespace.ptr);
-        for (0..@intCast(usize, n)) |i| {
-            const info: *c.GIBaseInfo = c.g_irepository_get_info(repository, namespace.ptr, @intCast(c_int, i));
+        for (0..@intCast(n)) |i| {
+            const info: *c.GIBaseInfo = c.g_irepository_get_info(repository, namespace.ptr, @intCast(i));
             defer c.g_base_info_unref(info);
             try emit(.{ .info = info }, writer);
         }

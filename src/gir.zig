@@ -91,12 +91,12 @@ test "FieldInfoFlags" {
     var flags: FieldInfoFlags = .{};
     {
         flags.readable = true;
-        assert(@bitCast(c.GIFieldInfoFlags, flags) == c.GI_FIELD_IS_READABLE);
+        assert(@as(c.GIFieldInfoFlags, @bitCast(flags)) == c.GI_FIELD_IS_READABLE);
         flags.readable = false;
     }
     {
         flags.writable = true;
-        assert(@bitCast(c.GIFieldInfoFlags, flags) == c.GI_FIELD_IS_WRITABLE);
+        assert(@as(c.GIFieldInfoFlags, @bitCast(flags)) == c.GI_FIELD_IS_WRITABLE);
         flags.writable = false;
     }
 }
@@ -115,32 +115,32 @@ test "FunctionInfoFlags" {
     var flags: FunctionInfoFlags = .{};
     {
         flags.is_method = true;
-        assert(@bitCast(c.GIFunctionInfoFlags, flags) == c.GI_FUNCTION_IS_METHOD);
+        assert(@as(c.GIFunctionInfoFlags, @bitCast(flags)) == c.GI_FUNCTION_IS_METHOD);
         flags.is_method = false;
     }
     {
         flags.is_constructor = true;
-        assert(@bitCast(c.GIFunctionInfoFlags, flags) == c.GI_FUNCTION_IS_CONSTRUCTOR);
+        assert(@as(c.GIFunctionInfoFlags, @bitCast(flags))  == c.GI_FUNCTION_IS_CONSTRUCTOR);
         flags.is_constructor = false;
     }
     {
         flags.is_getter = true;
-        assert(@bitCast(c.GIFunctionInfoFlags, flags) == c.GI_FUNCTION_IS_GETTER);
+        assert(@as(c.GIFunctionInfoFlags, @bitCast(flags))  == c.GI_FUNCTION_IS_GETTER);
         flags.is_getter = false;
     }
     {
         flags.is_setter = true;
-        assert(@bitCast(c.GIFunctionInfoFlags, flags) == c.GI_FUNCTION_IS_SETTER);
+        assert(@as(c.GIFunctionInfoFlags, @bitCast(flags))  == c.GI_FUNCTION_IS_SETTER);
         flags.is_setter = false;
     }
     {
         flags.wraps_vfunc = true;
-        assert(@bitCast(c.GIFunctionInfoFlags, flags) == c.GI_FUNCTION_WRAPS_VFUNC);
+        assert(@as(c.GIFunctionInfoFlags, @bitCast(flags))  == c.GI_FUNCTION_WRAPS_VFUNC);
         flags.wraps_vfunc = false;
     }
     {
         flags.throws = true;
-        assert(@bitCast(c.GIFunctionInfoFlags, flags) == c.GI_FUNCTION_THROWS);
+        assert(@as(c.GIFunctionInfoFlags, @bitCast(flags))  == c.GI_FUNCTION_THROWS);
         flags.throws = false;
     }
 }
@@ -163,52 +163,52 @@ test "ParamFlags" {
     var flags: ParamFlags = .{};
     {
         flags.readable = true;
-        assert(@bitCast(c.GParamFlags, flags) == c.G_PARAM_READABLE);
+        assert(@as(c.GParamFlags, @bitCast(flags)) == c.G_PARAM_READABLE);
         flags.readable = false;
     }
     {
         flags.writable = true;
-        assert(@bitCast(c.GParamFlags, flags) == c.G_PARAM_WRITABLE);
+        assert(@as(c.GParamFlags, @bitCast(flags)) == c.G_PARAM_WRITABLE);
         flags.writable = false;
     }
     {
         flags.construct = true;
-        assert(@bitCast(c.GParamFlags, flags) == c.G_PARAM_CONSTRUCT);
+        assert(@as(c.GParamFlags, @bitCast(flags)) == c.G_PARAM_CONSTRUCT);
         flags.construct = false;
     }
     {
         flags.construct_only = true;
-        assert(@bitCast(c.GParamFlags, flags) == c.G_PARAM_CONSTRUCT_ONLY);
+        assert(@as(c.GParamFlags, @bitCast(flags)) == c.G_PARAM_CONSTRUCT_ONLY);
         flags.construct_only = false;
     }
     {
         flags.lax_validation = true;
-        assert(@bitCast(c.GParamFlags, flags) == c.G_PARAM_LAX_VALIDATION);
+        assert(@as(c.GParamFlags, @bitCast(flags)) == c.G_PARAM_LAX_VALIDATION);
         flags.lax_validation = false;
     }
     {
         flags.static_name = true;
-        assert(@bitCast(c.GParamFlags, flags) == c.G_PARAM_STATIC_NAME);
+        assert(@as(c.GParamFlags, @bitCast(flags)) == c.G_PARAM_STATIC_NAME);
         flags.static_name = false;
     }
     {
         flags.static_nick = true;
-        assert(@bitCast(c.GParamFlags, flags) == c.G_PARAM_STATIC_NICK);
+        assert(@as(c.GParamFlags, @bitCast(flags)) == c.G_PARAM_STATIC_NICK);
         flags.static_nick = false;
     }
     {
         flags.static_blurb = true;
-        assert(@bitCast(c.GParamFlags, flags) == c.G_PARAM_STATIC_BLURB);
+        assert(@as(c.GParamFlags, @bitCast(flags)) == c.G_PARAM_STATIC_BLURB);
         flags.static_blurb = false;
     }
     {
         flags.explicit_notify = true;
-        assert(@bitCast(c.GParamFlags, flags) == c.G_PARAM_EXPLICIT_NOTIFY);
+        assert(@as(c.GParamFlags, @bitCast(flags)) == c.G_PARAM_EXPLICIT_NOTIFY);
         flags.explicit_notify = false;
     }
     {
         flags.deprecated = true;
-        assert(@bitCast(c.GParamFlags, flags) == c.G_PARAM_DEPRECATED);
+        assert(@as(c.GParamFlags, @bitCast(flags)) == c.G_PARAM_DEPRECATED);
         flags.deprecated = false;
     }
 }
@@ -232,52 +232,52 @@ test "SignalFlags" {
     var flags: SignalFlags = .{};
     {
         flags.run_first = true;
-        assert(@bitCast(c.GSignalFlags, flags) == c.G_SIGNAL_RUN_FIRST);
+        assert(@as(c.GSignalFlags, @bitCast(flags)) == c.G_SIGNAL_RUN_FIRST);
         flags.run_first = false;
     }
     {
         flags.run_last = true;
-        assert(@bitCast(c.GSignalFlags, flags) == c.G_SIGNAL_RUN_LAST);
+        assert(@as(c.GSignalFlags, @bitCast(flags)) == c.G_SIGNAL_RUN_LAST);
         flags.run_last = false;
     }
     {
         flags.run_cleanup = true;
-        assert(@bitCast(c.GSignalFlags, flags) == c.G_SIGNAL_RUN_CLEANUP);
+        assert(@as(c.GSignalFlags, @bitCast(flags)) == c.G_SIGNAL_RUN_CLEANUP);
         flags.run_cleanup = false;
     }
     {
         flags.no_recurse = true;
-        assert(@bitCast(c.GSignalFlags, flags) == c.G_SIGNAL_NO_RECURSE);
+        assert(@as(c.GSignalFlags, @bitCast(flags)) == c.G_SIGNAL_NO_RECURSE);
         flags.no_recurse = false;
     }
     {
         flags.detailed = true;
-        assert(@bitCast(c.GSignalFlags, flags) == c.G_SIGNAL_DETAILED);
+        assert(@as(c.GSignalFlags, @bitCast(flags)) == c.G_SIGNAL_DETAILED);
         flags.detailed = false;
     }
     {
         flags.action = true;
-        assert(@bitCast(c.GSignalFlags, flags) == c.G_SIGNAL_ACTION);
+        assert(@as(c.GSignalFlags, @bitCast(flags)) == c.G_SIGNAL_ACTION);
         flags.action = false;
     }
     {
         flags.no_hooks = true;
-        assert(@bitCast(c.GSignalFlags, flags) == c.G_SIGNAL_NO_HOOKS);
+        assert(@as(c.GSignalFlags, @bitCast(flags)) == c.G_SIGNAL_NO_HOOKS);
         flags.no_hooks = false;
     }
     {
         flags.must_collect = true;
-        assert(@bitCast(c.GSignalFlags, flags) == c.G_SIGNAL_MUST_COLLECT);
+        assert(@as(c.GSignalFlags, @bitCast(flags)) == c.G_SIGNAL_MUST_COLLECT);
         flags.must_collect = false;
     }
     {
         flags.deprecated = true;
-        assert(@bitCast(c.GSignalFlags, flags) == c.G_SIGNAL_DEPRECATED);
+        assert(@as(c.GSignalFlags, @bitCast(flags)) == c.G_SIGNAL_DEPRECATED);
         flags.deprecated = false;
     }
     {
         flags.accumulator_first_run = true;
-        assert(@bitCast(c.GSignalFlags, flags) == c.G_SIGNAL_ACCUMULATOR_FIRST_RUN);
+        assert(@as(c.GSignalFlags, @bitCast(flags)) == c.G_SIGNAL_ACCUMULATOR_FIRST_RUN);
         flags.accumulator_first_run = false;
     }
 }
@@ -294,22 +294,22 @@ test "VFuncInfoFlags" {
     var flags: VFuncInfoFlags = .{};
     {
         flags.must_chain_up = true;
-        assert(@bitCast(c.GIVFuncInfoFlags, flags) == c.GI_VFUNC_MUST_CHAIN_UP);
+        assert(@as(c.GIVFuncInfoFlags, @bitCast(flags)) == c.GI_VFUNC_MUST_CHAIN_UP);
         flags.must_chain_up = false;
     }
     {
         flags.must_override = true;
-        assert(@bitCast(c.GIVFuncInfoFlags, flags) == c.GI_VFUNC_MUST_OVERRIDE);
+        assert(@as(c.GIVFuncInfoFlags, @bitCast(flags)) == c.GI_VFUNC_MUST_OVERRIDE);
         flags.must_override = false;
     }
     {
         flags.must_not_override = true;
-        assert(@bitCast(c.GIVFuncInfoFlags, flags) == c.GI_VFUNC_MUST_NOT_OVERRIDE);
+        assert(@as(c.GIVFuncInfoFlags, @bitCast(flags)) == c.GI_VFUNC_MUST_NOT_OVERRIDE);
         flags.must_not_override = false;
     }
     {
         flags.throws = true;
-        assert(@bitCast(c.GIVFuncInfoFlags, flags) == c.GI_VFUNC_THROWS);
+        assert(@as(c.GIVFuncInfoFlags, @bitCast(flags)) == c.GI_VFUNC_THROWS);
         flags.throws = false;
     }
 }
@@ -374,7 +374,7 @@ pub const BaseInfo = struct {
     }
 
     pub fn @"type"(self: BaseInfo) InfoType {
-        return @intToEnum(InfoType, c.g_base_info_get_type(self.info));
+        return @enumFromInt(c.g_base_info_get_type(self.info));
     }
 
     pub fn isDeprecated(self: BaseInfo) bool {
@@ -414,11 +414,11 @@ pub const CallableInfo = struct {
     }
 
     pub fn callerOwns(self: CallableInfo) Transfer {
-        return @intToEnum(Transfer, c.g_callable_info_get_caller_owns(self.info));
+        return @enumFromInt(c.g_callable_info_get_caller_owns(self.info));
     }
 
     pub fn instanceOwnershipTransfer(self: CallableInfo) Transfer {
-        return @intToEnum(Transfer, c.g_callable_info_get_instance_ownership_transfer(self.info));
+        return @enumFromInt(c.g_callable_info_get_instance_ownership_transfer(self.info));
     }
 
     pub fn returnType(self: CallableInfo) TypeInfo {
@@ -450,19 +450,19 @@ pub const CallableInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = ArgInfo{ .info = c.g_callable_info_get_arg(self.callable_info.info, @intCast(c_int, self.index)) };
+            self.ret = ArgInfo{ .info = c.g_callable_info_get_arg(self.callable_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn argsIter(self: CallableInfo) ArgsIter {
-        return .{ .callable_info = self, .capacity = @intCast(usize, c.g_callable_info_get_n_args(self.info)) };
+        return .{ .callable_info = self, .capacity = @intCast(c.g_callable_info_get_n_args(self.info)) };
     }
 
     pub fn argsAlloc(self: CallableInfo, allocator: std.mem.Allocator) ![]ArgInfo {
-        var args = try allocator.alloc(ArgInfo, @intCast(usize, c.g_callable_info_get_n_args(self.info)));
+        var args = try allocator.alloc(ArgInfo, @intCast(c.g_callable_info_get_n_args(self.info)));
         for (args, 0..) |*arg, index| {
-            arg.* = .{ .info = c.g_callable_info_get_arg(self.info, @intCast(c_int, index)) };
+            arg.* = .{ .info = c.g_callable_info_get_arg(self.info, @intCast(index)) };
         }
         return args;
     }
@@ -585,7 +585,7 @@ pub const FunctionInfo = struct {
     }
 
     pub fn flags(self: FunctionInfo) FunctionInfoFlags {
-        return @bitCast(FunctionInfoFlags, c.g_function_info_get_flags(self.info));
+        return @bitCast(c.g_function_info_get_flags(self.info));
     }
 
     pub fn property(self: FunctionInfo) ?PropertyInfo {
@@ -625,9 +625,9 @@ pub const FunctionInfo = struct {
             }
         }
         var slice_info = allocator.alloc(SliceInfo, args.len) catch @panic("Out of Memory");
-        std.mem.set(SliceInfo, slice_info[0..], .{});
+        @memset(slice_info[0..], .{});
         var closure_info = allocator.alloc(ClosureInfo, args.len) catch @panic("Out of Memory");
-        std.mem.set(ClosureInfo, closure_info[0..], .{});
+        @memset(closure_info[0..], .{});
         var n_out_param: usize = 0;
         for (args, 0..) |arg, idx| {
             if (arg.direction() == .Out and !arg.isCallerAllocates()) {
@@ -776,9 +776,9 @@ pub const FunctionInfo = struct {
                 defer arg_type.asBase().deinit();
                 const ptr_arg = args[slice_info[idx].slice_ptr];
                 if (ptr_arg.isOptional()) {
-                    try writer.print("var arg_{s} = if (argz_{s}) |some| @intCast({}, some.len) else 0;\n", .{ arg_name, ptr_arg.asBase().name().?, arg_type });
+                    try writer.print("var arg_{s}: {} = if (argz_{s}) |some| @intCast(some.len) else 0;\n", .{ arg_name, arg_type, ptr_arg.asBase().name().? });
                 } else {
-                    try writer.print("var arg_{s} = @intCast({}, argz_{s}.len);\n", .{ arg_name, arg_type, ptr_arg.asBase().name().? });
+                    try writer.print("var arg_{s}: {} = @intCast(argz_{s}.len);\n", .{ arg_name, arg_type, ptr_arg.asBase().name().? });
                 }
             }
             if (slice_info[idx].is_slice_ptr) {
@@ -838,15 +838,15 @@ pub const FunctionInfo = struct {
                     },
                     else => unreachable,
                 }
-                try writer.print("var arg_{s} = @ptrCast({$}, closure_{s}.c_closure());\n", .{ arg_name, arg, arg_name });
+                try writer.print("var arg_{s}: {$} = @ptrCast(closure_{s}.c_closure());\n", .{ arg_name, arg, arg_name });
             }
             if (closure_info[idx].is_data) {
                 const func_arg = args[closure_info[idx].closure_func];
-                try writer.print("var arg_{s} = @ptrCast({$}, closure_{s}.c_data());\n", .{ arg_name, arg, func_arg.asBase().name().? });
+                try writer.print("var arg_{s}: {$} = @ptrCast(closure_{s}.c_data());\n", .{ arg_name, arg, func_arg.asBase().name().? });
             }
             if (closure_info[idx].is_destroy) {
                 const func_arg = args[closure_info[idx].closure_func];
-                try writer.print("var arg_{s} = @ptrCast({$}, closure_{s}.c_destroy());\n", .{ arg_name, arg, func_arg.asBase().name().? });
+                try writer.print("var arg_{s}: {$} = @ptrCast(closure_{s}.c_destroy());\n", .{ arg_name, arg, func_arg.asBase().name().? });
             }
         }
         // prepare output
@@ -900,7 +900,7 @@ pub const FunctionInfo = struct {
                 try writer.print(".{s} = out_{s}", .{ arg_name, arg_name });
                 if (slice_info[idx].is_slice_ptr) {
                     const len_arg = args[slice_info[idx].slice_len];
-                    try writer.writeAll("[0..@intCast(usize, ");
+                    try writer.writeAll("[0..@intCast(");
                     if (len_arg.direction() == .Out and !len_arg.isCallerAllocates()) {
                         try writer.print("out_{s}", .{len_arg.asBase().name().?});
                     } else {
@@ -940,7 +940,7 @@ pub const SignalInfo = struct {
     }
 
     pub fn flags(self: SignalInfo) SignalFlags {
-        return @bitCast(SignalFlags, c.g_signal_info_get_flags(self.info));
+        return @bitCast(c.g_signal_info_get_flags(self.info));
     }
 
     pub fn classClosure(self: SignalInfo) ?VFuncInfo {
@@ -996,7 +996,7 @@ pub const VFuncInfo = struct {
     }
 
     pub fn flags(self: VFuncInfo) VFuncInfoFlags {
-        return @bitCast(VFuncInfoFlags, c.g_vfunc_info_get_flags(self.info));
+        return @bitCast(c.g_vfunc_info_get_flags(self.info));
     }
 
     pub fn offset(self: VFuncInfo) c_int {
@@ -1029,7 +1029,7 @@ pub const VFuncInfo = struct {
         try writer.print("pub fn {s}V", .{vfunc_name});
         try self.asCallable().format_helper(writer, true, false, true);
         try writer.writeAll(" {\n");
-        try writer.print("const vfunc_fn = @ptrCast(*{s}, core.typeClassPeek(_type)).{s}.?;", .{ class_name, raw_vfunc_name });
+        try writer.print("const vfunc_fn = @as(*{s}, @ptrCast(core.typeClassPeek(_type))).{s}.?;", .{ class_name, raw_vfunc_name });
         try writer.writeAll("const ret = vfunc_fn");
         try self.asCallable().format_helper(writer, false, false, true);
         try writer.writeAll(";\n");
@@ -1095,7 +1095,7 @@ pub const RegisteredTypeInfo = struct {
             const init_fn = self.typeInit();
             if (std.mem.eql(u8, "intern", init_fn)) {
                 if (self.gType() < 256 * 4) {
-                    try writer.print("return @intToEnum(core.Type, {});", .{self.gType()});
+                    try writer.print("return @enumFromInt({});", .{self.gType()});
                 } else {
                     try writer.writeAll("@panic(\"Internal type\");");
                 }            
@@ -1116,7 +1116,7 @@ pub const EnumInfo = struct {
     }
 
     pub fn storageType(self: EnumInfo) TypeTag {
-        return @intToEnum(TypeTag, c.g_enum_info_get_storage_type(self.info));
+        return @enumFromInt(c.g_enum_info_get_storage_type(self.info));
     }
 
     pub fn errorDomain(self: EnumInfo) ?[:0]const u8 {
@@ -1136,13 +1136,13 @@ pub const EnumInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = ValueInfo{ .info = c.g_enum_info_get_value(self.enum_info.info, @intCast(c_int, self.index)) };
+            self.ret = ValueInfo{ .info = c.g_enum_info_get_value(self.enum_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn valueIter(self: EnumInfo) ValueIter {
-        return .{ .enum_info = self, .capacity = @intCast(usize, c.g_enum_info_get_n_values(self.info)) };
+        return .{ .enum_info = self, .capacity = @intCast(c.g_enum_info_get_n_values(self.info)) };
     }
 
     const MethodIter = struct {
@@ -1158,13 +1158,13 @@ pub const EnumInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = FunctionInfo{ .info = c.g_enum_info_get_method(self.enum_info.info, @intCast(c_int, self.index)) };
+            self.ret = FunctionInfo{ .info = c.g_enum_info_get_method(self.enum_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn methodIter(self: EnumInfo) MethodIter {
-        return .{ .enum_info = self, .capacity = @intCast(usize, c.g_enum_info_get_n_methods(self.info)) };
+        return .{ .enum_info = self, .capacity = @intCast(c.g_enum_info_get_n_methods(self.info)) };
     }
 
     pub fn format(self: EnumInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
@@ -1206,25 +1206,25 @@ pub const EnumInfo = struct {
             if (option_is_flag) {
                 switch (self.storageType()) {
                     .Int32 => {
-                        const _value = @intCast(i32, value.value());
+                        const _value: i32 = @intCast(value.value());
                         if (_value >= 0) {
                             try writer.print("0x{x}", .{_value});
                         } else {
-                            try writer.print("@bitCast(i32, 0x{x})", .{@bitCast(u32, _value)});
+                            try writer.print("@as(i32, @bitCast(0x{x}))", .{@as(u32, @bitCast(_value))});
                         }
                     },
                     .UInt32 => {
-                        try writer.print("0x{x}", .{@intCast(u32, value.value())});
+                        try writer.print("0x{x}", .{@as(u32, @intCast(value.value()))});
                     },
                     else => unreachable,
                 }
             } else {
                 switch (self.storageType()) {
                     .Int32 => {
-                        try writer.print("{d}", .{@intCast(i32, value.value())});
+                        try writer.print("{d}", .{@as(i32, @intCast(value.value()))});
                     },
                     .UInt32 => {
-                        try writer.print("{d}", .{@intCast(u32, value.value())});
+                        try writer.print("{d}", .{@as(u32, @intCast(value.value()))});
                     },
                     else => unreachable,
                 }
@@ -1280,13 +1280,13 @@ pub const StructInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = FieldInfo{ .info = c.g_struct_info_get_field(self.struct_info.info, @intCast(c_int, self.index)) };
+            self.ret = FieldInfo{ .info = c.g_struct_info_get_field(self.struct_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn fieldIter(self: StructInfo) FieldIter {
-        return .{ .struct_info = self, .capacity = @intCast(usize, c.g_struct_info_get_n_fields(self.info)) };
+        return .{ .struct_info = self, .capacity = @intCast(c.g_struct_info_get_n_fields(self.info)) };
     }
 
     const MethodIter = struct {
@@ -1302,13 +1302,13 @@ pub const StructInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = FunctionInfo{ .info = c.g_struct_info_get_method(self.struct_info.info, @intCast(c_int, self.index)) };
+            self.ret = FunctionInfo{ .info = c.g_struct_info_get_method(self.struct_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn methodIter(self: StructInfo) MethodIter {
-        return .{ .struct_info = self, .capacity = @intCast(usize, c.g_struct_info_get_n_methods(self.info)) };
+        return .{ .struct_info = self, .capacity = @intCast(c.g_struct_info_get_n_methods(self.info)) };
     }
 
     pub fn format(self: StructInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
@@ -1341,7 +1341,7 @@ pub const UnionInfo = struct {
     }
 
     pub fn discriminatorOffset(self: UnionInfo) usize {
-        return @intCast(usize, c.g_union_info_get_discriminator_offset(self.info));
+        return @intCast(c.g_union_info_get_discriminator_offset(self.info));
     }
 
     pub fn discriminatorType(self: UnionInfo) TypeInfo {
@@ -1349,7 +1349,7 @@ pub const UnionInfo = struct {
     }
 
     pub fn discriminator(self: UnionInfo, n: usize) ConstantInfo {
-        return .{ .info = c.g_union_info_get_discriminator(self.info, @intCast(c_int, n)) };
+        return .{ .info = c.g_union_info_get_discriminator(self.info, @intCast(n)) };
     }
 
     pub fn size(self: UnionInfo) usize {
@@ -1373,13 +1373,13 @@ pub const UnionInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = FieldInfo{ .info = c.g_union_info_get_field(self.union_info.info, @intCast(c_int, self.index)) };
+            self.ret = FieldInfo{ .info = c.g_union_info_get_field(self.union_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn fieldIter(self: UnionInfo) FieldIter {
-        return .{ .union_info = self, .capacity = @intCast(usize, c.g_union_info_get_n_fields(self.info)) };
+        return .{ .union_info = self, .capacity = @intCast(c.g_union_info_get_n_fields(self.info)) };
     }
 
     const MethodIter = struct {
@@ -1395,13 +1395,13 @@ pub const UnionInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = FunctionInfo{ .info = c.g_union_info_get_method(self.union_info.info, @intCast(c_int, self.index)) };
+            self.ret = FunctionInfo{ .info = c.g_union_info_get_method(self.union_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn methodIter(self: UnionInfo) MethodIter {
-        return .{ .union_info = self, .capacity = @intCast(usize, c.g_union_info_get_n_methods(self.info)) };
+        return .{ .union_info = self, .capacity = @intCast(c.g_union_info_get_n_methods(self.info)) };
     }
 
     pub fn format(self: UnionInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
@@ -1470,13 +1470,13 @@ pub const ObjectInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = ConstantInfo{ .info = c.g_object_info_get_constant(self.object_info.info, @intCast(c_int, self.index)) };
+            self.ret = ConstantInfo{ .info = c.g_object_info_get_constant(self.object_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn constantIter(self: ObjectInfo) ConstantIter {
-        return .{ .object_info = self, .capacity = @intCast(usize, c.g_object_info_get_n_constants(self.info)) };
+        return .{ .object_info = self, .capacity = @intCast(c.g_object_info_get_n_constants(self.info)) };
     }
 
     const FieldIter = struct {
@@ -1492,13 +1492,13 @@ pub const ObjectInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = FieldInfo{ .info = c.g_object_info_get_field(self.object_info.info, @intCast(c_int, self.index)) };
+            self.ret = FieldInfo{ .info = c.g_object_info_get_field(self.object_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn fieldIter(self: ObjectInfo) FieldIter {
-        return .{ .object_info = self, .capacity = @intCast(usize, c.g_object_info_get_n_fields(self.info)) };
+        return .{ .object_info = self, .capacity = @intCast(c.g_object_info_get_n_fields(self.info)) };
     }
 
     const InterfaceIter = struct {
@@ -1514,13 +1514,13 @@ pub const ObjectInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = InterfaceInfo{ .info = c.g_object_info_get_interface(self.object_info.info, @intCast(c_int, self.index)) };
+            self.ret = InterfaceInfo{ .info = c.g_object_info_get_interface(self.object_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn interfaceIter(self: ObjectInfo) InterfaceIter {
-        return .{ .object_info = self, .capacity = @intCast(usize, c.g_object_info_get_n_interfaces(self.info)) };
+        return .{ .object_info = self, .capacity = @intCast(c.g_object_info_get_n_interfaces(self.info)) };
     }
 
     const MethodIter = struct {
@@ -1536,13 +1536,13 @@ pub const ObjectInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = FunctionInfo{ .info = c.g_object_info_get_method(self.object_info.info, @intCast(c_int, self.index)) };
+            self.ret = FunctionInfo{ .info = c.g_object_info_get_method(self.object_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn methodIter(self: ObjectInfo) MethodIter {
-        return .{ .object_info = self, .capacity = @intCast(usize, c.g_object_info_get_n_methods(self.info)) };
+        return .{ .object_info = self, .capacity = @intCast(c.g_object_info_get_n_methods(self.info)) };
     }
 
     const PropertyIter = struct {
@@ -1558,13 +1558,13 @@ pub const ObjectInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = PropertyInfo{ .info = c.g_object_info_get_property(self.object_info.info, @intCast(c_int, self.index)) };
+            self.ret = PropertyInfo{ .info = c.g_object_info_get_property(self.object_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn propertyIter(self: ObjectInfo) PropertyIter {
-        return .{ .object_info = self, .capacity = @intCast(usize, c.g_object_info_get_n_properties(self.info)) };
+        return .{ .object_info = self, .capacity = @intCast(c.g_object_info_get_n_properties(self.info)) };
     }
 
     const SignalIter = struct {
@@ -1580,13 +1580,13 @@ pub const ObjectInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = SignalInfo{ .info = c.g_object_info_get_signal(self.object_info.info, @intCast(c_int, self.index)) };
+            self.ret = SignalInfo{ .info = c.g_object_info_get_signal(self.object_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn signalIter(self: ObjectInfo) SignalIter {
-        return .{ .object_info = self, .capacity = @intCast(usize, c.g_object_info_get_n_signals(self.info)) };
+        return .{ .object_info = self, .capacity = @intCast(c.g_object_info_get_n_signals(self.info)) };
     }
 
     const VFuncIter = struct {
@@ -1602,13 +1602,13 @@ pub const ObjectInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = VFuncInfo{ .info = c.g_object_info_get_vfunc(self.object_info.info, @intCast(c_int, self.index)) };
+            self.ret = VFuncInfo{ .info = c.g_object_info_get_vfunc(self.object_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn vfuncIter(self: ObjectInfo) VFuncIter {
-        return .{ .object_info = self, .capacity = @intCast(usize, c.g_object_info_get_n_vfuncs(self.info)) };
+        return .{ .object_info = self, .capacity = @intCast(c.g_object_info_get_n_vfuncs(self.info)) };
     }
 
     pub fn format(self: ObjectInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
@@ -1688,13 +1688,13 @@ pub const InterfaceInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = BaseInfo{ .info = c.g_interface_info_get_prerequisite(self.interface_info.info, @intCast(c_int, self.index)) };
+            self.ret = BaseInfo{ .info = c.g_interface_info_get_prerequisite(self.interface_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn prerequisiteIter(self: InterfaceInfo) PrerequisiteIter {
-        return .{ .interface_info = self, .capacity = @intCast(usize, c.g_interface_info_get_n_prerequisites(self.info)) };
+        return .{ .interface_info = self, .capacity = @intCast(c.g_interface_info_get_n_prerequisites(self.info)) };
     }
 
     const PropertyIter = struct {
@@ -1710,13 +1710,13 @@ pub const InterfaceInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = PropertyInfo{ .info = c.g_interface_info_get_property(self.interface_info.info, @intCast(c_int, self.index)) };
+            self.ret = PropertyInfo{ .info = c.g_interface_info_get_property(self.interface_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn propertyIter(self: InterfaceInfo) PropertyIter {
-        return .{ .interface_info = self, .capacity = @intCast(usize, c.g_interface_info_get_n_properties(self.info)) };
+        return .{ .interface_info = self, .capacity = @intCast(c.g_interface_info_get_n_properties(self.info)) };
     }
 
     const MethodIter = struct {
@@ -1732,13 +1732,13 @@ pub const InterfaceInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = FunctionInfo{ .info = c.g_interface_info_get_method(self.interface_info.info, @intCast(c_int, self.index)) };
+            self.ret = FunctionInfo{ .info = c.g_interface_info_get_method(self.interface_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn methodIter(self: InterfaceInfo) MethodIter {
-        return .{ .interface_info = self, .capacity = @intCast(usize, c.g_interface_info_get_n_methods(self.info)) };
+        return .{ .interface_info = self, .capacity = @intCast(c.g_interface_info_get_n_methods(self.info)) };
     }
 
     const SignalIter = struct {
@@ -1754,13 +1754,13 @@ pub const InterfaceInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = SignalInfo{ .info = c.g_interface_info_get_signal(self.interface_info.info, @intCast(c_int, self.index)) };
+            self.ret = SignalInfo{ .info = c.g_interface_info_get_signal(self.interface_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn signalIter(self: InterfaceInfo) SignalIter {
-        return .{ .interface_info = self, .capacity = @intCast(usize, c.g_interface_info_get_n_signals(self.info)) };
+        return .{ .interface_info = self, .capacity = @intCast(c.g_interface_info_get_n_signals(self.info)) };
     }
 
     const VFuncIter = struct {
@@ -1776,13 +1776,13 @@ pub const InterfaceInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = VFuncInfo{ .info = c.g_interface_info_get_vfunc(self.interface_info.info, @intCast(c_int, self.index)) };
+            self.ret = VFuncInfo{ .info = c.g_interface_info_get_vfunc(self.interface_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn vfuncIter(self: InterfaceInfo) VFuncIter {
-        return .{ .interface_info = self, .capacity = @intCast(usize, c.g_interface_info_get_n_vfuncs(self.info)) };
+        return .{ .interface_info = self, .capacity = @intCast(c.g_interface_info_get_n_vfuncs(self.info)) };
     }
 
     const ConstantIter = struct {
@@ -1798,13 +1798,13 @@ pub const InterfaceInfo = struct {
             }
             if (self.index >= self.capacity) return null;
             defer self.index += 1;
-            self.ret = ConstantInfo{ .info = c.g_interface_info_get_constant(self.interface_info.info, @intCast(c_int, self.index)) };
+            self.ret = ConstantInfo{ .info = c.g_interface_info_get_constant(self.interface_info.info, @intCast(self.index)) };
             return self.ret;
         }
     };
 
     pub fn constantIter(self: InterfaceInfo) ConstantIter {
-        return .{ .interface_info = self, .capacity = @intCast(usize, c.g_interface_info_get_n_constants(self.info)) };
+        return .{ .interface_info = self, .capacity = @intCast(c.g_interface_info_get_n_constants(self.info)) };
     }
 
     pub fn format(self: InterfaceInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
@@ -1862,24 +1862,24 @@ pub const ArgInfo = struct {
 
     pub fn closure(self: ArgInfo) ?usize {
         const index = c.g_arg_info_get_closure(self.info);
-        return if (index != -1) @intCast(usize, index) else null;
+        return if (index != -1) @intCast(index) else null;
     }
 
     pub fn destroy(self: ArgInfo) ?usize {
         const index = c.g_arg_info_get_destroy(self.info);
-        return if (index != -1) @intCast(usize, index) else null;
+        return if (index != -1) @intCast(index) else null;
     }
 
     pub fn direction(self: ArgInfo) Direction {
-        return @intToEnum(Direction, c.g_arg_info_get_direction(self.info));
+        return @enumFromInt(c.g_arg_info_get_direction(self.info));
     }
 
     pub fn ownershipTransfer(self: ArgInfo) Transfer {
-        return @intToEnum(Transfer, c.g_arg_info_get_ownership_transfer(self.info));
+        return @enumFromInt(c.g_arg_info_get_ownership_transfer(self.info));
     }
 
     pub fn scope(self: ArgInfo) ScopeType {
-        return @intToEnum(ScopeType, c.g_arg_info_get_scope(self.info));
+        return @enumFromInt(c.g_arg_info_get_scope(self.info));
     }
 
     pub fn @"type"(self: ArgInfo) TypeInfo {
@@ -2026,15 +2026,15 @@ pub const FieldInfo = struct {
     }
 
     pub fn flags(self: FieldInfo) FieldInfoFlags {
-        return @bitCast(FieldInfoFlags, c.g_field_info_get_flags(self.info));
+        return @bitCast(c.g_field_info_get_flags(self.info));
     }
 
     pub fn offset(self: FieldInfo) usize {
-        return @intCast(usize, c.g_field_info_get_offset(self.info));
+        return @intCast(c.g_field_info_get_offset(self.info));
     }
 
     pub fn size(self: FieldInfo) usize {
-        return @intCast(usize, c.g_field_info_get_size(self.info));
+        return @intCast(c.g_field_info_get_size(self.info));
     }
 
     pub fn @"type"(self: FieldInfo) TypeInfo {
@@ -2064,11 +2064,11 @@ pub const PropertyInfo = struct {
     }
 
     pub fn flags(self: PropertyInfo) ParamFlags {
-        return @bitCast(ParamFlags, c.g_property_info_get_flags(self.info));
+        return @bitCast(c.g_property_info_get_flags(self.info));
     }
 
     pub fn ownershipTransfer(self: PropertyInfo) Transfer {
-        return @bitCast(Transfer, c.g_property_info_get_ownership_transfer(self.info));
+        return @bitCast(c.g_property_info_get_ownership_transfer(self.info));
     }
 
     pub fn @"type"(self: PropertyInfo) TypeInfo {
@@ -2155,11 +2155,11 @@ pub const TypeInfo = struct {
     }
 
     pub fn tag(self: TypeInfo) TypeTag {
-        return @intToEnum(TypeTag, c.g_type_info_get_tag(self.info));
+        return @enumFromInt(c.g_type_info_get_tag(self.info));
     }
 
     pub fn paramType(self: TypeInfo, n: usize) TypeInfo {
-        return .{ .info = c.g_type_info_get_param_type(self.info, @intCast(c_int, n)) };
+        return .{ .info = c.g_type_info_get_param_type(self.info, @intCast(n)) };
     }
 
     pub fn interface(self: TypeInfo) ?BaseInfo {
@@ -2168,12 +2168,12 @@ pub const TypeInfo = struct {
 
     pub fn arrayLength(self: TypeInfo) ?usize {
         const index = c.g_type_info_get_array_length(self.info);
-        return if (index != -1) @intCast(usize, index) else null;
+        return if (index != -1) @intCast(index) else null;
     }
 
     pub fn arrayFixedSize(self: TypeInfo) ?usize {
         const size = c.g_type_info_get_array_fixed_size(self.info);
-        return if (size != -1) @intCast(usize, size) else null;
+        return if (size != -1) @intCast(size) else null;
     }
 
     pub fn isZeroTerminated(self: TypeInfo) bool {
@@ -2182,7 +2182,7 @@ pub const TypeInfo = struct {
 
     pub fn arrayType(self: TypeInfo) ?ArrayType {
         const ty = c.g_type_info_get_array_type(self.info);
-        return if (ty != -1) @intToEnum(ArrayType, ty) else null;
+        return if (ty != -1) @enumFromInt(ty) else null;
     }
 
     pub fn format(self: TypeInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {

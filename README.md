@@ -5,7 +5,6 @@ GObject Introspection for zig. Generated [GTK4 binding](https://github.com/Derry
 ## Documentation
 
 - [Examples](./example)
-- [GObject Tutorial](https://toshiocp.github.io/Gobject-tutorial/) by ToshioCP
 - [GTK Documentation](https://docs.gtk.org/)
 - [Zig Language Reference](https://ziglang.org/documentation/master/)
 

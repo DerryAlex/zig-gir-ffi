@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) !void {
     const exe = b.addExecutable(.{ .name = "main", .root_source_file = .{ .path = "src/main.zig" }, .optimize = optimize, .target = target });
     exe.linkLibC();
     exe.linkSystemLibrary("gobject-introspection-1.0");
-    exe.install();
+    b.installArtifact(exe);
 
     const tests = b.addTest(.{ .root_source_file = .{ .path = "src/gir.zig" } });
     tests.linkLibC();

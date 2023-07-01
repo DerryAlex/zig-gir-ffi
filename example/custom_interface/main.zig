@@ -6,7 +6,7 @@ const PartialEq = @import("eq.zig").PartialEq;
 const PartialOrd = @import("ord.zig").PartialOrd;
 
 pub fn main() void {
-    var rand_backend = std.rand.DefaultPrng.init(@intCast(u64, @mod(std.time.nanoTimestamp(), 1_000_000)));
+    var rand_backend = std.rand.DefaultPrng.init(@intCast(@mod(std.time.nanoTimestamp(), 1_000_000)));
     var rand = std.rand.Random.init(&rand_backend, @TypeOf(rand_backend).fill);
     const v1 = rand.int(i8);
     const v2 = rand.int(i8);

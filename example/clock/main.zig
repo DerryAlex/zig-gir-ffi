@@ -6,7 +6,7 @@ pub fn main() u8 {
     var app = Gtk.Application.new("org.example.clock", .FlagsNone);
     defer app.__call("unref", .{});
     _ = app.__call("connectActivate", .{ buildUi, .{}, .{} });
-    return @truncate(u8, @bitCast(u32, app.__call("run", .{std.os.argv})));
+    return @intCast(app.__call("run", .{std.os.argv}));
 }
 
 pub fn buildUi(arg_app: *core.Application) void {
@@ -23,11 +23,11 @@ pub fn buildUi(arg_app: *core.Application) void {
 
 pub fn tick(label: *Gtk.Label) bool {
     var time = std.time.timestamp();
-    const s: u6 = @intCast(u6, @mod(time, std.time.s_per_min));
+    const s: u6 = @intCast(@mod(time, std.time.s_per_min));
     time = @divFloor(time, std.time.s_per_min);
-    const min: u6 = @intCast(u6, @mod(time, 60));
+    const min: u6 = @intCast(@mod(time, 60));
     time = @divFloor(time, 60);
-    const hour: u5 = @intCast(u5, @mod(time, 24));
+    const hour: u5 = @intCast(@mod(time, 24));
     var buf: [13]u8 = undefined;
     const str = std.fmt.bufPrintZ(buf[0..], "{d:0>2}:{d:0>2}:{d:0>2}UTC", .{ hour, min, s }) catch @panic("No Space Left");
     label.setLabel(str);
