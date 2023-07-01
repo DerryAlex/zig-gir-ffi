@@ -120,27 +120,27 @@ test "FunctionInfoFlags" {
     }
     {
         flags.is_constructor = true;
-        assert(@as(c.GIFunctionInfoFlags, @bitCast(flags))  == c.GI_FUNCTION_IS_CONSTRUCTOR);
+        assert(@as(c.GIFunctionInfoFlags, @bitCast(flags)) == c.GI_FUNCTION_IS_CONSTRUCTOR);
         flags.is_constructor = false;
     }
     {
         flags.is_getter = true;
-        assert(@as(c.GIFunctionInfoFlags, @bitCast(flags))  == c.GI_FUNCTION_IS_GETTER);
+        assert(@as(c.GIFunctionInfoFlags, @bitCast(flags)) == c.GI_FUNCTION_IS_GETTER);
         flags.is_getter = false;
     }
     {
         flags.is_setter = true;
-        assert(@as(c.GIFunctionInfoFlags, @bitCast(flags))  == c.GI_FUNCTION_IS_SETTER);
+        assert(@as(c.GIFunctionInfoFlags, @bitCast(flags)) == c.GI_FUNCTION_IS_SETTER);
         flags.is_setter = false;
     }
     {
         flags.wraps_vfunc = true;
-        assert(@as(c.GIFunctionInfoFlags, @bitCast(flags))  == c.GI_FUNCTION_WRAPS_VFUNC);
+        assert(@as(c.GIFunctionInfoFlags, @bitCast(flags)) == c.GI_FUNCTION_WRAPS_VFUNC);
         flags.wraps_vfunc = false;
     }
     {
         flags.throws = true;
-        assert(@as(c.GIFunctionInfoFlags, @bitCast(flags))  == c.GI_FUNCTION_THROWS);
+        assert(@as(c.GIFunctionInfoFlags, @bitCast(flags)) == c.GI_FUNCTION_THROWS);
         flags.throws = false;
     }
 }
@@ -722,8 +722,7 @@ pub const FunctionInfo = struct {
                 }
                 if (return_bool) {
                     try writer.writeAll("bool");
-                }
-                else if (generic_gtk_widget) {
+                } else if (generic_gtk_widget) {
                     const container = self.asCallable().asBase().container();
                     if (self.asCallable().mayReturnNull()) {
                         try writer.writeAll("?");
@@ -1098,7 +1097,7 @@ pub const RegisteredTypeInfo = struct {
                     try writer.print("return @enumFromInt({});", .{self.gType()});
                 } else {
                     try writer.writeAll("@panic(\"Internal type\");");
-                }            
+                }
             } else {
                 try writer.print("const ffi_fn = struct {{ extern \"c\" fn {s}() core.Type; }}.{s};\n", .{ init_fn, init_fn });
                 try writer.writeAll("return ffi_fn();\n");
@@ -1167,6 +1166,51 @@ pub const EnumInfo = struct {
         return .{ .enum_info = self, .capacity = @intCast(c.g_enum_info_get_n_methods(self.info)) };
     }
 
+    fn formatValue(self: EnumInfo, value: ValueInfo, option_is_flag: bool, alter_name: bool, writer: anytype) !void {
+        var buf: [256]u8 = undefined;
+        const value_name = snakeToCamel(value.asBase().name().?, buf[0..]);
+        if (std.ascii.isAlphabetic(value_name[0])) {
+            try writer.print("{c}{s} = ", .{ std.ascii.toUpper(value_name[0]), value_name[1..] });
+        } else {
+            try writer.print("@\"{s}\" = ", .{value_name});
+        }
+
+        if (alter_name) {
+            try writer.writeAll("@as(@This(), @enumFromInt(");
+        }
+
+        if (option_is_flag) {
+            switch (self.storageType()) {
+                .Int32 => {
+                    const _value: i32 = @intCast(value.value());
+                    if (_value >= 0) {
+                        try writer.print("0x{x}", .{_value});
+                    } else {
+                        try writer.print("@as(i32, @bitCast(0x{x}))", .{@as(u32, @bitCast(_value))});
+                    }
+                },
+                .UInt32 => {
+                    try writer.print("0x{x}", .{@as(u32, @intCast(value.value()))});
+                },
+                else => unreachable,
+            }
+        } else {
+            switch (self.storageType()) {
+                .Int32 => {
+                    try writer.print("{d}", .{@as(i32, @intCast(value.value()))});
+                },
+                .UInt32 => {
+                    try writer.print("{d}", .{@as(u32, @intCast(value.value()))});
+                },
+                else => unreachable,
+            }
+        }
+
+        if (alter_name) {
+            try writer.writeAll("))");
+        }
+    }
+
     pub fn format(self: EnumInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = options;
         if (self.asRegisteredType().asBase().isDeprecated() and !enable_deprecated) return;
@@ -1188,52 +1232,30 @@ pub const EnumInfo = struct {
             else => unreachable,
         }
         try writer.writeAll("{\n");
-        var last_value: ?i64 = null;
+        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        defer _ = gpa.deinit();
+        const allocator = gpa.allocator();
+        var values = std.AutoHashMap(i64, void).init(allocator);
+        defer values.deinit();
         var iter = self.valueIter();
         while (iter.next()) |value| {
-            if (last_value) |some| {
-                if (some == value.value()) continue;
+            if (values.contains(value.value())) {
+                continue;
             }
-            last_value = value.value();
-            var buf: [256]u8 = undefined;
-            const value_name = snakeToCamel(value.asBase().name().?, buf[0..]);
-            if (std.ascii.isAlphabetic(value_name[0])) {
-                try writer.print("{c}{s} = ", .{ std.ascii.toUpper(value_name[0]), value_name[1..] });
-            } else {
-                try writer.print("@\"{s}\" = ", .{value_name});
-            }
-
-            if (option_is_flag) {
-                switch (self.storageType()) {
-                    .Int32 => {
-                        const _value: i32 = @intCast(value.value());
-                        if (_value >= 0) {
-                            try writer.print("0x{x}", .{_value});
-                        } else {
-                            try writer.print("@as(i32, @bitCast(0x{x}))", .{@as(u32, @bitCast(_value))});
-                        }
-                    },
-                    .UInt32 => {
-                        try writer.print("0x{x}", .{@as(u32, @intCast(value.value()))});
-                    },
-                    else => unreachable,
-                }
-            } else {
-                switch (self.storageType()) {
-                    .Int32 => {
-                        try writer.print("{d}", .{@as(i32, @intCast(value.value()))});
-                    },
-                    .UInt32 => {
-                        try writer.print("{d}", .{@as(u32, @intCast(value.value()))});
-                    },
-                    else => unreachable,
-                }
-            }
+            values.put(value.value(), {}) catch @panic("Out of Memory");
+            try formatValue(self, value, option_is_flag, false, writer);
             try writer.writeAll(",\n");
         }
         if (option_is_flag) {
             try writer.writeAll("_,\n");
             try writer.writeAll("pub usingnamespace core.Flags(@This());\n");
+        }
+        iter = self.valueIter();
+        while (iter.next()) |value| {
+            if (values.remove(value.value())) continue;
+            try writer.writeAll("pub const ");
+            try formatValue(self, value, option_is_flag, true, writer);
+            try writer.writeAll(";\n");
         }
         var m_iter = self.methodIter();
         while (m_iter.next()) |method| {
@@ -2369,8 +2391,8 @@ pub const TypeInfo = struct {
                                         try writer.print("[*:0]{}", .{child_type});
                                     },
                                     else => {
-                                        try writer.print("[*:std.mem.zeroes({??})]{??}", .{child_type, child_type});
-                                    }
+                                        try writer.print("[*:std.mem.zeroes({??})]{??}", .{ child_type, child_type });
+                                    },
                                 }
                             }
                         } else {
