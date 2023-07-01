@@ -1340,6 +1340,11 @@ pub const StructInfo = struct {
         try writer.print("pub const {s} = {s}{{\n", .{ self.asRegisteredType().asBase().name().?, if (self.size() == 0) "opaque" else "extern struct" });
         var iter = self.fieldIter();
         while (iter.next()) |field| {
+            // TODO: workaround https://github.com/ziglang/zig/issues/12325
+            if (std.mem.eql(u8, self.asRegisteredType().asBase().name().?, "Closure") and std.mem.eql(u8, field.asBase().name().?, "notifiers")) {
+                try writer.writeAll("notifiers: ?*anyopaque,\n");
+                continue;
+            }
             try writer.print("{}", .{field});
         }
         var m_iter = self.methodIter();
