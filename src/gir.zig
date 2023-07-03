@@ -1337,14 +1337,198 @@ pub const StructInfo = struct {
         _ = fmt;
         _ = options;
         if (self.asRegisteredType().asBase().isDeprecated() and !enable_deprecated) return;
-        try writer.print("pub const {s} = {s}{{\n", .{ self.asRegisteredType().asBase().name().?, if (self.size() == 0) "opaque" else "extern struct" });
+        const name = self.asRegisteredType().asBase().name().?;
+        try writer.print("pub const {s} = {s}{{\n", .{ name, if (self.size() == 0) "opaque" else "extern struct" });
         var iter = self.fieldIter();
+        // TODO: issue #1
+        const namespace = self.asRegisteredType().asBase().namespace();
+        if (std.mem.eql(u8, namespace, "GLib") and std.mem.eql(u8, name, "Date")) {
+            try writer.writeAll(
+                \\bitfield0: packed struct {
+                \\    julian_days: u32,
+                \\    julian: u1,
+                \\    dmy: u1,
+                \\    day: u6,
+                \\    month: u4,
+                \\    year: u16,
+                \\    padding: u4,
+                \\},
+            );
+            while (iter.next()) |_| {}
+        }
+        if (std.mem.eql(u8, namespace, "GLib") and std.mem.eql(u8, name, "HookList")) {
+            try writer.writeAll(
+                \\seq_id: c_ulong,
+                \\bitfield0: packed struct {
+                \\hook_size: u16,
+                \\is_setup: u1,
+                \\padding: u15,
+                \\},
+                \\hooks: ?*GLib.Hook,
+                \\dummy3: ?*anyopaque,
+                \\finalize_hook: ?GLib.HookFinalizeFunc,
+                \\dummy: [2]?*anyopaque,
+            );
+            while (iter.next()) |_| {}
+        }
+        if (std.mem.eql(u8, namespace, "GLib") and std.mem.eql(u8, name, "IOChannel")) {
+            try writer.writeAll(
+                \\ref_count: c_int,
+                \\funcs: ?*GLib.IOFuncs,
+                \\encoding: ?[*:0]u8,
+                \\read_cd: ?*anyopaque,
+                \\write_cd: ?*anyopaque,
+                \\line_term: ?[*:0]u8,
+                \\line_term_len: c_uint,
+                \\buf_size: usize,
+                \\read_buf: ?*GLib.String,
+                \\encoded_read_buf: ?*GLib.String,
+                \\write_buf: ?*GLib.String,
+                \\partial_write_buf: [6]i8,
+                \\bitfield0: packed struct {
+                \\use_buffer: u1,
+                \\do_encode: u1,
+                \\close_on_unref: u1,
+                \\is_readable: u1,
+                \\is_writeable: u1,
+                \\is_seekable: u1,
+                \\},
+                \\reserved1: ?*anyopaque,
+                \\reserved2: ?*anyopaque,
+            );
+            while (iter.next()) |_| {}
+        }
+        if (std.mem.eql(u8, namespace, "GLib") and std.mem.eql(u8, name, "ScannerConfig")) {
+            try writer.writeAll(
+                \\cset_skip_characters: ?[*:0]u8,
+                \\cset_identifier_first: ?[*:0]u8,
+                \\cset_identifier_nth: ?[*:0]u8,
+                \\cpair_comment_single: ?[*:0]u8,
+                \\bitfield0: packed struct {
+                \\case_sensitive: u1,
+                \\skip_comment_multi: u1,
+                \\skip_comment_single: u1,
+                \\scan_comment_multi: u1,
+                \\scan_identifier: u1,
+                \\scan_identifier_1char: u1,
+                \\scan_identifier_NULL: u1,
+                \\scan_symbols: u1,
+                \\scan_binary: u1,
+                \\scan_octal: u1,
+                \\scan_float: u1,
+                \\scan_hex: u1,
+                \\scan_hex_dollar: u1,
+                \\scan_string_sq: u1,
+                \\scan_string_dq: u1,
+                \\numbers_2_int: u1,
+                \\int_2_float: u1,
+                \\identifier_2_string: u1,
+                \\char_2_token: u1,
+                \\symbol_2_token: u1,
+                \\scope_0_fallback: u1,
+                \\store_int64: u1,
+                \\padding: u10,
+                \\},
+                \\padding_dummy: c_uint,
+            );
+            while (iter.next()) |_| {}
+        }
+        if (std.mem.eql(u8, namespace, "GObject") and std.mem.eql(u8, name, "ParamSpecString")) {
+            try writer.writeAll(
+                \\parent_instance: GObject.ParamSpec,
+                \\default_value: ?[*:0]u8,
+                \\cset_first: ?[*:0]u8,
+                \\cset_nth: ?[*:0]u8,
+                \\substitutor: u8,
+                \\bitfield0: packed struct {
+                \\null_fold_if_empty: u1,
+                \\ensure_non_null: u1,
+                \\padding: u6,
+                \\},
+            );
+            while (iter.next()) |_| {}
+        }
+        if (std.mem.eql(u8, namespace, "GObject") and std.mem.eql(u8, name, "Closure")) {
+            try writer.writeAll(
+                \\bitfield0: packed struct {
+                \\ref_count: u15,
+                \\meta_marshal_nouse: u1,
+                \\n_guards: u1,
+                \\n_fnotifiers: u2,
+                \\n_inotifiers: u8,
+                \\in_inotify: u1,
+                \\floating: u1,
+                \\derivative_flag: u1,
+                \\in_marshal: u1,
+                \\is_invalid: u1,
+                \\},
+                \\marshal: ?*const fn (arg_closure: *GObject.Closure, arg_return_value: *GObject.Value, arg_n_param_values: c_uint, arg_param_values: *GObject.Value, arg_invocation_hint: *anyopaque, arg_marshal_data: *anyopaque) callconv(.C) void,
+                \\data: ?*anyopaque,
+                // TODO: https://github.com/ziglang/zig/issues/12325
+                // notifiers: ?*GObject.ClosureNotifyData
+                \\notifiers: ?*anyopaque,
+            );
+            while (iter.next()) |_| {}
+        }
+        if (std.mem.eql(u8, namespace, "Pango") and std.mem.eql(u8, name, "AttrSize")) {
+            try writer.writeAll(
+                \\attr: Pango.Attribute,
+                \\size: c_int,
+                \\bitfield0: packed struct {
+                \\absolute: u1,
+                \\padding: u7,
+                \\},
+            );
+            while (iter.next()) |_| {}
+        }
+        if (std.mem.eql(u8, namespace, "Pango") and std.mem.eql(u8, name, "GlyphVisAttr")) {
+            try writer.writeAll(
+                \\bitfield0: packed struct {
+                \\is_cluster_start: u1,
+                \\is_color: u1,
+                \\padding: u6,
+                \\},
+            );
+            while (iter.next()) |_| {}
+        }
+        if (std.mem.eql(u8, namespace, "Pango") and std.mem.eql(u8, name, "LayoutLine")) {
+            try writer.writeAll(
+                \\layout: ?*Pango.Layout,
+                \\start_index: c_int,
+                \\length: c_int,
+                \\runs: ?*core.SList,
+                \\bitfield0: packed struct {
+                \\is_paragraph_start: u1,
+                \\resolved_dir: u3,
+                \\padding: u4,
+                \\},
+            );
+            while (iter.next()) |_| {}
+        }
+        if (std.mem.eql(u8, namespace, "Pango") and std.mem.eql(u8, name, "LogAttr")) {
+            try writer.writeAll(
+                \\bitfield0: packed struct {
+                \\is_line_break: u1,
+                \\is_mandatory_break: u1,
+                \\is_char_break: u1,
+                \\is_white: u1,
+                \\is_cursor_position: u1,
+                \\is_word_start: u1,
+                \\is_word_end: u1,
+                \\is_sentence_boundary: u1,
+                \\is_sentence_start: u1,
+                \\is_sentence_end: u1,
+                \\backspace_deletes_character: u1,
+                \\is_expandable_space: u1,
+                \\is_word_boundary: u1,
+                \\break_inserts_hyphen: u1,
+                \\break_removes_preceding: u1,
+                \\reserved: u17,
+                \\},
+            );
+            while (iter.next()) |_| {}
+        }
         while (iter.next()) |field| {
-            // TODO: workaround https://github.com/ziglang/zig/issues/12325
-            if (std.mem.eql(u8, self.asRegisteredType().asBase().name().?, "Closure") and std.mem.eql(u8, field.asBase().name().?, "notifiers")) {
-                try writer.writeAll("notifiers: ?*anyopaque,\n");
-                continue;
-            }
             try writer.print("{}", .{field});
         }
         var m_iter = self.methodIter();
