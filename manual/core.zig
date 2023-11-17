@@ -54,8 +54,7 @@ pub fn ValueZ(comptime T: type) type {
         const Ulong = @Type(@typeInfo(c_ulong));
 
         pub fn init() Self {
-            // var value = std.mem.zeroes(GObject.Value);
-            var value: GObject.Value = .{ .g_type = .Invalid, .data = .{ .{ .v_pointer = null }, .{ .v_pointer = null } } };
+            var value = std.mem.zeroes(GObject.Value);
             if (comptime T == void) {
                 value.g_type = .None; // for internal use
             } else if (comptime T == bool) {
@@ -188,7 +187,7 @@ pub fn ValueZ(comptime T: type) type {
             } else if (comptime T == GLib.Variant) {
                 self.value.setVariant(arg_value);
             } else if (comptime T == GObject.ParamSpec) {
-                self.gvalue.setParam(arg_value);
+                self.value.setParam(arg_value);
             } else if (comptime @hasDecl(T, "__call")) {
                 self.value.setObject(upCast(GObject.Object, arg_value));
             } else {
@@ -447,7 +446,7 @@ pub fn ClosureZ(comptime FnPtr: type, comptime Args: type, comptime signature: [
         const Self = @This();
 
         pub fn new(allocator: ?std.mem.Allocator, handler: FnPtr, args: Args) !*Self {
-            const real_allocator = if (allocator) |some| some else gpa.allocator();
+            const real_allocator = allocator orelse gpa.allocator();
             var closure = try real_allocator.create(Self);
             closure.handler = handler;
             closure.args = args;
