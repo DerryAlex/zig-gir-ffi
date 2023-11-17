@@ -1,0 +1,8 @@
+.{
+    .name = "zig-gir-ffi",
+    .version = "0.5.3+dev",
+    .paths = .{
+        "src",
+    },
+    .dependencies = .{},
+}

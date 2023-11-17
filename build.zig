@@ -4,12 +4,15 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
 
+    const xml = b.createModule(.{ .source_file = .{ .path = "src/deps/zig-xml/Parser.zig" } });
+
     const exe = b.addExecutable(.{
         .name = "main",
         .root_source_file = .{ .path = "src/main.zig" },
         .optimize = optimize,
         .target = target,
     });
+    exe.addModule("xml", xml);
     exe.linkLibC();
     exe.linkSystemLibrary("gobject-introspection-1.0");
     b.installArtifact(exe);

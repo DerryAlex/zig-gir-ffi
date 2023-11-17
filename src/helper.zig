@@ -1,5 +1,8 @@
 const std = @import("std");
-const BaseInfo = @import("gir.zig").BaseInfo;
+const gir = @import("gir.zig");
+const BaseInfo = gir.BaseInfo;
+const FieldInfo = gir.FieldInfo;
+const xml = @import("xml");
 
 pub const enable_deprecated = false;
 
@@ -74,4 +77,9 @@ pub fn isZigKeyword(str: []const u8) bool {
         }
     }
     return false;
+}
+
+pub fn fieldInfoGetSize(field_info: FieldInfo) usize {
+    _ = field_info;
+    return 0; // TODO
 }

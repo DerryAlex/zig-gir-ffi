@@ -318,7 +318,7 @@ fn CallMethod(comptime T: type, comptime method: []const u8) union(enum) {
     Ok: type,
     Err: void,
 } {
-    if (comptime @hasDecl(T, method) and meta.declarationInfo(T, method).is_pub) {
+    if (comptime @hasDecl(T, method)) {
         const method_info = @typeInfo(@TypeOf(@field(T, method)));
         comptime assert(meta.Child(method_info.Fn.params[0].type.?) == T);
         return .{ .Ok = method_info.Fn.return_type.? };
@@ -353,7 +353,7 @@ fn callMethod(self: anytype, comptime method: []const u8, args: anytype) switch 
     .Err => @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(meta.Child(@TypeOf(self))), method })),
 } {
     const Self = meta.Child(@TypeOf(self));
-    if (comptime @hasDecl(Self, method) and meta.declarationInfo(Self, method).is_pub) {
+    if (comptime @hasDecl(Self, method)) {
         return @call(.auto, @field(Self, method), .{self} ++ args);
     }
     if (comptime @hasDecl(Self, "Prerequisites")) {
