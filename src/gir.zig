@@ -2091,7 +2091,7 @@ pub const BitField = struct {
             try writer.print("_padding: u{d},\n", .{BitField.remaining.?});
         }
         BitField.remaining = null;
-        try writer.writeAll("}\n");
+        try writer.writeAll("},\n");
     }
 
     pub fn ensure(bits: usize, alloc: usize, writer: anytype) !void {
@@ -2126,7 +2126,9 @@ pub const FieldInfo = struct {
     pub fn size(self: FieldInfo) usize {
         // https://gitlab.gnome.org/GNOME/gobject-introspection/-/issues/246
         // return @intCast(c.g_field_info_get_size(self.info));
-        return fieldInfoGetSize(self);
+        return fieldInfoGetSize(self) catch |err| {
+            @panic(@errorName(err));
+        };
     }
 
     pub fn @"type"(self: FieldInfo) TypeInfo {

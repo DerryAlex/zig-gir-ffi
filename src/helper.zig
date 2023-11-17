@@ -79,7 +79,148 @@ pub fn isZigKeyword(str: []const u8) bool {
     return false;
 }
 
-pub fn fieldInfoGetSize(field_info: FieldInfo) usize {
-    _ = field_info;
-    return 0; // TODO
+// See https://github.com/ianprime0509/zig-gobject/
+pub fn fieldInfoGetSize(field_info: FieldInfo) !usize {
+    const xml_reader_option: xml.ReaderOptions = .{
+        .DecoderType = xml.encoding.Utf8Decoder,
+        .enable_normalization = false,
+    };
+    const XmlReader = xml.Reader(std.fs.File.Reader, xml_reader_option);
+    const Cache = struct {
+        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        var namespace: ?[]const u8 = null;
+        var success: bool = false;
+        var file: std.fs.File = undefined;
+        var reader: XmlReader = undefined;
+        const XmlChildrenReader = @TypeOf(reader.children());
+        var repository: XmlChildrenReader = undefined;
+
+        var record_success: bool = false;
+        var record_name: ?[]const u8 = null;
+        var record: XmlChildrenReader = undefined;
+    };
+    const allocator = Cache.gpa.allocator();
+    const ns = "http://www.gtk.org/introspection/core/1.0";
+
+    const namespace = field_info.asBase().namespace();
+    const record_name = field_info.asBase().container().name().?;
+    const field_name = field_info.asBase().name().?;
+    if (Cache.namespace != null and std.mem.eql(u8, Cache.namespace.?, namespace)) {
+        // do nothing
+    } else {
+        if (Cache.namespace != null) {
+            allocator.free(Cache.namespace.?);
+            Cache.namespace = null;
+        }
+        if (Cache.success) {
+            Cache.file.close();
+        }
+        Cache.success = false;
+        Cache.record_success = false;
+        Cache.record_name = null;
+
+        Cache.namespace = try allocator.dupe(u8, namespace);
+        const prefix = "/usr/share/gir-1.0/"; // FIXME
+        const dir = try std.fs.openIterableDirAbsolute(prefix, .{});
+        var iter = dir.iterate();
+        while (try iter.next()) |entry| {
+            if (std.mem.startsWith(u8, entry.name, namespace) and entry.name.len > namespace.len and entry.name[namespace.len] == '-') {
+                const path = try std.mem.concat(allocator, u8, &[_][]const u8{ prefix, entry.name });
+                defer allocator.free(path);
+                Cache.file = try std.fs.openFileAbsolute(path, .{});
+                Cache.reader = xml.reader(allocator, Cache.file.reader(), xml_reader_option);
+                while (try Cache.reader.next()) |event| {
+                    switch (event) {
+                        .element_start => |e| if (e.name.is(ns, "repository")) {
+                            var children = Cache.reader.children();
+                            while (try children.next()) |child_event| {
+                                switch (child_event) {
+                                    .element_start => |child| if (child.name.is(ns, "namespace")) {
+                                        Cache.repository = children.children();
+                                        Cache.success = true;
+                                        std.log.debug("[Success] Open {s}", .{path});
+                                        break;
+                                    } else {
+                                        try children.children().skip();
+                                    },
+                                    else => {},
+                                }
+                            }
+                        } else {
+                            try Cache.reader.children().skip();
+                        },
+                        else => {},
+                    }
+                    if (Cache.success) break;
+                }
+                break;
+            }
+        }
+    }
+    if (!Cache.success) {
+        return 0;
+    } else {
+        if (Cache.record_success and std.mem.eql(u8, Cache.record_name.?, record_name)) {
+            return try fieldBitSizeHelper(&Cache.record, field_name, record_name);
+        }
+        Cache.record_success = false;
+        if (Cache.record_name != null) {
+            allocator.free(Cache.record_name.?);
+            Cache.record_name = null;
+        }
+        while (try Cache.repository.next()) |event| {
+            switch (event) {
+                .element_start => |child| if (child.name.is(ns, "record")) {
+                    for (child.attributes) |attr| {
+                        if (attr.name.is(null, "name")) {
+                            if (std.mem.eql(u8, attr.value, record_name)) {
+                                Cache.record_success = true;
+                                Cache.record_name = try allocator.dupe(u8, record_name);
+                            }
+                        }
+                    }
+                    if (!Cache.record_success) continue;
+                    Cache.record = Cache.repository.children();
+                    return try fieldBitSizeHelper(&Cache.record, field_name, record_name);
+                } else {
+                    try Cache.repository.children().skip();
+                },
+                else => {},
+            }
+            if (Cache.record_success) break;
+        }
+        return 0;
+    }
+}
+
+fn fieldBitSizeHelper(reader: anytype, field_name: []const u8, record_name: []const u8) !usize {
+    const ns = "http://www.gtk.org/introspection/core/1.0";
+    while (try reader.next()) |event| {
+        switch (event) {
+            .element_start => |child| if (child.name.is(ns, "field")) {
+                var field_matched = false;
+                var field_bits: usize = 0;
+                for (child.attributes) |attr| {
+                    if (attr.name.is(null, "name")) {
+                        if (std.mem.eql(u8, attr.value, field_name)) {
+                            field_matched = true;
+                        }
+                    } else if (attr.name.is(null, "bits")) {
+                        field_bits = try std.fmt.parseInt(usize, attr.value, 10);
+                    }
+                }
+                if (field_matched) {
+                    if (field_bits != 0) {
+                        // std.log.debug("[bitfield] {s}.{s} {d}", .{ record_name, field_name, field_bits });
+                        _ = record_name;
+                    }
+                    return field_bits;
+                }
+            } else {
+                try reader.children().skip();
+            },
+            else => {},
+        }
+    }
+    return 0;
 }

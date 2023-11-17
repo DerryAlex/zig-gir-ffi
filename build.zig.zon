@@ -4,5 +4,10 @@
     .paths = .{
         "src",
     },
-    .dependencies = .{},
+    .dependencies = .{
+        .xml = .{
+            .url = "https://github.com/ianprime0509/zig-xml/archive/f4bfcbe1ce24c3b520a7471e4c9425e133fb652b.tar.gz",
+            .hash = "1220696d896599a7e1ccd2ab1afe3c1d4f8436547d160bfd395172bc7cd4e40576b6",
+        },
+    },
 }
