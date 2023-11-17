@@ -6,8 +6,8 @@ pub fn build(b: *Builder) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{ .name = "main", .root_source_file = .{ .path = "main.zig" }, .optimize = optimize, .target = target });
-    const gtk_mod = b.createModule(.{ .source_file = .{ .path = "../../publish/Gtk.zig" } });
-    exe.addModule("Gtk", gtk_mod);
+    const gtk = b.createModule(.{ .source_file = .{ .path = "../../publish/Gtk.zig" } });
+    exe.addModule("gtk", gtk);
     exe.linkLibC();
     exe.linkSystemLibrary("gtk4");
     b.installArtifact(exe);

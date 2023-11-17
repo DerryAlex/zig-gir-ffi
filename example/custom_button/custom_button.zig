@@ -1,10 +1,9 @@
 const std = @import("std");
-const root = @import("root");
-const Gtk = root.Gtk;
-const core = Gtk.core;
+const gtk = @import("gtk");
+const core = gtk.core;
 const meta = std.meta;
-const Button = Gtk.Button;
-const ButtonClass = Gtk.ButtonClass;
+const Button = gtk.Button;
+const ButtonClass = gtk.ButtonClass;
 const ParamSpec = core.ParamSpec;
 const Object = core.Object;
 const Value = core.Value;
@@ -25,7 +24,7 @@ pub const CustomButtonClass = extern struct {
     zero_reached: ?*const fn (self: *CustomButton) callconv(.C) void,
 
     pub fn init(class: *CustomButtonClass) void {
-        var button_class: *Gtk.ButtonClass = @ptrCast(class);
+        var button_class: *gtk.ButtonClass = @ptrCast(class);
         button_class.clicked = &clicked;
     }
 

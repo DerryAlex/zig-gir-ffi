@@ -1,7 +1,6 @@
 const std = @import("std");
-const root = @import("root");
-const Gtk = root.Gtk;
-const core = Gtk.core;
+const gtk = @import("gtk");
+const core = gtk.core;
 const TypeInterface = core.TypeInterface;
 const PartialEq = @import("eq.zig").PartialEq;
 

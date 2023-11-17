@@ -1,27 +1,27 @@
 const std = @import("std");
-pub const Gtk = @import("Gtk");
-const core = Gtk.core;
+const gtk = @import("gtk");
+const core = gtk.core;
 
 pub fn main() u8 {
-    var app = Gtk.Application.new("org.example.clock", .FlagsNone);
+    var app = gtk.Application.new("org.example.clock", .FlagsNone);
     defer app.__call("unref", .{});
     _ = app.__call("connectActivate", .{ buildUi, .{}, .{} });
     return @intCast(app.__call("run", .{std.os.argv}));
 }
 
 pub fn buildUi(arg_app: *core.Application) void {
-    var app = arg_app.tryInto(Gtk.Application).?;
-    var window = Gtk.ApplicationWindow.new(app);
+    var app = arg_app.tryInto(gtk.Application).?;
+    var window = gtk.ApplicationWindow.new(app);
     window.__call("setTitle", .{"Clock Example"});
     window.__call("setDefaultSize", .{ 260, 40 });
-    var label = Gtk.Label.new(null);
+    var label = gtk.Label.new(null);
     _ = tick(label);
     _ = core.timeoutAddSeconds(core.PRIORITY_DEFAULT, 1, tick, .{label});
-    window.__call("setChild", .{label.into(Gtk.Widget)});
+    window.__call("setChild", .{label.into(gtk.Widget)});
     window.__call("present", .{});
 }
 
-pub fn tick(label: *Gtk.Label) bool {
+pub fn tick(label: *gtk.Label) bool {
     var time = std.time.timestamp();
     const s: u6 = @intCast(@mod(time, std.time.s_per_min));
     time = @divFloor(time, std.time.s_per_min);

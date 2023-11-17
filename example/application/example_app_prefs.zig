@@ -1,20 +1,19 @@
 const std = @import("std");
-const root = @import("root");
-const Gtk = root.Gtk;
-const core = Gtk.core;
-const template = Gtk.template;
+const gtk = @import("gtk");
+const core = gtk.core;
+const template = gtk.template;
 const meta = std.meta;
 const assert = std.debug.assert;
 const ExampleAppWindow = @import("example_app_window.zig").ExampleAppWindow;
-const ComboBoxText = Gtk.ComboBoxText;
-const Dialog = Gtk.Dialog;
-const DialogClass = Gtk.DialogClass;
-const FontButton = Gtk.FontButton;
+const ComboBoxText = gtk.ComboBoxText;
+const Dialog = gtk.Dialog;
+const DialogClass = gtk.DialogClass;
+const FontButton = gtk.FontButton;
 const Object = core.Object;
 const ObjectClass = core.ObjectClass;
 const Settings = core.Settings;
-const WidgetClass = Gtk.WidgetClass;
-const Window = Gtk.Window;
+const WidgetClass = gtk.WidgetClass;
+const Window = gtk.Window;
 
 const ExampleAppPrefsClass = extern struct {
     parent: DialogClass,

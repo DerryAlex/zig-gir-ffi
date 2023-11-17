@@ -1,11 +1,11 @@
 const std = @import("std");
-pub const Gtk = @import("Gtk");
-const core = Gtk.core;
+const gtk = @import("gtk");
+const core = gtk.core;
 const CustomButton = @import("custom_button.zig").CustomButton;
-const Application = Gtk.Application;
-const ApplicationWindow = Gtk.ApplicationWindow;
-const Box = Gtk.Box;
-const Widget = Gtk.Widget;
+const Application = gtk.Application;
+const ApplicationWindow = gtk.ApplicationWindow;
+const Box = gtk.Box;
+const Widget = gtk.Widget;
 const GApplication = core.Application;
 
 pub fn main() u8 {

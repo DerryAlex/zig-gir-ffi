@@ -1,12 +1,12 @@
 const std = @import("std");
-const Gtk = @import("Gtk");
-const core = Gtk.core;
-const Application = Gtk.Application;
-const ApplicationWindow = Gtk.ApplicationWindow;
-const Box = Gtk.Box;
-const Button = Gtk.Button;
-const Widget = Gtk.Widget;
-const Window = Gtk.Window;
+const gtk = @import("gtk");
+const core = gtk.core;
+const Application = gtk.Application;
+const ApplicationWindow = gtk.ApplicationWindow;
+const Box = gtk.Box;
+const Button = gtk.Button;
+const Widget = gtk.Widget;
+const Window = gtk.Window;
 const GApplication = core.Application;
 
 pub fn printHello() void {

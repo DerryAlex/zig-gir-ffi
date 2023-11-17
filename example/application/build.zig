@@ -24,9 +24,12 @@ pub fn build(b: *Builder) !void {
     } else {
         std.debug.assert(std.os.waitpid(pid, 0).status == 0);
     }
-    exe.addCSourceFile("resources.c", &[_][]const u8{""});
-    const gtk_mod = b.createModule(.{ .source_file = .{ .path = "../../publish/Gtk.zig" } });
-    exe.addModule("Gtk", gtk_mod);
+    exe.addCSourceFile(.{
+        .file = .{ .path = "resources.c" },
+        .flags = &[_][]const u8{},
+    });
+    const gtk = b.createModule(.{ .source_file = .{ .path = "../../publish/Gtk.zig" } });
+    exe.addModule("gtk", gtk);
     exe.linkLibC();
     exe.linkSystemLibrary("gtk4");
     b.installArtifact(exe);
