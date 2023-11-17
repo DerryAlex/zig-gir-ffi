@@ -7,6 +7,7 @@ GObject Introspection for zig. Generated [GTK4 binding](https://github.com/Derry
 - [Examples](./example)
 - [GTK Documentation](https://docs.gtk.org/)
 - [Zig Language Reference](https://ziglang.org/documentation/master/)
+- [Zig Build System](https://ziglang.org/learn/build-system/)
 
 ## Example
 
