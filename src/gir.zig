@@ -2143,10 +2143,14 @@ pub const FieldInfo = struct {
         defer field_type.asBase().deinit();
         const field_size = self.size();
         if (field_size != 0) {
+            const field_container_bits: usize = switch (field_type.tag()) {
+                .Int32, .UInt32 => 32,
+                else => unreachable,
+            };
             if (BitField.remaining == null) {
-                try BitField.begin(32, writer); // FIXME
+                try BitField.begin(field_container_bits, writer);
             } else {
-                try BitField.ensure(field_size, 32, writer); // FIXME
+                try BitField.ensure(field_size, field_container_bits, writer);
             }
             BitField.emit(field_size);
         } else if (BitField.remaining != null) {
@@ -2160,7 +2164,15 @@ pub const FieldInfo = struct {
         if (field_size == 0) {
             try writer.print(": {??},\n", .{field_type});
         } else {
-            try writer.print(": i{d},\n", .{field_size}); // FIXME
+            switch (field_type.tag()) {
+                .Int32 => {
+                    try writer.print(": i{d},\n", .{field_size});
+                },
+                .UInt32 => {
+                    try writer.print(": u{d},\n", .{field_size});
+                },
+                else => unreachable,
+            }
         }
     }
 };
