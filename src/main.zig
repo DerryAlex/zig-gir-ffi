@@ -9,7 +9,6 @@ const output_path = "publish/";
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
-
     const cwd = std.fs.cwd();
 
     const repository: *c.GIRepository = c.g_irepository_get_default();
@@ -19,19 +18,50 @@ pub fn main() !void {
         std.log.warn("{s}", .{err.message});
         return error.UnexpectedError;
     }
-    var output_dir_inited = false;
+    var versions: *c.GList = @ptrCast(c.g_irepository_enumerate_versions(repository, "Gtk"));
+    if (versions.data == null) {
+        std.log.warn("Version not found for Gtk", .{});
+        return error.UnexpectedError;
+    }
+    // FIXME
+    // const gtk_version = std.mem.span(@as([*c]u8, @ptrCast(versions.data.?)));
+    const gtk_version = "4.8.3";
+
     cwd.makeDir(output_path) catch |err| switch (err) {
-        error.PathAlreadyExists => {
-            output_dir_inited = true;
-        },
+        error.PathAlreadyExists => {},
         else => return err,
     };
     var output_dir = try cwd.openDir(output_path, .{});
     defer output_dir.close();
-    if (!output_dir_inited) {
-        try output_dir.symLink("../manual/core.zig", "core.zig", .{});
-        try output_dir.symLink("../manual/template.zig", "template.zig", .{});
+    inline for ([_][]const u8{ "core.zig", "template.zig" }) |filename| {
+        output_dir.symLink("../manual/" ++ filename, filename, .{}) catch |err| switch (err) {
+            error.PathAlreadyExists => {},
+            else => return err,
+        };
     }
+    var build_zig = try output_dir.createFile("build.zig", .{});
+    defer build_zig.close();
+    var build_zig_zon = try output_dir.createFile("build.zig.zon", .{});
+    defer build_zig_zon.close();
+    try build_zig.writer().writeAll(
+        \\const std = @import("std");
+        \\const Build = std.Build;
+        \\
+        \\pub fn build(b: *Build) !void{
+        \\    _ = b.standardOptimizeOption(.{});
+        \\    _ = b.standardTargetOptions(.{});
+        \\
+    );
+    try build_zig_zon.writer().print(
+        \\.{{
+        \\    .name = "gtk",
+        \\    .version = "{s}",
+        \\    .path = .{{
+        \\        "build.zig",
+        \\        "build.zig.zon",
+        \\
+    , .{gtk_version});
+
     const namespaces: [*:null]?[*:0]const u8 = c.g_irepository_get_loaded_namespaces(repository);
     for (std.mem.span(namespaces)) |namespaceZ| {
         const namespace = std.mem.span(namespaceZ.?);
@@ -80,5 +110,17 @@ pub fn main() !void {
             .argv = &[_][]const u8{ "zig", "fmt", longer_file_name },
         });
         std.debug.assert(fmt_result.stderr.len == 0);
+
+        try build_zig.writer().print("    _ = b.addModule(\"{c}{s}\", .{{ .source_file = .{{ .path = \"{s}.zig\" }} }});\n", .{ std.ascii.toLower(namespace[0]), namespace[1..], namespace });
+        try build_zig_zon.writer().print("        \"{s}.zig\",\n", .{namespace});
     }
+
+    try build_zig.writer().writeAll(
+        \\}
+    );
+    try build_zig_zon.writer().writeAll(
+        \\    },
+        \\    .dependencies = .{},
+        \\}
+    );
 }

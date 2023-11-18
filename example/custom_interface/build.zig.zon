@@ -1,0 +1,18 @@
+.{
+    .name = "custom_interface",
+    .version = "0.1.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "eq.zig",
+        "int.zig",
+        "ord.zig",
+        "main.zig",
+    },
+    .dependencies = .{
+        .gtk = .{
+            .url = "https://github.com/DerryAlex/zig-gir-ffi/releases/download/v0.6.0/gtk4.tar.gz",
+            .hash = "12203ad49775d89f31bf13b229ef5536a300d0d14082e032e768798571015e8845b6",
+        },
+    },
+}

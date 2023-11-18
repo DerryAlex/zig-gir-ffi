@@ -2,7 +2,10 @@
     .name = "zig-gir-ffi",
     .version = "0.6.0",
     .paths = .{
+        "build.zig",
+        "build.zig.zon",
         "src",
+        "manual",
     },
     .dependencies = .{
         .xml = .{

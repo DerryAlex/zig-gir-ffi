@@ -5,7 +5,15 @@ pub fn build(b: *Builder) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable(.{ .name = "application", .root_source_file = .{ .path = "application.zig" }, .optimize = optimize, .target = target });
+    const gtk = b.dependency("gtk", .{});
+
+    const exe = b.addExecutable(.{
+        .name = "application",
+        .root_source_file = .{ .path = "application.zig" },
+        .optimize = optimize,
+        .target = target,
+    });
+    exe.addModule("gtk", gtk.module("gtk"));
     var pid = try std.os.fork();
     if (pid == 0) {
         const argv = [_:null]?[*:0]const u8{ "glib-compile-resources", "exampleapp.gresource.xml", "--target=resources.c", "--generate-source" };
@@ -28,8 +36,6 @@ pub fn build(b: *Builder) !void {
         .file = .{ .path = "resources.c" },
         .flags = &[_][]const u8{},
     });
-    const gtk = b.createModule(.{ .source_file = .{ .path = "../../publish/Gtk.zig" } });
-    exe.addModule("gtk", gtk);
     exe.linkLibC();
     exe.linkSystemLibrary("gtk4");
     b.installArtifact(exe);

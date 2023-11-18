@@ -5,9 +5,15 @@ pub fn build(b: *Builder) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe = b.addExecutable(.{ .name = "example", .root_source_file = .{ .path = "example.zig" }, .optimize = optimize, .target = target });
-    const gtk = b.createModule(.{ .source_file = .{ .path = "../../publish/Gtk.zig" } });
-    exe.addModule("gtk", gtk);
+    const gtk = b.dependency("gtk", .{});
+
+    const exe = b.addExecutable(.{
+        .name = "example",
+        .root_source_file = .{ .path = "example.zig" },
+        .optimize = optimize,
+        .target = target,
+    });
+    exe.addModule("gtk", gtk.module("gtk"));
     exe.linkLibC();
     exe.linkSystemLibrary("gtk4");
     b.installArtifact(exe);
