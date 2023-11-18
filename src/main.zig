@@ -7,6 +7,8 @@ const emit = @import("helper.zig").emit;
 const output_path = "publish/";
 
 pub fn main() !void {
+    const version = "0.6.1";
+
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
     const cwd = std.fs.cwd();
@@ -18,14 +20,6 @@ pub fn main() !void {
         std.log.warn("{s}", .{err.message});
         return error.UnexpectedError;
     }
-    var versions: *c.GList = @ptrCast(c.g_irepository_enumerate_versions(repository, "Gtk"));
-    if (versions.data == null) {
-        std.log.warn("Version not found for Gtk", .{});
-        return error.UnexpectedError;
-    }
-    // FIXME
-    // const gtk_version = std.mem.span(@as([*c]u8, @ptrCast(versions.data.?)));
-    const gtk_version = "4.8.3";
 
     cwd.makeDir(output_path) catch |err| switch (err) {
         error.PathAlreadyExists => {},
@@ -54,13 +48,13 @@ pub fn main() !void {
     );
     try build_zig_zon.writer().print(
         \\.{{
-        \\    .name = "gtk",
+        \\    .name = "gtk4",
         \\    .version = "{s}",
         \\    .path = .{{
         \\        "build.zig",
         \\        "build.zig.zon",
         \\
-    , .{gtk_version});
+    , .{version});
 
     const namespaces: [*:null]?[*:0]const u8 = c.g_irepository_get_loaded_namespaces(repository);
     for (std.mem.span(namespaces)) |namespaceZ| {

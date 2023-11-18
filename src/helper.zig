@@ -3,6 +3,7 @@ const gir = @import("gir.zig");
 const BaseInfo = gir.BaseInfo;
 const FieldInfo = gir.FieldInfo;
 const xml = @import("xml");
+const c = @import("root").c;
 
 pub const enable_deprecated = false;
 
@@ -79,7 +80,8 @@ pub fn isZigKeyword(str: []const u8) bool {
     return false;
 }
 
-// See https://github.com/ianprime0509/zig-gobject/
+// TODO: https://gitlab.gnome.org/GNOME/gobject-introspection/-/issues/246
+// For xml parser, see https://github.com/ianprime0509/zig-gobject/
 pub fn fieldInfoGetSize(field_info: FieldInfo) !usize {
     const xml_reader_option: xml.ReaderOptions = .{
         .DecoderType = xml.encoding.Utf8Decoder,
@@ -121,47 +123,47 @@ pub fn fieldInfoGetSize(field_info: FieldInfo) !usize {
 
         Cache.namespace = try allocator.dupe(u8, namespace);
         const prefix = "/usr/share/gir-1.0/"; // FIXME
-        const dir = try std.fs.openIterableDirAbsolute(prefix, .{});
-        var iter = dir.iterate();
-        while (try iter.next()) |entry| {
-            if (std.mem.startsWith(u8, entry.name, namespace) and entry.name.len > namespace.len and entry.name[namespace.len] == '-') {
-                const path = try std.mem.concat(allocator, u8, &[_][]const u8{ prefix, entry.name });
-                defer allocator.free(path);
-                Cache.file = try std.fs.openFileAbsolute(path, .{});
-                Cache.reader = xml.reader(allocator, Cache.file.reader(), xml_reader_option);
-                while (try Cache.reader.next()) |event| {
-                    switch (event) {
-                        .element_start => |e| if (e.name.is(ns, "repository")) {
-                            var children = Cache.reader.children();
-                            while (try children.next()) |child_event| {
-                                switch (child_event) {
-                                    .element_start => |child| if (child.name.is(ns, "namespace")) {
-                                        Cache.repository = children.children();
-                                        Cache.success = true;
-                                        std.log.debug("[Success] Open {s}", .{path});
-                                        break;
-                                    } else {
-                                        try children.children().skip();
-                                    },
-                                    else => {},
-                                }
-                            }
-                        } else {
-                            try Cache.reader.children().skip();
-                        },
-                        else => {},
+        const version = std.mem.span(c.g_irepository_get_version(null, namespace));
+        const path = try std.mem.concat(allocator, u8, &[_][]const u8{ prefix, namespace, "-", version, ".gir" });
+        defer allocator.free(path);
+
+        Cache.file = std.fs.openFileAbsolute(path, .{}) catch |err| switch (err) {
+            error.FileNotFound => {
+                std.log.warn("[File Not Found] {s}", .{path});
+                return 0;
+            },
+            else => return err,
+        };
+        Cache.reader = xml.reader(allocator, Cache.file.reader(), xml_reader_option);
+        while (try Cache.reader.next()) |event| {
+            switch (event) {
+                .element_start => |e| if (e.name.is(ns, "repository")) {
+                    var children = Cache.reader.children();
+                    while (try children.next()) |child_event| {
+                        switch (child_event) {
+                            .element_start => |child| if (child.name.is(ns, "namespace")) {
+                                Cache.repository = children.children();
+                                Cache.success = true;
+                                break;
+                            } else {
+                                try children.children().skip();
+                            },
+                            else => {},
+                        }
                     }
-                    if (Cache.success) break;
-                }
-                break;
+                } else {
+                    try Cache.reader.children().skip();
+                },
+                else => {},
             }
+            if (Cache.success) break;
         }
     }
     if (!Cache.success) {
         return 0;
     } else {
         if (Cache.record_success and std.mem.eql(u8, Cache.record_name.?, record_name)) {
-            return try fieldBitSizeHelper(&Cache.record, field_name, record_name);
+            return try fieldBitSizeHelper(&Cache.record, field_name);
         }
         Cache.record_success = false;
         if (Cache.record_name != null) {
@@ -181,7 +183,7 @@ pub fn fieldInfoGetSize(field_info: FieldInfo) !usize {
                     }
                     if (!Cache.record_success) continue;
                     Cache.record = Cache.repository.children();
-                    return try fieldBitSizeHelper(&Cache.record, field_name, record_name);
+                    return try fieldBitSizeHelper(&Cache.record, field_name);
                 } else {
                     try Cache.repository.children().skip();
                 },
@@ -193,7 +195,7 @@ pub fn fieldInfoGetSize(field_info: FieldInfo) !usize {
     }
 }
 
-fn fieldBitSizeHelper(reader: anytype, field_name: []const u8, record_name: []const u8) !usize {
+fn fieldBitSizeHelper(reader: anytype, field_name: []const u8) !usize {
     const ns = "http://www.gtk.org/introspection/core/1.0";
     while (try reader.next()) |event| {
         switch (event) {
@@ -210,10 +212,6 @@ fn fieldBitSizeHelper(reader: anytype, field_name: []const u8, record_name: []co
                     }
                 }
                 if (field_matched) {
-                    if (field_bits != 0) {
-                        // std.log.debug("[bitfield] {s}.{s} {d}", .{ record_name, field_name, field_bits });
-                        _ = record_name;
-                    }
                     return field_bits;
                 }
             } else {
