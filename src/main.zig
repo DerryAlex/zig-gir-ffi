@@ -4,7 +4,7 @@ pub const c = @cImport({
 });
 const emit = @import("helper.zig").emit;
 
-const output_path = "publish/";
+const output_path = "gtk4/";
 
 pub fn main() !void {
     const version = "0.6.1";

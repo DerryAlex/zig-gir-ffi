@@ -21,10 +21,8 @@ pub fn build(b: *std.Build) !void {
     const run_step = b.step("run", "Generate the binding");
     run_step.dependOn(&run_exe.step);
 
-    const tests = b.addTest(.{ .root_source_file = .{ .path = "src/gir.zig" } });
-    tests.linkLibC();
-    tests.linkSystemLibrary("gobject-introspection-1.0");
-
-    const test_step = b.step("test_gir", "Test gir.zig");
-    test_step.dependOn(&tests.step);
+    const run_tar = b.addSystemCommand(&[_][]const u8{ "tar", "cahf" });
+    run_tar.addArgs(&[_][]const u8{ "gtk4.tar.gz", "gtk4" });
+    const release_step = b.step("release", "Create the release tar ball (Please run generator first)");
+    release_step.dependOn(&run_tar.step);
 }
