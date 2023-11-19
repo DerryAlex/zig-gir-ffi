@@ -407,8 +407,6 @@ pub fn Extend(comptime Self: type) type {
 // -------------
 // closure begin
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-
 pub fn ClosureZ(comptime FnPtr: type, comptime Args: type, comptime signature: []const type) type {
     comptime assert(meta.trait.isTuple(Args));
     const n_arg = @typeInfo(Args).Struct.fields.len;
@@ -446,7 +444,7 @@ pub fn ClosureZ(comptime FnPtr: type, comptime Args: type, comptime signature: [
         const Self = @This();
 
         pub fn new(allocator: ?std.mem.Allocator, handler: FnPtr, args: Args) !*Self {
-            const real_allocator = allocator orelse gpa.allocator();
+            const real_allocator = allocator orelse std.heap.c_allocator;
             var closure = try real_allocator.create(Self);
             closure.handler = handler;
             closure.args = args;
