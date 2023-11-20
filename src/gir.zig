@@ -2146,6 +2146,8 @@ pub const FieldInfo = struct {
         }
         if (field_size == 0) {
             try writer.print(": {??},\n", .{field_type});
+        } else if (field_size == 1) {
+            try writer.writeAll(": bool,\n");
         } else {
             switch (field_type.tag()) {
                 .Int32 => {
