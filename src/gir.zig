@@ -1342,30 +1342,13 @@ pub const StructInfo = struct {
         try writer.print("pub const {s} = {s}{{\n", .{ name, if (self.size() == 0) "opaque" else "extern struct" });
         BitField.reset();
         var iter = self.fieldIter();
-        // TODO: https://github.com/ziglang/zig/issues/12325
         const namespace = self.asRegisteredType().asBase().namespace();
-        if (std.mem.eql(u8, namespace, "GObject") and std.mem.eql(u8, name, "Closure")) {
-            try writer.writeAll(
-                \\packed1: packed struct(u32) {
-                \\ref_count: u15,
-                \\meta_marshal_nouse: u1,
-                \\n_guards: u1,
-                \\n_fnotifiers: u2,
-                \\n_inotifiers: u8,
-                \\in_inotify: u1,
-                \\floating: u1,
-                \\derivative_flag: u1,
-                \\in_marshal: u1,
-                \\is_invalid: u1,
-                \\},
-                \\marshal: ?*const fn (arg_closure: *GObject.Closure, arg_return_value: *GObject.Value, arg_n_param_values: c_uint, arg_param_values: *GObject.Value, arg_invocation_hint: *anyopaque, arg_marshal_data: *anyopaque) callconv(.C) void,
-                \\data: ?*anyopaque,
-                // notifiers: ?*GObject.ClosureNotifyData
-                \\notifiers: ?*anyopaque,
-            );
-            while (iter.next()) |_| {}
-        }
         while (iter.next()) |field| {
+            // TODO: https://github.com/ziglang/zig/issues/12325
+            if (std.mem.eql(u8, namespace, "GObject") and std.mem.eql(u8, name, "Closure") and std.mem.eql(u8, field.asBase().name().?, "notifiers")) {
+                try writer.writeAll("notifiers: ?*anyopaque,\n");
+                continue;
+            }
             try writer.print("{}", .{field});
         }
         if (BitField.remaining != null) {
