@@ -122,12 +122,12 @@ pub fn fieldInfoGetSize(field_info: FieldInfo) !usize {
         Cache.record_name = null;
 
         Cache.namespace = try allocator.dupe(u8, namespace);
-        const prefix = "/usr/share/gir-1.0/"; // FIXME
+        const prefix = "gir-files/";
         const version = std.mem.span(c.g_irepository_get_version(null, namespace));
         const path = try std.mem.concat(allocator, u8, &[_][]const u8{ prefix, namespace, "-", version, ".gir" });
         defer allocator.free(path);
 
-        Cache.file = std.fs.openFileAbsolute(path, .{}) catch |err| switch (err) {
+        Cache.file = std.fs.cwd().openFile(path, .{}) catch |err| switch (err) {
             error.FileNotFound => {
                 std.log.warn("[File Not Found] {s}", .{path});
                 return 0;
