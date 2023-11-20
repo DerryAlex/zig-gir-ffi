@@ -4,6 +4,7 @@ const BaseInfo = gir.BaseInfo;
 const FieldInfo = gir.FieldInfo;
 const xml = @import("xml");
 const c = @import("root").c;
+const StringHashMap = std.StringHashMap;
 
 pub const enable_deprecated = false;
 
@@ -87,138 +88,113 @@ pub fn fieldInfoGetSize(field_info: FieldInfo) !usize {
         .DecoderType = xml.encoding.Utf8Decoder,
         .enable_normalization = false,
     };
-    const XmlReader = xml.Reader(std.fs.File.Reader, xml_reader_option);
-    const Cache = struct {
-        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-        var namespace: ?[]const u8 = null;
-        var success: bool = false;
-        var file: std.fs.File = undefined;
-        var reader: XmlReader = undefined;
-        const XmlChildrenReader = @TypeOf(reader.children());
-        var repository: XmlChildrenReader = undefined;
-
-        var record_success: bool = false;
-        var record_name: ?[]const u8 = null;
-        var record: XmlChildrenReader = undefined;
-    };
-    const allocator = Cache.gpa.allocator();
     const ns = "http://www.gtk.org/introspection/core/1.0";
+    const Static = struct {
+        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        var table = StringHashMap(*StringHashMap(*StringHashMap(usize))).init(gpa.allocator());
+    };
+    const allocator = Static.gpa.allocator();
 
     const namespace = field_info.asBase().namespace();
-    const record_name = field_info.asBase().container().name().?;
-    const field_name = field_info.asBase().name().?;
-    if (Cache.namespace != null and std.mem.eql(u8, Cache.namespace.?, namespace)) {
-        // do nothing
-    } else {
-        if (Cache.namespace != null) {
-            allocator.free(Cache.namespace.?);
-            Cache.namespace = null;
-        }
-        if (Cache.success) {
-            Cache.file.close();
-        }
-        Cache.success = false;
-        Cache.record_success = false;
-        Cache.record_name = null;
-
-        Cache.namespace = try allocator.dupe(u8, namespace);
-        const prefix = "gir-files/";
-        const version = std.mem.span(c.g_irepository_get_version(null, namespace));
-        const path = try std.mem.concat(allocator, u8, &[_][]const u8{ prefix, namespace, "-", version, ".gir" });
-        defer allocator.free(path);
-
-        Cache.file = std.fs.cwd().openFile(path, .{}) catch |err| switch (err) {
-            error.FileNotFound => {
-                std.log.warn("[File Not Found] {s}", .{path});
-                return 0;
-            },
-            else => return err,
-        };
-        Cache.reader = xml.reader(allocator, Cache.file.reader(), xml_reader_option);
-        while (try Cache.reader.next()) |event| {
-            switch (event) {
-                .element_start => |e| if (e.name.is(ns, "repository")) {
-                    var children = Cache.reader.children();
-                    while (try children.next()) |child_event| {
-                        switch (child_event) {
-                            .element_start => |child| if (child.name.is(ns, "namespace")) {
-                                Cache.repository = children.children();
-                                Cache.success = true;
-                                break;
-                            } else {
-                                try children.children().skip();
-                            },
-                            else => {},
-                        }
-                    }
-                } else {
-                    try Cache.reader.children().skip();
-                },
-                else => {},
+    const query_record_name = field_info.asBase().container().name().?;
+    const query_field_name = field_info.asBase().name().?;
+    if (Static.table.get(namespace)) |subtable| {
+        if (subtable.get(query_record_name)) |subsubtable| {
+            if (subsubtable.get(query_field_name)) |bits| {
+                return bits;
             }
-            if (Cache.success) break;
+            return 0;
         }
-    }
-    if (!Cache.success) {
         return 0;
-    } else {
-        if (Cache.record_success and std.mem.eql(u8, Cache.record_name.?, record_name)) {
-            return try fieldBitSizeHelper(&Cache.record, field_name);
-        }
-        Cache.record_success = false;
-        if (Cache.record_name != null) {
-            allocator.free(Cache.record_name.?);
-            Cache.record_name = null;
-        }
-        while (try Cache.repository.next()) |event| {
-            switch (event) {
-                .element_start => |child| if (child.name.is(ns, "record")) {
-                    for (child.attributes) |attr| {
+    }
+
+    const namespace_dup = try allocator.dupe(u8, namespace); // DO NOT free
+    var new_subtable = try allocator.create(StringHashMap(*StringHashMap(usize)));
+    new_subtable.* = StringHashMap(*StringHashMap(usize)).init(allocator);
+    try Static.table.put(namespace_dup, new_subtable);
+    const version = std.mem.span(c.g_irepository_get_version(null, namespace));
+    const path = try std.mem.concat(allocator, u8, &[_][]const u8{ "gir-files/", namespace, "-", version, ".gir" });
+    defer allocator.free(path);
+    const file = std.fs.cwd().openFile(path, .{}) catch |err| switch (err) {
+        error.FileNotFound => {
+            std.log.warn("[File Not Found] {s}", .{path});
+            return 0;
+        },
+        else => return err,
+    };
+    defer file.close();
+    var reader = xml.reader(allocator, file.reader(), xml_reader_option);
+
+    while (try reader.next()) |event| switch (event) {
+        .element_start => |e| if (e.name.is(ns, "repository")) {
+            var repository_reader = reader.children();
+            while (try repository_reader.next()) |repository_event| switch (repository_event) {
+                .element_start => |re| if (re.name.is(ns, "namespace")) {
+                    for (re.attributes) |attr| {
                         if (attr.name.is(null, "name")) {
-                            if (std.mem.eql(u8, attr.value, record_name)) {
-                                Cache.record_success = true;
-                                Cache.record_name = try allocator.dupe(u8, record_name);
-                            }
+                            std.debug.assert(std.mem.eql(u8, attr.value, namespace));
                         }
                     }
-                    if (!Cache.record_success) continue;
-                    Cache.record = Cache.repository.children();
-                    return try fieldBitSizeHelper(&Cache.record, field_name);
+                    var namespace_reader = repository_reader.children();
+                    while (try namespace_reader.next()) |namespace_event| switch (namespace_event) {
+                        .element_start => |ne| if (ne.name.is(ns, "record")) {
+                            for (ne.attributes) |attr| {
+                                if (attr.name.is(null, "name")) {
+                                    const record_name = try allocator.dupe(u8, attr.value); // DO NOT free
+                                    var record_reader = repository_reader.children();
+                                    while (try record_reader.next()) |record_event| switch (record_event) {
+                                        .element_start => |rece| if (rece.name.is(ns, "field")) {
+                                            var bits: usize = 0;
+                                            var name: []const u8 = ""; // DO NOT free
+                                            for (rece.attributes) |field_attr| {
+                                                if (field_attr.name.is(null, "name")) {
+                                                    name = try allocator.dupe(u8, field_attr.value);
+                                                } else if (field_attr.name.is(null, "bits")) {
+                                                    bits = try std.fmt.parseInt(usize, field_attr.value, 10);
+                                                }
+                                            }
+                                            std.debug.assert(!std.mem.eql(u8, name, ""));
+                                            if (bits != 0) {
+                                                var subtable = Static.table.get(namespace).?;
+                                                if (!subtable.contains(record_name)) {
+                                                    var new_subsubtable = try allocator.create(StringHashMap(usize));
+                                                    new_subsubtable.* = StringHashMap(usize).init(allocator);
+                                                    try subtable.put(record_name, new_subsubtable);
+                                                }
+                                                var subsubtable = subtable.get(record_name).?;
+                                                try subsubtable.putNoClobber(name, bits);
+                                            }
+                                        } else {
+                                            try record_reader.children().skip();
+                                        },
+                                        else => {},
+                                    };
+                                }
+                            }
+                        } else {
+                            try namespace_reader.children().skip();
+                        },
+                        else => {},
+                    };
                 } else {
-                    try Cache.repository.children().skip();
+                    try repository_reader.children().skip();
                 },
                 else => {},
+            };
+        } else {
+            try reader.children().skip();
+        },
+        else => {},
+    };
+
+    if (Static.table.get(namespace)) |subtable| {
+        if (subtable.get(query_record_name)) |subsubtable| {
+            if (subsubtable.get(query_field_name)) |bits| {
+                return bits;
             }
-            if (Cache.record_success) break;
+            return 0;
         }
         return 0;
-    }
-}
-
-fn fieldBitSizeHelper(reader: anytype, field_name: []const u8) !usize {
-    const ns = "http://www.gtk.org/introspection/core/1.0";
-    while (try reader.next()) |event| {
-        switch (event) {
-            .element_start => |child| if (child.name.is(ns, "field")) {
-                var field_matched = false;
-                var field_bits: usize = 0;
-                for (child.attributes) |attr| {
-                    if (attr.name.is(null, "name")) {
-                        if (std.mem.eql(u8, attr.value, field_name)) {
-                            field_matched = true;
-                        }
-                    } else if (attr.name.is(null, "bits")) {
-                        field_bits = try std.fmt.parseInt(usize, attr.value, 10);
-                    }
-                }
-                if (field_matched) {
-                    return field_bits;
-                }
-            } else {
-                try reader.children().skip();
-            },
-            else => {},
-        }
     }
     return 0;
 }
