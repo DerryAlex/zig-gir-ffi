@@ -7,7 +7,7 @@ const emit = @import("helper.zig").emit;
 const output_path = "gtk4/";
 
 pub fn main() !void {
-    const version = "0.6.1";
+    const version = "0.7.0";
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
