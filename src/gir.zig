@@ -665,6 +665,8 @@ pub const FunctionInfo = struct {
         const throw_bool = return_bool and (n_out_param > 0);
         const throw_error = self.asCallable().canThrow();
         const skip_return = self.asCallable().skipReturn();
+        const real_skip_return = skip_return or throw_bool;
+        const n_out = n_out_param + @intFromBool(!real_skip_return);
         {
             try writer.writeAll("(");
             var first = true;
@@ -707,13 +709,13 @@ pub const FunctionInfo = struct {
             } else if (throw_bool) {
                 try writer.writeAll("error{BooleanError}!");
             }
-            if (n_out_param > 0) {
+            if (n_out > 1) {
                 try writer.writeAll("struct {\n");
-                try writer.writeAll("ret: ");
             }
-            if (skip_return or throw_bool) {
-                try writer.writeAll("void");
-            } else {
+            if (!real_skip_return) {
+                if (n_out > 1) {
+                    try writer.writeAll("ret: ");
+                }
                 var generic_gtk_widget = false;
                 if (func_name.len >= 3 and std.mem.eql(u8, "new", func_name[0..3])) {
                     if (return_type.interface()) |interface| {
@@ -737,29 +739,37 @@ pub const FunctionInfo = struct {
                         try writer.print("{&}", .{return_type});
                     }
                 }
+                if (n_out > 1) {
+                    try writer.writeAll(",\n");
+                }
             }
             if (n_out_param > 0) {
-                try writer.writeAll(",\n");
                 for (args, 0..) |arg, idx| {
                     if (arg.direction() != .Out or arg.isCallerAllocates()) continue;
                     if (slice_info[idx].is_slice_len) continue;
                     const arg_type = arg.type();
                     defer arg_type.asBase().deinit();
-                    if (slice_info[idx].is_slice_ptr) {
+                    if (n_out > 1) {
                         try writer.print("{s}: ", .{arg.asBase().name().?});
+                    }
+                    if (slice_info[idx].is_slice_ptr) {
                         if (arg.isOptional()) {
                             try writer.writeAll("?");
                         }
                         try writer.print("[]{}", .{arg.type().paramType(0)});
                     } else {
                         if (arg.mayBeNull()) {
-                            try writer.print("{s}: {&?}", .{ arg.asBase().name().?, arg.type() });
+                            try writer.print("{&?}", .{arg.type()});
                         } else {
-                            try writer.print("{s}: {&}", .{ arg.asBase().name().?, arg.type() });
+                            try writer.print("{&}", .{arg.type()});
                         }
                     }
-                    try writer.writeAll(",\n");
+                    if (n_out > 1) {
+                        try writer.writeAll(",\n");
+                    }
                 }
+            }
+            if (n_out > 1) {
                 try writer.writeAll("}");
             }
         }
@@ -884,21 +894,33 @@ pub const FunctionInfo = struct {
             try writer.writeAll("if (ret) return error.BooleanError;\n");
         }
         try writer.writeAll("return ");
-        if (n_out_param > 0) {
-            try writer.writeAll(".{ .ret = ");
+        var first = true;
+        if (n_out > 1) {
+            try writer.writeAll(".{ ");
         }
-        if (skip_return or throw_bool) {
-            try writer.writeAll("{}");
-        } else {
+        if (!real_skip_return) {
+            first = false;
+            if (n_out > 1) {
+                try writer.writeAll(".ret = ");
+            }
             try writer.writeAll("ret");
         }
         if (n_out_param > 0) {
             for (args, 0..) |arg, idx| {
                 if (arg.direction() != .Out or arg.isCallerAllocates()) continue;
                 if (slice_info[idx].is_slice_len) continue;
-                try writer.writeAll(", ");
+                if (n_out > 1) {
+                    if (first) {
+                        first = false;
+                    } else {
+                        try writer.writeAll(", ");
+                    }
+                }
                 const arg_name = arg.asBase().name().?;
-                try writer.print(".{s} = out_{s}", .{ arg_name, arg_name });
+                if (n_out > 1) {
+                    try writer.print(".{s} = ", .{arg_name});
+                }
+                try writer.print("out_{s}", .{arg_name});
                 if (slice_info[idx].is_slice_ptr) {
                     const len_arg = args[slice_info[idx].slice_len];
                     try writer.writeAll("[0..@intCast(");
@@ -910,7 +932,9 @@ pub const FunctionInfo = struct {
                     try writer.writeAll(")]");
                 }
             }
-            try writer.writeAll("}");
+        }
+        if (n_out > 1) {
+            try writer.writeAll(" }");
         }
         try writer.writeAll(";\n");
         try writer.writeAll("}\n");
