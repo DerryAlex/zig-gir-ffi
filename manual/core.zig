@@ -197,59 +197,6 @@ pub fn ValueZ(comptime T: type) type {
     };
 }
 
-/// Helper for C style bitmask
-pub fn Flags(comptime T: type) type {
-    return struct {
-        pub inline fn @"|"(self: T, rhs: T) T {
-            return @enumFromInt(@intFromEnum(self) | @intFromEnum(rhs));
-        }
-
-        pub inline fn @"|="(self: *T, rhs: T) void {
-            self.* = @enumFromInt(@intFromEnum(self.*) | @intFromEnum(rhs));
-        }
-
-        pub inline fn @"&"(self: T, rhs: T) T {
-            return @enumFromInt(@intFromEnum(self) & @intFromEnum(rhs));
-        }
-
-        pub inline fn @"&="(self: *T, rhs: T) void {
-            self.* = @enumFromInt(@intFromEnum(self.*) & @intFromEnum(rhs));
-        }
-
-        pub inline fn @"^"(self: T, rhs: T) T {
-            return @enumFromInt(@intFromEnum(self) ^ @intFromEnum(rhs));
-        }
-
-        pub inline fn @"^="(self: *T, rhs: T) void {
-            self.* = @enumFromInt(@intFromEnum(self.*) ^ @intFromEnum(rhs));
-        }
-
-        pub inline fn @"-"(self: T, rhs: T) T {
-            return @enumFromInt(@intFromEnum(self) & ~@intFromEnum(rhs));
-        }
-
-        pub inline fn @"-="(self: *T, rhs: T) void {
-            self.* = @enumFromInt(@intFromEnum(self.*) & ~@intFromEnum(rhs));
-        }
-
-        pub inline fn @"~"(self: T) T {
-            return @enumFromInt(~@intFromEnum(self));
-        }
-
-        pub inline fn empty(self: T) bool {
-            return @intFromEnum(self) == 0;
-        }
-
-        pub inline fn intersects(self: T, rhs: T) bool {
-            return @intFromEnum(self) & @intFromEnum(rhs) != 0;
-        }
-
-        pub inline fn contains(self: T, rhs: T) bool {
-            return @intFromEnum(self) & @intFromEnum(rhs) == @intFromEnum(rhs);
-        }
-    };
-}
-
 // type end
 // --------
 
