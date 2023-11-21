@@ -605,9 +605,9 @@ fn cclosureNewSwap(callback_func: GObject.Callback, user_data: ?*anyopaque, dest
 }
 
 /// Wrapper for g_signal_connect_closure
-pub fn connect(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, flags: GObject.ConnectFlags, comptime signature: []const type) usize {
-    var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(null, handler, args) catch @panic("Out of Memory");
-    const clousre_new_fn = if (flags.swapped) &cclosureNewSwap else &cclosureNew;
+pub fn connect(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, comptime flags: GObject.ConnectFlags, comptime signature: []const type) usize {
+    var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), if (flags.swapped) signature[0..1] else signature).new(null, handler, args) catch @panic("Out of Memory");
+    const clousre_new_fn = if (flags.swapped) cclosureNewSwap else cclosureNew;
     const cclosure = clousre_new_fn(@ptrCast(closure.c_closure()), closure.c_data(), @ptrCast(closure.c_destroy()));
     return GObject.signalConnectClosure(object, signal, cclosure, flags.after);
 }
@@ -717,20 +717,10 @@ pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]cons
             if (typeTag(Object).private_offset != 0) {
                 _ = GObject.typeClassAdjustPrivateOffset(class, &typeTag(Object).private_offset);
             }
-            if (comptime @hasDecl(Class, "constructed")) {
-                @as(*GObject.ObjectClass, @ptrCast(class)).constructed = &Class.constructed;
-            }
-            if (comptime @hasDecl(Class, "dispose")) {
-                @as(*GObject.ObjectClass, @ptrCast(class)).dispose = &Class.dispose;
-            }
-            if (comptime @hasDecl(Class, "finalize")) {
-                @as(*GObject.ObjectClass, @ptrCast(class)).finalize = &Class.finalize;
-            }
-            if (comptime @hasDecl(Class, "getProperty")) {
-                @as(*GObject.ObjectClass, @ptrCast(class)).get_property = &Class.getProperty;
-            }
-            if (comptime @hasDecl(Class, "setProperty")) {
-                @as(*GObject.ObjectClass, @ptrCast(class)).set_property = &Class.setProperty;
+            inline for ([_][]const u8{ "constructed", "dispatch_properties_changed", "dispose", "finalize", "get_property", "notify", "set_property" }) |vfunc| {
+                if (comptime @hasDecl(Class, vfunc)) {
+                    @field(@as(*GObject.ObjectClass, @ptrCast(class)), vfunc) = &@field(Class, vfunc);
+                }
             }
             if (comptime @hasDecl(Class, "properties")) {
                 @as(*GObject.ObjectClass, @ptrCast(class)).installProperties(Class.properties());

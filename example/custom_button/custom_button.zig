@@ -24,7 +24,7 @@ pub const CustomButtonClass = extern struct {
     zero_reached: ?*const fn (self: *CustomButton) callconv(.C) void,
 
     pub fn init(class: *CustomButtonClass) void {
-        var button_class: *gtk.ButtonClass = @ptrCast(class);
+        var button_class: *ButtonClass = @ptrCast(class);
         button_class.clicked = &clicked;
     }
 
@@ -34,7 +34,7 @@ pub const CustomButtonClass = extern struct {
     }
 
     // @override
-    pub fn setProperty(arg_object: *Object, arg_property_id: u32, arg_value: *Value, _: *ParamSpec) callconv(.C) void {
+    pub fn set_property(arg_object: *Object, arg_property_id: u32, arg_value: *Value, _: *ParamSpec) callconv(.C) void {
         var self = arg_object.tryInto(CustomButton).?;
         switch (@as(Properties, @enumFromInt(arg_property_id))) {
             .Number => {
@@ -44,7 +44,7 @@ pub const CustomButtonClass = extern struct {
     }
 
     // @override
-    pub fn getProperty(arg_object: *Object, arg_property_id: u32, arg_value: *Value, _: *ParamSpec) callconv(.C) void {
+    pub fn get_property(arg_object: *Object, arg_property_id: u32, arg_value: *Value, _: *ParamSpec) callconv(.C) void {
         var self = arg_object.tryInto(CustomButton).?;
         switch (@as(Properties, @enumFromInt(arg_property_id))) {
             .Number => {
@@ -54,7 +54,11 @@ pub const CustomButtonClass = extern struct {
     }
 
     pub fn signals() []u32 {
-        _signals[@intFromEnum(Signals.ZeroReached)] = core.newSignal(CustomButtonClass, CustomButton, "zero-reached", .{ .run_last = true, .no_recurse = true, .no_hooks = true }, {}, .{});
+        _signals[@intFromEnum(Signals.ZeroReached)] = core.newSignal(CustomButtonClass, CustomButton, "zero-reached", .{
+            .run_last = true,
+            .no_recurse = true,
+            .no_hooks = true,
+        }, {}, .{});
         return _signals[0..];
     }
 
@@ -110,11 +114,11 @@ pub const CustomButton = extern struct {
     }
 
     pub fn connectNumberNotify(self: *CustomButton, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlags) usize {
-        return core.connect(self.into(core.Object), "notify::number", handler, args, flags, if (flags.swapped) &[_]type{void} else &[_]type{ void, *CustomButton, *ParamSpec });
+        return core.connect(self.into(core.Object), "notify::number", handler, args, flags, &[_]type{ void, *CustomButton, *ParamSpec });
     }
 
     pub fn connectZeroReached(self: *CustomButton, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlags) usize {
-        return core.connect(self.into(core.Object), "zero-reached", handler, args, flags, if (flags.swapped) &[_]type{void} else &[_]type{ void, *CustomButton });
+        return core.connect(self.into(core.Object), "zero-reached", handler, args, flags, &[_]type{ void, *CustomButton });
     }
 
     pub fn @"type"() core.Type {
