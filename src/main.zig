@@ -59,7 +59,7 @@ pub fn main() !void {
     const namespaces: [*:null]?[*:0]const u8 = c.g_irepository_get_loaded_namespaces(repository);
     for (std.mem.span(namespaces)) |namespaceZ| {
         const namespace = std.mem.span(namespaceZ.?);
-        var file_name = try std.mem.concat(allocator, u8, &[_][]const u8{ namespace, ".zig" });
+        const file_name = try std.mem.concat(allocator, u8, &[_][]const u8{ namespace, ".zig" });
         defer allocator.free(file_name);
         const file = try output_dir.createFile(file_name, .{});
         const writer = file.writer();
@@ -97,9 +97,9 @@ pub fn main() !void {
             try emit(.{ .info = info }, writer);
         }
         file.close();
-        var longer_file_name = try std.mem.concat(allocator, u8, &[_][]const u8{ output_path, file_name });
+        const longer_file_name = try std.mem.concat(allocator, u8, &[_][]const u8{ output_path, file_name });
         defer allocator.free(longer_file_name);
-        const fmt_result = try std.ChildProcess.exec(.{
+        const fmt_result = try std.ChildProcess.run(.{
             .allocator = allocator,
             .argv = &[_][]const u8{ "zig", "fmt", longer_file_name },
         });

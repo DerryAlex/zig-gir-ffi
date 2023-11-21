@@ -611,7 +611,7 @@ pub const ConnectFlagsZ = struct {
 /// Wrapper for g_signal_connect_closure
 pub fn connect(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, flags: ConnectFlagsZ, comptime signature: []const type) usize {
     var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(null, handler, args) catch @panic("Out of Memory");
-    var cclosure = cclosureNew(@ptrCast(closure.c_closure()), closure.c_data(), @ptrCast(closure.c_destroy()));
+    const cclosure = cclosureNew(@ptrCast(closure.c_closure()), closure.c_data(), @ptrCast(closure.c_destroy()));
     return GObject.signalConnectClosure(object, signal, cclosure, flags.after);
 }
 
@@ -619,7 +619,7 @@ pub fn connect(object: *GObject.Object, signal: [*:0]const u8, handler: anytype,
 pub fn connectSwap(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, flags: ConnectFlagsZ, comptime signature: []const type) usize {
     comptime assert(signature.len == 1);
     var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(null, handler, args) catch @panic("Out of Memory");
-    var cclosure = cclosureNewSwap(@ptrCast(closure.c_closure()), closure.c_data(), @ptrCast(closure.c_destroy()));
+    const cclosure = cclosureNewSwap(@ptrCast(closure.c_closure()), closure.c_data(), @ptrCast(closure.c_destroy()));
     return GObject.signalConnectClosure(object, signal, cclosure, flags.after);
 }
 
@@ -708,10 +708,10 @@ pub fn newSignal(comptime Class: type, comptime Object: type, comptime signal_na
             }
         }
     }
-    var class_closure = GObject.signalTypeCclosureNew(Object.type(), @offsetOf(Class, &field_name));
+    const class_closure = GObject.signalTypeCclosureNew(Object.type(), @offsetOf(Class, &field_name));
     const signal_field_type = meta.FieldType(Class, meta.stringToEnum(meta.FieldEnum(Class), &field_name).?);
     const signal_info = @typeInfo(meta.Child(meta.Child(signal_field_type))); // ?*const fn(args...) return_type
-    var return_type = ValueZ(signal_info.Fn.return_type.?).init().value.g_type;
+    const return_type = ValueZ(signal_info.Fn.return_type.?).init().value.g_type;
     var param_types: [signal_info.Fn.params.len - 1]Type = undefined;
     inline for (signal_info.Fn.params[1..], &param_types) |param, *ty| {
         var is_gtyped = false;

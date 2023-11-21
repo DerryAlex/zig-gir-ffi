@@ -461,7 +461,7 @@ pub const CallableInfo = struct {
     }
 
     pub fn argsAlloc(self: CallableInfo, allocator: std.mem.Allocator) ![]ArgInfo {
-        var args = try allocator.alloc(ArgInfo, @intCast(c.g_callable_info_get_n_args(self.info)));
+        const args = try allocator.alloc(ArgInfo, @intCast(c.g_callable_info_get_n_args(self.info)));
         for (args, 0..) |*arg, index| {
             arg.* = .{ .info = c.g_callable_info_get_arg(self.info, @intCast(index)) };
         }
@@ -619,7 +619,7 @@ pub const FunctionInfo = struct {
         }
         const return_type = self.asCallable().returnType();
         defer return_type.asBase().deinit();
-        var args = self.asCallable().argsAlloc(allocator) catch @panic("Out of Memory");
+        const args = self.asCallable().argsAlloc(allocator) catch @panic("Out of Memory");
         defer {
             for (args) |arg| {
                 arg.asBase().deinit();
@@ -776,16 +776,16 @@ pub const FunctionInfo = struct {
                 defer arg_type.asBase().deinit();
                 const ptr_arg = args[slice_info[idx].slice_ptr];
                 if (ptr_arg.isOptional()) {
-                    try writer.print("var arg_{s}: {} = if (argz_{s}) |some| @intCast(some.len) else 0;\n", .{ arg_name, arg_type, ptr_arg.asBase().name().? });
+                    try writer.print("const arg_{s}: {} = if (argz_{s}) |some| @intCast(some.len) else 0;\n", .{ arg_name, arg_type, ptr_arg.asBase().name().? });
                 } else {
-                    try writer.print("var arg_{s}: {} = @intCast(argz_{s}.len);\n", .{ arg_name, arg_type, ptr_arg.asBase().name().? });
+                    try writer.print("const arg_{s}: {} = @intCast(argz_{s}.len);\n", .{ arg_name, arg_type, ptr_arg.asBase().name().? });
                 }
             }
             if (slice_info[idx].is_slice_ptr) {
                 if (arg.isOptional()) {
-                    try writer.print("var arg_{s} = if (argz_{s}) |some| some.ptr else null;\n", .{ arg_name, arg_name });
+                    try writer.print("const arg_{s} = if (argz_{s}) |some| some.ptr else null;\n", .{ arg_name, arg_name });
                 } else {
-                    try writer.print("var arg_{s} = argz_{s}.ptr;\n", .{ arg_name, arg_name });
+                    try writer.print("const arg_{s} = argz_{s}.ptr;\n", .{ arg_name, arg_name });
                 }
             }
             if (closure_info[idx].is_func) {
@@ -838,15 +838,15 @@ pub const FunctionInfo = struct {
                     },
                     else => unreachable,
                 }
-                try writer.print("var arg_{s}: {$} = @ptrCast(closure_{s}.c_closure());\n", .{ arg_name, arg, arg_name });
+                try writer.print("const arg_{s}: {$} = @ptrCast(closure_{s}.c_closure());\n", .{ arg_name, arg, arg_name });
             }
             if (closure_info[idx].is_data) {
                 const func_arg = args[closure_info[idx].closure_func];
-                try writer.print("var arg_{s}: {$} = @ptrCast(closure_{s}.c_data());\n", .{ arg_name, arg, func_arg.asBase().name().? });
+                try writer.print("const arg_{s}: {$} = @ptrCast(closure_{s}.c_data());\n", .{ arg_name, arg, func_arg.asBase().name().? });
             }
             if (closure_info[idx].is_destroy) {
                 const func_arg = args[closure_info[idx].closure_func];
-                try writer.print("var arg_{s}: {$} = @ptrCast(closure_{s}.c_destroy());\n", .{ arg_name, arg, func_arg.asBase().name().? });
+                try writer.print("const arg_{s}: {$} = @ptrCast(closure_{s}.c_destroy());\n", .{ arg_name, arg, func_arg.asBase().name().? });
             }
         }
         // prepare output
@@ -860,7 +860,7 @@ pub const FunctionInfo = struct {
             } else {
                 try writer.print("var out_{s}: {&} = undefined;\n", .{ arg_name, arg_type });
             }
-            try writer.print("var arg_{s} = &out_{s};\n", .{ arg_name, arg_name });
+            try writer.print("const arg_{s} = &out_{s};\n", .{ arg_name, arg_name });
         }
         try writer.print("const ffi_fn = struct {{ extern fn {s}", .{self.symbol()});
         try self.asCallable().format_helper(writer, true, false, false);

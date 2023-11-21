@@ -10,7 +10,7 @@ pub fn main() u8 {
 }
 
 pub fn buildUi(arg_app: *core.Application) void {
-    var app = arg_app.tryInto(gtk.Application).?;
+    const app = arg_app.tryInto(gtk.Application).?;
     var window = gtk.ApplicationWindow.new(app);
     window.__call("setTitle", .{"Clock Example"});
     window.__call("setDefaultSize", .{ 260, 40 });

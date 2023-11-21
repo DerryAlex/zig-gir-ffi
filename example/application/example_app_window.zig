@@ -64,7 +64,7 @@ pub const ExampleAppWindowClass = extern struct {
 
     // template callback
     pub fn TCsearch_text_changed(entry: *Entry, self: *ExampleAppWindow) callconv(.C) void {
-        var text = entry.__call("getText", .{});
+        const text = entry.__call("getText", .{});
         if (text[0] == 0) return;
         var tab = self.tc_stack.getVisibleChild().?.tryInto(ScrolledWindow).?;
         var view = tab.getChild().?.tryInto(TextView).?;
@@ -108,14 +108,14 @@ pub const ExampleAppWindow = extern struct {
         self.__call("initTemplate", .{});
         var builder = Builder.newFromResource("/org/gtk/exampleapp/gears-menu.ui");
         defer builder.__call("unref", .{});
-        var menu = builder.getObject("menu").?.tryInto(MenuModel).?;
+        const menu = builder.getObject("menu").?.tryInto(MenuModel).?;
         self.tc_gears.setMenuModel(menu);
         self.settings = Settings.new("org.gtk.exampleapp");
         self.settings.bind("transition", self.tc_stack.into(Object), "transition-type", .Default);
         self.settings.bind("show-words", self.tc_sidebar.into(Object), "reveal-child", .Default);
         _ = self.tc_search.__call("bindProperty", .{ "active", self.tc_searchbar.into(Object), "search-mode-enabled", .Bidirectional });
         _ = self.tc_sidebar.__call("connectRevealChildNotifySwap", .{ updateWords, .{self}, .{} });
-        var action_show_words = self.settings.createAction("show-words");
+        const action_show_words = self.settings.createAction("show-words");
         defer core.unsafeCast(Object, action_show_words).unref();
         self.__call("addAction", .{action_show_words});
         var action_show_lines = PropertyAction.new("show-lines", self.tc_lines.into(Object), "visible");
@@ -134,7 +134,7 @@ pub const ExampleAppWindow = extern struct {
     }
 
     pub fn open(self: *ExampleAppWindow, file: *File) void {
-        var basename = file.getBasename().?;
+        const basename = file.getBasename().?;
         defer core.free(basename);
         var scrolled = ScrolledWindow.new();
         scrolled.__call("setHexpand", .{true});
@@ -145,7 +145,7 @@ pub const ExampleAppWindow = extern struct {
         scrolled.setChild(view.into(Widget));
         _ = self.tc_stack.addTitled(scrolled.into(Widget), basename, basename);
         var buffer = view.getBuffer();
-        var contents = file.loadContents(null) catch {
+        const contents = file.loadContents(null) catch {
             var err = core.getError();
             defer err.free();
             std.log.warn("{s}", .{err.message.?});
@@ -168,7 +168,7 @@ pub const ExampleAppWindow = extern struct {
     }
 
     fn findWord(button: *Button, self: *ExampleAppWindow) void {
-        var word = button.getLabel().?;
+        const word = button.getLabel().?;
         self.tc_searchentry.__call("setText", .{word});
     }
 
@@ -198,13 +198,13 @@ pub const ExampleAppWindow = extern struct {
             }
             end = start;
             if (!end.forwardWordEnd()) break :outer;
-            var word = buffer.getText(&start, &end, false);
+            const word = buffer.getText(&start, &end, false);
             defer core.free(word);
             strings.put(core.utf8Strdown(word, -1), {}) catch @panic("");
             start = end;
         }
         while (true) {
-            var child = self.tc_words.__call("getFirstChild", .{});
+            const child = self.tc_words.__call("getFirstChild", .{});
             if (child) |some| {
                 self.tc_words.remove(some);
             } else {
@@ -223,7 +223,7 @@ pub const ExampleAppWindow = extern struct {
         var tab = if (self.tc_stack.getVisibleChild()) |some| some.tryInto(ScrolledWindow).? else return;
         var view = tab.getChild().?.tryInto(TextView).?;
         var buffer = view.getBuffer();
-        var count = buffer.getLineCount();
+        const count = buffer.getLineCount();
         var buf: [22]u8 = undefined;
         _ = std.fmt.bufPrintZ(buf[0..], "{d}", .{count}) catch @panic("");
         self.tc_lines.setText(@ptrCast(&buf));

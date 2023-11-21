@@ -27,7 +27,7 @@ pub const ExampleAppClass = extern struct {
 
     // @override
     fn activate(arg_app: *GApplication) callconv(.C) void {
-        var self = arg_app.tryInto(ExampleApp).?;
+        const self = arg_app.tryInto(ExampleApp).?;
         var win = ExampleAppWindow.new(self);
         win.__call("present", .{});
     }
@@ -36,8 +36,8 @@ pub const ExampleAppClass = extern struct {
     fn open(arg_app: *GApplication, arg_files: [*]*File, arg_n_files: i32, arg_hint: [*:0]const u8) callconv(.C) void {
         var self = arg_app.tryInto(ExampleApp).?;
         _ = arg_hint;
-        var windows = self.__call("getWindows", .{});
-        var win = if (windows) |some| core.dynamicCast(ExampleAppWindow, some.data.?).? else ExampleAppWindow.new(self);
+        const windows = self.__call("getWindows", .{});
+        const win = if (windows) |some| core.dynamicCast(ExampleAppWindow, some.data.?).? else ExampleAppWindow.new(self);
         for (arg_files[0..@intCast(arg_n_files)]) |file| {
             win.__call("open", .{file});
         }
@@ -45,7 +45,7 @@ pub const ExampleAppClass = extern struct {
     }
 
     fn preferencesActivate(self: *ExampleApp) void {
-        var win = self.__call("getActiveWindow", .{}).?.tryInto(ExampleAppWindow).?;
+        const win = self.__call("getActiveWindow", .{}).?.tryInto(ExampleAppWindow).?;
         var prefs = ExampleAppPrefs.new(win);
         prefs.__call("present", .{});
     }

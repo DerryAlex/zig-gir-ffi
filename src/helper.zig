@@ -109,7 +109,7 @@ pub fn fieldInfoGetSize(field_info: FieldInfo) !usize {
     }
 
     const namespace_dup = try allocator.dupe(u8, namespace); // DO NOT free
-    var new_subtable = try allocator.create(StringHashMap(*StringHashMap(usize)));
+    const new_subtable = try allocator.create(StringHashMap(*StringHashMap(usize)));
     new_subtable.* = StringHashMap(*StringHashMap(usize)).init(allocator);
     try Static.table.put(namespace_dup, new_subtable);
     const version = std.mem.span(c.g_irepository_get_version(null, namespace));
@@ -157,7 +157,7 @@ pub fn fieldInfoGetSize(field_info: FieldInfo) !usize {
                                             if (bits != 0) {
                                                 var subtable = Static.table.get(namespace).?;
                                                 if (!subtable.contains(record_name)) {
-                                                    var new_subsubtable = try allocator.create(StringHashMap(usize));
+                                                    const new_subsubtable = try allocator.create(StringHashMap(usize));
                                                     new_subsubtable.* = StringHashMap(usize).init(allocator);
                                                     try subtable.put(record_name, new_subsubtable);
                                                 }

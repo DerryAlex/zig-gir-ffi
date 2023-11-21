@@ -14,7 +14,7 @@ pub fn printHello() void {
 }
 
 pub fn activate(arg_app: *GApplication) void {
-    var app = arg_app.tryInto(Application).?;
+    const app = arg_app.tryInto(Application).?;
     var window = ApplicationWindow.new(app);
     window.__call("setTitle", .{"Window"});
     window.__call("setDefaultSize", .{ 200, 200 });
