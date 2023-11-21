@@ -29,7 +29,7 @@ pub const CustomButtonClass = extern struct {
     }
 
     pub fn properties() []*ParamSpec {
-        _properties[@intFromEnum(Properties.Number)] = core.paramSpecInt("number", null, null, 0, 10, 10, .Readwrite);
+        _properties[@intFromEnum(Properties.Number)] = core.paramSpecInt("number", null, null, 0, 10, 10, .{ .readable = true, .writable = true });
         return _properties[0..];
     }
 
@@ -54,10 +54,6 @@ pub const CustomButtonClass = extern struct {
     }
 
     pub fn signals() []u32 {
-        var flags = std.mem.zeroes(core.SignalFlags);
-        flags.@"|="(.RunLast);
-        flags.@"|="(.NoRecurse);
-        flags.@"|="(.NoHooks);
         _signals[@intFromEnum(Signals.ZeroReached)] = core.newSignal(CustomButtonClass, CustomButton, "zero-reached", .{ .run_last = true, .no_recurse = true, .no_hooks = true }, {}, .{});
         return _signals[0..];
     }
@@ -66,7 +62,7 @@ pub const CustomButtonClass = extern struct {
     pub fn constructed(arg_object: *Object) callconv(.C) void {
         var self = arg_object.tryInto(CustomButton).?;
         self.__call("constructedV", .{CustomButton.Parent.type()});
-        _ = self.__call("bindProperty", .{ "number", self.into(Object), "label", .SyncCreate });
+        _ = self.__call("bindProperty", .{ "number", self.into(Object), "label", .{ .sync_create = true } });
     }
 
     // @override

@@ -73,7 +73,7 @@ pub const ExampleAppWindowClass = extern struct {
         buffer.getStartIter(&start);
         var match_start: TextIter = undefined;
         var match_end: TextIter = undefined;
-        if (start.forwardSearch(text, .CaseInsensitive, &match_start, &match_end, null)) {
+        if (start.forwardSearch(text, .{ .case_insensitive = true }, &match_start, &match_end, null)) {
             buffer.selectRange(&match_start, &match_end);
             _ = view.scrollToIter(&match_start, 0, false, 0, 0);
         }
@@ -111,9 +111,9 @@ pub const ExampleAppWindow = extern struct {
         const menu = builder.getObject("menu").?.tryInto(MenuModel).?;
         self.tc_gears.setMenuModel(menu);
         self.settings = Settings.new("org.gtk.exampleapp");
-        self.settings.bind("transition", self.tc_stack.into(Object), "transition-type", .Default);
-        self.settings.bind("show-words", self.tc_sidebar.into(Object), "reveal-child", .Default);
-        _ = self.tc_search.__call("bindProperty", .{ "active", self.tc_searchbar.into(Object), "search-mode-enabled", .Bidirectional });
+        self.settings.bind("transition", self.tc_stack.into(Object), "transition-type", .{});
+        self.settings.bind("show-words", self.tc_sidebar.into(Object), "reveal-child", .{});
+        _ = self.tc_search.__call("bindProperty", .{ "active", self.tc_searchbar.into(Object), "search-mode-enabled", .{ .bidirectional = true } });
         _ = self.tc_sidebar.__call("connectRevealChildNotifySwap", .{ updateWords, .{self}, .{} });
         const action_show_words = self.settings.createAction("show-words");
         defer core.unsafeCast(Object, action_show_words).unref();
@@ -121,7 +121,7 @@ pub const ExampleAppWindow = extern struct {
         var action_show_lines = PropertyAction.new("show-lines", self.tc_lines.into(Object), "visible");
         defer action_show_lines.__call("unref", .{});
         self.__call("addAction", .{action_show_lines.into(Action)});
-        _ = self.tc_lines.__call("bindProperty", .{ "visible", self.tc_lines_label.into(Object), "visible", .Default });
+        _ = self.tc_lines.__call("bindProperty", .{ "visible", self.tc_lines_label.into(Object), "visible", .{} });
     }
 
     pub fn new(app: *ExampleApp) *ExampleAppWindow {
@@ -156,7 +156,7 @@ pub const ExampleAppWindow = extern struct {
         buffer.setText(@ptrCast(contents.contents.ptr), @intCast(contents.contents.len));
         var tag = TextTag.new(null);
         _ = buffer.getTagTable().add(tag);
-        self.settings.bind("font", tag.into(Object), "font", .Default);
+        self.settings.bind("font", tag.into(Object), "font", .{});
         var start_iter: TextIter = undefined;
         var end_iter: TextIter = undefined;
         buffer.getStartIter(&start_iter);

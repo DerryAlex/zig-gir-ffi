@@ -65,6 +65,21 @@ pub fn snakeToCamel(src: []const u8, buf: []u8) []u8 {
     return buf[0..len];
 }
 
+pub fn camelToSnake(src: []const u8, buf: []u8) []u8 {
+    var len: usize = 0;
+    var idx: usize = 0;
+    for (src) |ch| {
+        if (idx != 0 and std.ascii.isUpper(ch)) {
+            buf[len] = '_';
+            len += 1;
+        }
+        buf[len] = ch;
+        len += 1;
+        idx += 1;
+    }
+    return buf[0..len];
+}
+
 pub fn isZigKeyword(str: []const u8) bool {
     const keywords = [_][]const u8{ "addrspace", "align", "allowzero", "and", "anyframe", "anytype", "asm", "async", "await", "break", "callconv", "catch", "comptime", "const", "continue", "defer", "else", "enum", "errdefer", "error", "export", "extern", "fn", "for", "if", "inline", "linksection", "noalias", "noinline", "nosuspend", "opaque", "or", "orelse", "packed", "pub", "resume", "return", "struct", "suspend", "switch", "test", "threadlocal", "try", "union", "unreachable", "usingnamespace", "var", "volatile", "while" };
     for (keywords) |keyword| {

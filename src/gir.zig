@@ -4,6 +4,7 @@ const assert = std.debug.assert;
 const helper = @import("helper.zig");
 const enable_deprecated = helper.enable_deprecated;
 const snakeToCamel = helper.snakeToCamel;
+const camelToSnake = helper.camelToSnake;
 const isZigKeyword = helper.isZigKeyword;
 const fieldInfoGetSize = helper.fieldInfoGetSize;
 
@@ -1167,7 +1168,7 @@ pub const EnumInfo = struct {
         return .{ .enum_info = self, .capacity = @intCast(c.g_enum_info_get_n_methods(self.info)) };
     }
 
-    fn formatValue(self: EnumInfo, value: ValueInfo, option_is_flag: bool, alter_name: bool, writer: anytype) !void {
+    fn formatValue(self: EnumInfo, value: ValueInfo, convert_func: ?[]const u8, writer: anytype) !void {
         var buf: [256]u8 = undefined;
         const value_name = snakeToCamel(value.asBase().name().?, buf[0..]);
         if (std.ascii.isAlphabetic(value_name[0])) {
@@ -1176,52 +1177,26 @@ pub const EnumInfo = struct {
             try writer.print("@\"{s}\" = ", .{value_name});
         }
 
-        if (alter_name) {
-            try writer.writeAll("@as(@This(), @enumFromInt(");
+        if (convert_func) |func| {
+            try writer.print("@as(@This(), @{s}(", .{func});
         }
 
-        if (option_is_flag) {
-            switch (self.storageType()) {
-                .Int32 => {
-                    const _value: i32 = @intCast(value.value());
-                    if (_value >= 0) {
-                        try writer.print("0x{x}", .{_value});
-                    } else {
-                        try writer.print("@as(i32, @bitCast(0x{x}))", .{@as(u32, @bitCast(_value))});
-                    }
-                },
-                .UInt32 => {
-                    try writer.print("0x{x}", .{@as(u32, @intCast(value.value()))});
-                },
-                else => unreachable,
-            }
-        } else {
-            switch (self.storageType()) {
-                .Int32 => {
-                    try writer.print("{d}", .{@as(i32, @intCast(value.value()))});
-                },
-                .UInt32 => {
-                    try writer.print("{d}", .{@as(u32, @intCast(value.value()))});
-                },
-                else => unreachable,
-            }
+        switch (self.storageType()) {
+            .Int32 => {
+                try writer.print("{d}", .{@as(i32, @intCast(value.value()))});
+            },
+            .UInt32 => {
+                try writer.print("{d}", .{@as(u32, @intCast(value.value()))});
+            },
+            else => unreachable,
         }
 
-        if (alter_name) {
+        if (convert_func) |_| {
             try writer.writeAll("))");
         }
     }
 
-    pub fn format(self: EnumInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = options;
-        if (self.asRegisteredType().asBase().isDeprecated() and !enable_deprecated) return;
-        var option_is_flag = false;
-        for (fmt) |ch| {
-            if (ch == '_') {
-                option_is_flag = true;
-                break;
-            }
-        }
+    fn formatEnum(self: EnumInfo, writer: anytype) !void {
         try writer.print("pub const {s} = enum", .{self.asRegisteredType().asBase().name().?});
         switch (self.storageType()) {
             .Int32 => {
@@ -1244,18 +1219,14 @@ pub const EnumInfo = struct {
                 continue;
             }
             values.put(value.value(), {}) catch @panic("Out of Memory");
-            try formatValue(self, value, option_is_flag, false, writer);
+            try formatValue(self, value, null, writer);
             try writer.writeAll(",\n");
-        }
-        if (option_is_flag) {
-            try writer.writeAll("_,\n");
-            try writer.writeAll("pub usingnamespace core.Flags(@This());\n");
         }
         iter = self.valueIter();
         while (iter.next()) |value| {
             if (values.remove(value.value())) continue;
             try writer.writeAll("pub const ");
-            try formatValue(self, value, option_is_flag, true, writer);
+            try formatValue(self, value, "enumFromInt", writer);
             try writer.writeAll(";\n");
         }
         var m_iter = self.methodIter();
@@ -1264,6 +1235,98 @@ pub const EnumInfo = struct {
         }
         try self.asRegisteredType().format_helper(writer);
         try writer.writeAll("};\n");
+    }
+
+    fn formatFlag(self: EnumInfo, writer: anytype) !void {
+        try writer.print("pub const {s} = packed struct", .{self.asRegisteredType().asBase().name().?});
+        switch (self.storageType()) {
+            .Int32 => {
+                try writer.writeAll("(i32)");
+            },
+            .UInt32 => {
+                try writer.writeAll("(u32)");
+            },
+            else => unreachable,
+        }
+        try writer.writeAll("{\n");
+        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        defer _ = gpa.deinit();
+        const allocator = gpa.allocator();
+        var values = std.AutoHashMap(usize, []const u8).init(allocator);
+        defer {
+            var value_iter = values.valueIterator();
+            while (value_iter.next()) |val| {
+                allocator.free(val.*);
+            }
+            values.deinit();
+        }
+        var iter = self.valueIter();
+        while (iter.next()) |value| {
+            const _value = value.value();
+            if (_value <= 0 or !std.math.isPowerOfTwo(_value)) {
+                continue;
+            }
+            const idx = std.math.log2_int(u32, @intCast(_value));
+            if (values.contains(idx)) {
+                continue;
+            }
+            var buf: [256]u8 = undefined;
+            const name = camelToSnake(value.asBase().name().?, buf[0..]);
+            const name_dup = allocator.dupe(u8, name) catch @panic("Out of Memory");
+            values.put(idx, name_dup) catch @panic("Out of Memory");
+        }
+        var padding_count: usize = 0;
+        var padding_bits: usize = 0;
+        for (0..32) |idx| {
+            if (values.get(idx)) |name| {
+                if (padding_bits != 0) {
+                    try writer.print("_padding{d}: u{d} = 0,\n", .{ padding_count, padding_bits });
+                    padding_bits = 0;
+                }
+                if (isZigKeyword(name) or !std.ascii.isAlphabetic(name[0])) {
+                    try writer.print("@\"{s}\": bool = false, \n", .{name});
+                } else {
+                    try writer.print("{s}: bool = false,\n", .{name});
+                }
+            } else {
+                if (padding_bits == 0) {
+                    padding_count += 1;
+                }
+                padding_bits += 1;
+            }
+        }
+        if (padding_bits != 0) {
+            try writer.print("_padding: u{d} = 0,\n", .{padding_bits});
+        }
+        iter = self.valueIter();
+        while (iter.next()) |value| {
+            try writer.writeAll("pub const ");
+            try formatValue(self, value, "bitCast", writer);
+            try writer.writeAll(";\n");
+        }
+        var m_iter = self.methodIter();
+        while (m_iter.next()) |method| {
+            try writer.print("\n{}", .{method});
+        }
+        try self.asRegisteredType().format_helper(writer);
+        try writer.writeAll("};\n");
+    }
+
+    pub fn format(self: EnumInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = options;
+        if (self.asRegisteredType().asBase().isDeprecated() and !enable_deprecated) return;
+        var option_is_flag = false;
+        for (fmt) |ch| {
+            if (ch == '_') {
+                option_is_flag = true;
+                break;
+            }
+        }
+        if (option_is_flag) {
+            try formatFlag(self, writer);
+        } else {
+            try formatEnum(self, writer);
+        }
     }
 };
 

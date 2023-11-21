@@ -3,7 +3,7 @@ const gtk = @import("gtk");
 const core = gtk.core;
 
 pub fn main() u8 {
-    var app = gtk.Application.new("org.example.clock", .FlagsNone);
+    var app = gtk.Application.new("org.example.clock", .{});
     defer app.__call("unref", .{});
     _ = app.__call("connectActivate", .{ buildUi, .{}, .{} });
     return @intCast(app.__call("run", .{std.os.argv}));

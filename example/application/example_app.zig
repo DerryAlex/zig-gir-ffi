@@ -83,7 +83,7 @@ pub const ExampleApp = extern struct {
         application_id.set("org.gtk.example");
         var flags = core.ValueZ(core.ApplicationFlags).init();
         defer flags.deinit();
-        flags.set(.HandlesOpen);
+        flags.set(.{ .handles_open = true });
         var property_names = [_][*:0]const u8{ "application-id", "flags" };
         var property_values = [_]Value{ application_id.value, flags.value };
         return core.newObject(ExampleApp, property_names[0..], property_values[0..]);

@@ -30,7 +30,7 @@ pub fn activate(arg_app: *GApplication) void {
 }
 
 pub fn main() u8 {
-    var app = Application.new("org.gtk.example", .FlagsNone);
+    var app = Application.new("org.gtk.example", .{});
     defer app.__call("unref", .{});
     _ = app.__call("connectActivate", .{ activate, .{}, .{} });
     return @intCast(app.__call("run", .{std.os.argv}));

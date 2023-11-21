@@ -9,7 +9,7 @@ const Widget = gtk.Widget;
 const GApplication = core.Application;
 
 pub fn main() u8 {
-    var app = Application.new("org.example.custom_button", .FlagsNone);
+    var app = Application.new("org.example.custom_button", .{});
     defer app.__call("unref", .{});
     _ = app.__call("connectActivate", .{ activate, .{}, .{} });
     return @intCast(app.__call("run", .{std.os.argv}));
