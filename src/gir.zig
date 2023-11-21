@@ -1192,13 +1192,15 @@ pub const EnumInfo = struct {
         var buf: [256]u8 = undefined;
         const value_name = snakeToCamel(value.asBase().name().?, buf[0..]);
         if (std.ascii.isAlphabetic(value_name[0])) {
-            try writer.print("{c}{s} = ", .{ std.ascii.toUpper(value_name[0]), value_name[1..] });
+            try writer.print("{c}{s}", .{ std.ascii.toUpper(value_name[0]), value_name[1..] });
         } else {
-            try writer.print("@\"{s}\" = ", .{value_name});
+            try writer.print("@\"{s}\"", .{value_name});
         }
 
         if (convert_func) |func| {
-            try writer.print("@as(@This(), @{s}(", .{func});
+            try writer.print(": @This() = @{s}(", .{func});
+        } else {
+            try writer.writeAll(" = ");
         }
 
         switch (self.storageType()) {
@@ -1212,7 +1214,7 @@ pub const EnumInfo = struct {
         }
 
         if (convert_func) |_| {
-            try writer.writeAll("))");
+            try writer.writeAll(")");
         }
     }
 
