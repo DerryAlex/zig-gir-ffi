@@ -604,22 +604,11 @@ fn cclosureNewSwap(callback_func: GObject.Callback, user_data: ?*anyopaque, dest
     }.g_cclosure_new_swap(callback_func, user_data, destroy_data);
 }
 
-pub const ConnectFlagsZ = struct {
-    after: bool = false,
-};
-
 /// Wrapper for g_signal_connect_closure
-pub fn connect(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, flags: ConnectFlagsZ, comptime signature: []const type) usize {
+pub fn connect(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, flags: GObject.ConnectFlags, comptime signature: []const type) usize {
     var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(null, handler, args) catch @panic("Out of Memory");
-    const cclosure = cclosureNew(@ptrCast(closure.c_closure()), closure.c_data(), @ptrCast(closure.c_destroy()));
-    return GObject.signalConnectClosure(object, signal, cclosure, flags.after);
-}
-
-/// Wrapper for g_signal_connect_closure
-pub fn connectSwap(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, flags: ConnectFlagsZ, comptime signature: []const type) usize {
-    comptime assert(signature.len == 1);
-    var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(null, handler, args) catch @panic("Out of Memory");
-    const cclosure = cclosureNewSwap(@ptrCast(closure.c_closure()), closure.c_data(), @ptrCast(closure.c_destroy()));
+    const clousre_new_fn = if (flags.swapped) &cclosureNewSwap else &cclosureNew;
+    const cclosure = clousre_new_fn(@ptrCast(closure.c_closure()), closure.c_data(), @ptrCast(closure.c_destroy()));
     return GObject.signalConnectClosure(object, signal, cclosure, flags.after);
 }
 

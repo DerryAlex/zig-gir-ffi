@@ -114,7 +114,7 @@ pub const ExampleAppWindow = extern struct {
         self.settings.bind("transition", self.tc_stack.into(Object), "transition-type", .{});
         self.settings.bind("show-words", self.tc_sidebar.into(Object), "reveal-child", .{});
         _ = self.tc_search.__call("bindProperty", .{ "active", self.tc_searchbar.into(Object), "search-mode-enabled", .{ .bidirectional = true } });
-        _ = self.tc_sidebar.__call("connectRevealChildNotifySwap", .{ updateWords, .{self}, .{} });
+        _ = self.tc_sidebar.__call("connectRevealChildNotify", .{ updateWords, .{self}, .{ .swapped = true } });
         const action_show_words = self.settings.createAction("show-words");
         defer core.unsafeCast(Object, action_show_words).unref();
         self.__call("addAction", .{action_show_words});

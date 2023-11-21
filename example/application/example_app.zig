@@ -59,11 +59,11 @@ pub const ExampleAppClass = extern struct {
         var self = arg_app.tryInto(ExampleApp).?;
         var action_preferences = SimpleAction.new("preferences", null);
         defer action_preferences.__call("unref", .{});
-        _ = action_preferences.connectActivateSwap(preferencesActivate, .{self}, .{});
+        _ = action_preferences.connectActivate(preferencesActivate, .{self}, .{ .swapped = true });
         self.__call("addAction", .{action_preferences.into(Action)});
         var action_quit = SimpleAction.new("quit", null);
         defer action_quit.__call("unref", .{});
-        _ = action_quit.connectActivateSwap(quitActivate, .{self}, .{});
+        _ = action_quit.connectActivate(quitActivate, .{self}, .{ .swapped = true });
         self.__call("addAction", .{action_quit.into(Action)});
         var quit_accels = [_:null]?[*:0]const u8{"<Ctrl>Q"};
         self.__call("setAccelsForAction", .{ "app.quit", &quit_accels });

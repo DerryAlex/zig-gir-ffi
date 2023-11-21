@@ -24,7 +24,7 @@ pub fn activate(arg_app: *GApplication) void {
     window.__call("setChild", .{box.into(Widget)});
     var button = Button.newWithLabel("Hello, World");
     _ = button.connectClicked(printHello, .{}, .{});
-    _ = button.connectClickedSwap(Window.destroy, .{window.into(Window)}, .{});
+    _ = button.connectClicked(Window.destroy, .{window.into(Window)}, .{ .swapped = true });
     box.append(button.into(Widget));
     window.__call("show", .{});
 }

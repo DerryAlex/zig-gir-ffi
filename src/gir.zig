@@ -960,10 +960,16 @@ pub const SignalInfo = struct {
         var buf: [256]u8 = undefined;
         const raw_name = self.asCallable().asBase().name().?;
         const name = snakeToCamel(raw_name, buf[0..]);
-        try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
-        try writer.print("return core.connect(self.into(core.Object), \"{s}\", handler, args, flags, &[_]type{{", .{raw_name});
+        try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, comptime flags: core.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
+        try writer.print("return core.connect(self.into(core.Object), \"{s}\", handler, args, flags, if (flags.swapped) &[_]type{{", .{raw_name});
         const return_type = self.asCallable().returnType();
         defer return_type.asBase().deinit();
+        if (self.asCallable().mayReturnNull()) {
+            try writer.print("{&*}", .{return_type});
+        } else {
+            try writer.print("{&}", .{return_type});
+        }
+        try writer.writeAll("} else &[_]type{");
         if (self.asCallable().mayReturnNull()) {
             try writer.print("{&*}", .{return_type});
         } else {
@@ -973,16 +979,6 @@ pub const SignalInfo = struct {
         var iter = self.asCallable().argsIter();
         while (iter.next()) |arg| {
             try writer.print(", {$}", .{arg});
-        }
-        try writer.writeAll("});\n");
-        try writer.writeAll("}\n");
-        // connect swapped
-        try writer.print("pub fn connect{c}{s}Swap(self: *{s}, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
-        try writer.print("return core.connectSwap(self.into(core.Object), \"{s}\", handler, args, flags, &[_]type{{", .{raw_name});
-        if (self.asCallable().mayReturnNull()) {
-            try writer.print("{&*}", .{return_type});
-        } else {
-            try writer.print("{&}", .{return_type});
         }
         try writer.writeAll("});\n");
         try writer.writeAll("}\n");
@@ -2302,11 +2298,8 @@ pub const PropertyInfo = struct {
                 try writer.print("self.__call(\"setProperty\", .{{ \"{s}\", &property_value.value }});\n", .{raw_name});
                 try writer.writeAll("}");
             }
-            try writer.print("pub fn connect{c}{s}Notify(self: *{s}, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
-            try writer.print("return core.connect(self.into(core.Object), \"notify::{s}\", handler, args, flags, &[_]type{{ void, *{s}, *core.ParamSpec }});\n", .{ raw_name, container_name });
-            try writer.writeAll("}\n");
-            try writer.print("pub fn connect{c}{s}NotifySwap(self: *{s}, handler: anytype, args: anytype, flags: core.ConnectFlagsZ) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
-            try writer.print("return core.connectSwap(self.into(core.Object), \"notify::{s}\", handler, args, flags, &[_]type{{ void }});\n", .{raw_name});
+            try writer.print("pub fn connect{c}{s}Notify(self: *{s}, handler: anytype, args: anytype, comptime flags: core.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
+            try writer.print("return core.connect(self.into(core.Object), \"notify::{s}\", handler, args, flags, if (flags.swapped) &[_]type{{void}} else &[_]type{{ void, *{s}, *core.ParamSpec }});\n", .{ raw_name, container_name });
             try writer.writeAll("}\n");
         }
     }

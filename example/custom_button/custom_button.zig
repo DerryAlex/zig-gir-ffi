@@ -109,20 +109,12 @@ pub const CustomButton = extern struct {
         self.__call("notifyByPspec", .{_properties[@intFromEnum(Properties.Number)]});
     }
 
-    pub fn connectNumberNotify(self: *CustomButton, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlagsZ) usize {
-        return core.connect(self.into(core.Object), "notify::number", handler, args, flags, &[_]type{ void, *CustomButton, *ParamSpec });
+    pub fn connectNumberNotify(self: *CustomButton, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlags) usize {
+        return core.connect(self.into(core.Object), "notify::number", handler, args, flags, if (flags.swapped) &[_]type{void} else &[_]type{ void, *CustomButton, *ParamSpec });
     }
 
-    pub fn connectNumberNotifySwap(self: *CustomButton, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlagsZ) usize {
-        return core.connect(self.into(core.Object), "notify::number", handler, args, flags, &[_]type{void});
-    }
-
-    pub fn connectZeroReached(self: *CustomButton, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlagsZ) usize {
-        return core.connect(self.into(core.Object), "zero-reached", handler, args, flags, &[_]type{ void, *CustomButton });
-    }
-
-    pub fn connectZeroReachedSwap(self: *CustomButton, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlagsZ) usize {
-        return core.connectSwap(self.into(core.Object), "zero-reached", handler, args, flags, &[_]type{void});
+    pub fn connectZeroReached(self: *CustomButton, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlags) usize {
+        return core.connect(self.into(core.Object), "zero-reached", handler, args, flags, if (flags.swapped) &[_]type{void} else &[_]type{ void, *CustomButton });
     }
 
     pub fn @"type"() core.Type {
