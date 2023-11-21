@@ -11,6 +11,5 @@ GObject Introspection for zig. Generated [GTK4 binding](https://github.com/Derry
 
 ## Example
 
+[example/example](./example/example/example.zig)
 ![example.png](./example/example/screenshot.png)
-
-https://github.com/DerryAlex/zig-gir-ffi/blob/bec9aeca74496d54fa487bb76ba84c3967037980/example/example/example.zig
