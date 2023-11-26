@@ -81,7 +81,7 @@ pub fn ValueZ(comptime T: type) type {
                 _ = value.init(.Double);
             } else if (comptime T == [*:0]const u8) {
                 _ = value.init(.String);
-            } else if (comptime meta.trait.isSingleItemPtr(T)) {
+            } else if (comptime @typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) {
                 _ = value.init(.Pointer);
             } else if (comptime T == GLib.Variant) {
                 _ = value.init(.Variant);
@@ -112,10 +112,10 @@ pub fn ValueZ(comptime T: type) type {
             if (T == u64) break :gen_is_basic true;
             if (T == f32) break :gen_is_basic true;
             if (T == f64) break :gen_is_basic true;
-            if (meta.trait.is(.Enum)(T)) break :gen_is_basic true; // Enum or Type
-            if (meta.trait.isPacked(T)) break :gen_is_basic true; // Flag
+            if (@typeInfo(T) == .Enum) break :gen_is_basic true; // Enum or Type
+            if (@typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .Packed) break :gen_is_basic true; // Flag
             if (T == [*:0]const u8) break :gen_is_basic true; // String
-            if (meta.trait.isSingleItemPtr(T)) break :gen_is_basic true; // Pointer
+            if (@typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) break :gen_is_basic true; // Pointer
             break :gen_is_basic false;
         };
 
@@ -133,15 +133,15 @@ pub fn ValueZ(comptime T: type) type {
             if (comptime T == f32) return self.value.getFloat();
             if (comptime T == f64) return self.value.getDouble();
             if (comptime T == Type) return self.value.getGtype();
-            if (comptime meta.trait.is(.Enum)(T)) {
+            if (comptime @typeInfo(T) == .Enum) {
                 comptime assert(@typeInfo(T).Enum.is_exhaustive);
                 return @enumFromInt(self.value.getEnum());
             }
-            if (comptime meta.trait.isPacked(T)) {
+            if (comptime @typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .Packed) {
                 return @bitCast(self.value.getFlags());
             }
             if (comptime T == [*:0]const u8) return self.value.getString();
-            if (comptime meta.trait.isSingleItemPtr(T)) return @ptrCast(self.gvalue.getPointer());
+            if (comptime @typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) return @ptrCast(self.gvalue.getPointer());
             if (comptime T == GLib.Variant) return self.value.getVariant().?;
             if (comptime T == GObject.ParamSpec) return self.value.getParam();
             if (comptime @hasDecl(T, "__call")) return downCast(T, self.value.getObject()).?;
@@ -175,14 +175,14 @@ pub fn ValueZ(comptime T: type) type {
                 self.value.setDouble(arg_value);
             } else if (comptime T == Type) {
                 self.value.setGtype(arg_value);
-            } else if (comptime meta.trait.is(.Enum)(T)) {
+            } else if (comptime @typeInfo(T) == .Enum) {
                 comptime assert(@typeInfo(T).Enum.is_exhaustive);
                 self.value.setEnum(@intFromEnum(arg_value));
-            } else if (comptime meta.trait.isPacked(T)) {
+            } else if (comptime @typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .Packed) {
                 self.value.setFlags(@bitCast(arg_value));
             } else if (comptime T == [*:0]const u8) {
                 self.value.setString(arg_value);
-            } else if (comptime meta.trait.isSingleItemPtr(T)) {
+            } else if (comptime @typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) {
                 self.value.setPointer(arg_value);
             } else if (comptime T == GLib.Variant) {
                 self.value.setVariant(arg_value);
@@ -221,7 +221,7 @@ pub fn getError() *GLib.Error {
 // ---------------------
 // OOP inheritance begin
 
-pub fn isA(comptime T: type) meta.trait.TraitFn {
+pub fn isA(comptime T: type) fn (type) bool {
     return struct {
         pub fn trait(comptime Ty: type) bool {
             if (Ty == T) return true;
@@ -355,9 +355,10 @@ pub fn Extend(comptime Self: type) type {
 // closure begin
 
 pub fn ClosureZ(comptime FnPtr: type, comptime Args: type, comptime signature: []const type) type {
-    comptime assert(meta.trait.isTuple(Args));
+    comptime assert(@typeInfo(Args) == .Struct and @typeInfo(Args).Struct.is_tuple);
+    comptime assert(@typeInfo(FnPtr) == .Pointer and @typeInfo(FnPtr).Pointer.size == .One);
     const n_arg = @typeInfo(Args).Struct.fields.len;
-    if (comptime meta.trait.isPtrTo(.Void)(FnPtr)) {
+    if (comptime meta.Child(FnPtr) == void) {
         comptime assert(n_arg == 0);
         return struct {
             const Self = @This();
@@ -379,7 +380,7 @@ pub fn ClosureZ(comptime FnPtr: type, comptime Args: type, comptime signature: [
         };
     }
 
-    comptime assert(meta.trait.isPtrTo(.Fn)(FnPtr));
+    comptime assert(@typeInfo(meta.Child(FnPtr)) == .Fn);
     comptime assert(1 <= signature.len and signature.len <= 7);
     const n_param = @typeInfo(meta.Child(FnPtr)).Fn.params.len;
     return struct {
@@ -620,7 +621,7 @@ pub fn newSignal(comptime Class: type, comptime Object: type, comptime signal_na
     var param_types: [signal_info.Fn.params.len - 1]Type = undefined;
     inline for (signal_info.Fn.params[1..], &param_types) |param, *ty| {
         var is_gtyped = false;
-        if (meta.trait.isSingleItemPtr(param.type.?)) {
+        if (@typeInfo(param.type.?) == .Pointer and @typeInfo(param.type.?).Pointer.size == .One) {
             if (@hasDecl(meta.Child(param.type.?), "type")) {
                 is_gtyped = true;
             }

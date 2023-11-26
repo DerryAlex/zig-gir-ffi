@@ -88,7 +88,6 @@ pub fn main() !void {
         }
         // import 'std'
         try writer.print("const std = @import(\"std\");\n", .{});
-        try writer.print("const meta = std.meta;\n", .{});
         try writer.print("const assert = std.debug.assert;\n", .{});
         const n = c.g_irepository_get_n_infos(repository, namespace.ptr);
         for (0..@intCast(n)) |i| {
