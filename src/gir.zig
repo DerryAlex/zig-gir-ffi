@@ -873,10 +873,10 @@ pub const FunctionInfo = struct {
             }
             try writer.print("const arg_{s} = &out_{s};\n", .{ arg_name, arg_name });
         }
-        try writer.print("const ffi_fn = struct {{ extern fn {s}", .{self.symbol()});
-        try self.asCallable().format_helper(writer, true, false, false);
-        try writer.print("; }}.{s};\n", .{self.symbol()});
-        try writer.writeAll("const ret = ffi_fn");
+        try writer.writeAll("const cFn = @extern(*const fn");
+        try self.asCallable().format_helper(writer, true, true, false);
+        try writer.print(", .{{ .name = \"{s}\"}});\n", .{self.symbol()});
+        try writer.writeAll("const ret = cFn");
         try self.asCallable().format_helper(writer, false, false, false);
         try writer.writeAll(";\n");
         if (skip_return) {
@@ -1044,8 +1044,8 @@ pub const VFuncInfo = struct {
         try writer.print("pub fn {s}V", .{vfunc_name});
         try self.asCallable().format_helper(writer, true, false, true);
         try writer.writeAll(" {\n");
-        try writer.print("const vfunc_fn = @as(*{s}, @ptrCast(core.typeClassPeek(_type))).{s}.?;", .{ class_name, raw_vfunc_name });
-        try writer.writeAll("const ret = vfunc_fn");
+        try writer.print("const vFn = @as(*{s}, @ptrCast(core.typeClassPeek(_type))).{s}.?;", .{ class_name, raw_vfunc_name });
+        try writer.writeAll("const ret = vFn");
         try self.asCallable().format_helper(writer, false, false, true);
         try writer.writeAll(";\n");
         if (self.asCallable().skipReturn()) {
@@ -1115,8 +1115,8 @@ pub const RegisteredTypeInfo = struct {
                     try writer.writeAll("@panic(\"Internal type\");");
                 }
             } else {
-                try writer.print("const ffi_fn = struct {{ extern \"c\" fn {s}() core.Type; }}.{s};\n", .{ init_fn, init_fn });
-                try writer.writeAll("return ffi_fn();\n");
+                try writer.print("const cFn = @extern(*const fn () callconv(.C) core.Type, .{{ .name = \"{s}\" }});\n", .{init_fn});
+                try writer.writeAll("return cFn();\n");
             }
             try writer.writeAll("}\n");
         }
