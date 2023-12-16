@@ -469,7 +469,7 @@ pub const CallableInfo = struct {
         return args;
     }
 
-    fn format_helper(self: CallableInfo, writer: anytype, type_annotation: bool, c_callconv: bool, vfunc: bool) !void {
+    fn format_helper(self: CallableInfo, writer: anytype, type_annotation: enum { Disable, Enable, Only }, c_callconv: bool, vfunc: bool) !void {
         var first = true;
         try writer.writeAll("(");
         if (self.isMethod()) {
@@ -479,14 +479,14 @@ pub const CallableInfo = struct {
                 try writer.writeAll(", ");
             }
             const container = self.asBase().container();
-            if (type_annotation) {
-                try writer.print("self: *{s}", .{container.name().?});
-            } else {
-                try writer.writeAll("self");
+            switch (type_annotation) {
+                .Disable => try writer.writeAll("self"),
+                .Enable => try writer.print("self: *{s}", .{container.name().?}),
+                .Only => try writer.print("*{s}", .{container.name().?}),
             }
         }
         if (vfunc) {
-            if (type_annotation) {
+            if (type_annotation == .Enable) {
                 if (first) {
                     first = false;
                 } else {
@@ -502,11 +502,10 @@ pub const CallableInfo = struct {
             } else {
                 try writer.writeAll(", ");
             }
-            if (type_annotation) {
-                try writer.print("{}", .{arg});
-            } else {
-                const arg_name = arg.asBase().name().?;
-                try writer.print("_{s}", .{arg_name});
+            switch (type_annotation) {
+                .Disable => try writer.print("_{s}", .{arg.asBase().name().?}),
+                .Enable => try writer.print("{}", .{arg}),
+                .Only => try writer.print("{$}", .{arg}),
             }
         }
         if (self.canThrow()) {
@@ -515,17 +514,19 @@ pub const CallableInfo = struct {
             } else {
                 try writer.writeAll(", ");
             }
-            if (type_annotation) {
-                try writer.writeAll("_error: *?*core.Error");
-            } else {
-                if (!vfunc) {
-                    try writer.writeAll("&"); // method wrapper
-                }
-                try writer.writeAll("_error");
+            switch (type_annotation) {
+                .Disable => {
+                    if (!vfunc) {
+                        try writer.writeAll("&"); // method wrapper
+                    }
+                    try writer.writeAll("_error");
+                },
+                .Enable => try writer.writeAll("_error: *?*core.Error"),
+                .Only => try writer.writeAll("*?*core.Error"),
             }
         }
         try writer.writeAll(") ");
-        if (type_annotation) {
+        if (type_annotation != .Disable) {
             if (c_callconv) {
                 try writer.writeAll("callconv(.C) ");
             }
@@ -874,10 +875,10 @@ pub const FunctionInfo = struct {
             try writer.print("const _{s} = &{s}_out;\n", .{ arg_name, arg_name });
         }
         try writer.writeAll("const cFn = @extern(*const fn");
-        try self.asCallable().format_helper(writer, true, true, false);
+        try self.asCallable().format_helper(writer, .Only, true, false);
         try writer.print(", .{{ .name = \"{s}\"}});\n", .{self.symbol()});
         try writer.writeAll("const ret = cFn");
-        try self.asCallable().format_helper(writer, false, false, false);
+        try self.asCallable().format_helper(writer, .Disable, false, false);
         try writer.writeAll(";\n");
         if (skip_return) {
             try writer.writeAll("_ = ret;\n");
@@ -953,7 +954,7 @@ pub const CallbackInfo = struct {
         _ = options;
         if (self.asCallable().asBase().isDeprecated() and !enable_deprecated) return;
         try writer.writeAll("*const fn ");
-        try self.asCallable().format_helper(writer, true, true, false);
+        try self.asCallable().format_helper(writer, .Enable, true, false);
     }
 };
 
@@ -1042,11 +1043,11 @@ pub const VFuncInfo = struct {
         defer class.asRegisteredType().asBase().deinit();
         const class_name = class.asRegisteredType().asBase().name().?;
         try writer.print("pub fn {s}V", .{vfunc_name});
-        try self.asCallable().format_helper(writer, true, false, true);
+        try self.asCallable().format_helper(writer, .Enable, false, true);
         try writer.writeAll(" {\n");
         try writer.print("const vFn = @as(*{s}, @ptrCast(core.typeClassPeek(_gtype))).{s}.?;", .{ class_name, raw_vfunc_name });
         try writer.writeAll("const ret = vFn");
-        try self.asCallable().format_helper(writer, false, false, true);
+        try self.asCallable().format_helper(writer, .Disable, false, true);
         try writer.writeAll(";\n");
         if (self.asCallable().skipReturn()) {
             try writer.writeAll("_ = ret;\n");
