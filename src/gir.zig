@@ -699,7 +699,7 @@ pub const FunctionInfo = struct {
                     }
                     try writer.print("[]{}", .{arg.type().paramType(0)});
                 } else if (closure_info[idx].is_func) {
-                    try writer.print("{s}_fn: anytype, {s}_args: anytype", .{ arg.asBase().name().?, arg.asBase().name().? });
+                    try writer.print("{s}: anytype, {s}_args: anytype", .{ arg.asBase().name().?, arg.asBase().name().? });
                 } else {
                     try writer.print("{}", .{arg});
                 }
@@ -801,7 +801,7 @@ pub const FunctionInfo = struct {
                 }
             }
             if (closure_info[idx].is_func) {
-                try writer.print("var closure_{s} = core.ClosureZ(@TypeOf(&{s}_fn), @TypeOf({s}_args), &[_]type{{", .{ arg_name, arg_name, arg_name });
+                try writer.print("var closure_{s} = core.closureZ({s}, {s}_args, &[_]type{{", .{ arg_name, arg_name, arg_name });
                 const arg_type = arg.type();
                 defer arg_type.asBase().deinit();
                 if (arg_type.interface()) |interface| {
@@ -837,7 +837,7 @@ pub const FunctionInfo = struct {
                     try writer.writeAll("void");
                     std.log.warn("[Generic Callback] {s}", .{self.symbol()});
                 }
-                try writer.print("}}).new(null, {s}_fn, {s}_args) catch @panic(\"Out of Memory\");\n", .{ arg_name, arg_name });
+                try writer.writeAll("});\n");
                 switch (closure_info[idx].scope) {
                     .Call => {
                         try writer.print("defer closure_{s}.deinit();\n", .{arg_name});

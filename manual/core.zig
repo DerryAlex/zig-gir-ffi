@@ -362,7 +362,7 @@ pub fn ClosureZ(comptime FnPtr: type, comptime Args: type, comptime signature: [
         comptime assert(n_arg == 0);
         return struct {
             const Self = @This();
-            pub fn new(_: ?std.mem.Allocator, _: FnPtr, _: Args) !*Self {
+            pub fn new(_: FnPtr, _: Args) !*Self {
                 return undefined;
             }
             pub fn invoke() callconv(.C) void {}
@@ -387,17 +387,15 @@ pub fn ClosureZ(comptime FnPtr: type, comptime Args: type, comptime signature: [
         handler: FnPtr,
         args: Args,
         once: bool,
-        allocator: std.mem.Allocator,
 
         const Self = @This();
 
-        pub fn new(allocator: ?std.mem.Allocator, handler: FnPtr, args: Args) !*Self {
-            const real_allocator = allocator orelse std.heap.c_allocator;
-            var closure = try real_allocator.create(Self);
+        pub fn new(handler: FnPtr, args: Args) !*Self {
+            const allocator = std.heap.c_allocator;
+            var closure = try allocator.create(Self);
             closure.handler = handler;
             closure.args = args;
             closure.once = false;
-            closure.allocator = real_allocator;
             return closure;
         }
 
@@ -523,7 +521,7 @@ pub fn ClosureZ(comptime FnPtr: type, comptime Args: type, comptime signature: [
         }
 
         pub fn deinit(self: *Self) callconv(.C) void {
-            self.allocator.destroy(self);
+            std.heap.c_allocator.destroy(self);
         }
 
         pub inline fn c_closure(_: *Self) @TypeOf(&Self.invoke) {
@@ -540,21 +538,23 @@ pub fn ClosureZ(comptime FnPtr: type, comptime Args: type, comptime signature: [
     };
 }
 
+pub fn closureZ(handler: anytype, args: anytype, comptime signature: []const type) *ClosureZ(@TypeOf(&handler), @TypeOf(args), signature) {
+    return ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(&handler, args) catch @panic("Out of Memory");
+}
+
 fn cclosureNew(callback_func: GObject.Callback, user_data: ?*anyopaque, destroy_data: GObject.ClosureNotify) *GObject.Closure {
-    return struct {
-        pub extern fn g_cclosure_new(GObject.Callback, ?*anyopaque, GObject.ClosureNotify) *GObject.Closure;
-    }.g_cclosure_new(callback_func, user_data, destroy_data);
+    const g_cclosure_new = @extern(*const fn (GObject.Callback, ?*anyopaque, GObject.ClosureNotify) callconv(.C) *GObject.Closure, .{ .name = "g_cclosure_new" });
+    return g_cclosure_new(callback_func, user_data, destroy_data);
 }
 
 fn cclosureNewSwap(callback_func: GObject.Callback, user_data: ?*anyopaque, destroy_data: GObject.ClosureNotify) *GObject.Closure {
-    return struct {
-        pub extern fn g_cclosure_new_swap(GObject.Callback, ?*anyopaque, GObject.ClosureNotify) *GObject.Closure;
-    }.g_cclosure_new_swap(callback_func, user_data, destroy_data);
+    const g_cclosure_new_swap = @extern(*const fn (GObject.Callback, ?*anyopaque, GObject.ClosureNotify) callconv(.C) *GObject.Closure, .{ .name = "g_cclosure_new_swap" });
+    return g_cclosure_new_swap(callback_func, user_data, destroy_data);
 }
 
 /// Wrapper for g_signal_connect_closure
 pub fn connect(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, comptime flags: GObject.ConnectFlags, comptime signature: []const type) usize {
-    var closure = ClosureZ(@TypeOf(&handler), @TypeOf(args), if (flags.swapped) signature[0..1] else signature).new(null, handler, args) catch @panic("Out of Memory");
+    var closure = closureZ(handler, args, if (flags.swapped) signature[0..1] else signature);
     const clousre_new_fn = if (flags.swapped) cclosureNewSwap else cclosureNew;
     const cclosure = clousre_new_fn(@ptrCast(closure.c_closure()), closure.c_data(), @ptrCast(closure.c_destroy()));
     return GObject.signalConnectClosure(object, signal, cclosure, flags.after);
@@ -572,9 +572,8 @@ fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?
     } else {
         assert(values == null);
     }
-    return struct {
-        pub extern fn g_object_new_with_properties(Type, c_uint, ?[*][*:0]const u8, ?[*]GObject.Value) *GObject.Object;
-    }.g_object_new_with_properties(object_type, if (names) |some| @intCast(some.len) else 0, if (names) |some| some.ptr else null, if (values) |some| some.ptr else null);
+    const g_object_new_with_properties = @extern(*const fn (Type, c_uint, ?[*][*:0]const u8, ?[*]GObject.Value) callconv(.C) *GObject.Object, .{ .name = "g_object_new_with_properties" });
+    return g_object_new_with_properties(object_type, if (names) |some| @intCast(some.len) else 0, if (names) |some| some.ptr else null, if (values) |some| some.ptr else null);
 }
 
 /// Wrapper for g_object_new_with_properties
@@ -583,10 +582,9 @@ pub fn newObject(comptime T: type, names: ?[][*:0]const u8, values: ?[]GObject.V
 }
 
 fn signalNewv(signal_name: [*:0]const u8, itype: Type, signal_flags: GObject.SignalFlags, class_closure: ?*GObject.Closure, accumulator: anytype, accu_data: anytype, c_marshaller: ?GObject.ClosureMarshal, return_type: Type, param_types: ?[]Type) u32 {
-    var accumulator_closure = ClosureZ(@TypeOf(&accumulator), @TypeOf(accu_data), &[_]type{ bool, *GObject.SignalInvocationHint, *GObject.Value, *GObject.Value }).new(null, &accumulator, accu_data) catch @panic("Out of Memory");
-    return struct {
-        pub extern fn g_signal_newv([*:0]const u8, Type, GObject.SignalFlags, ?*GObject.Closure, ?GObject.SignalAccumulator, ?*anyopaque, ?GObject.ClosureMarshal, Type, c_uint, ?[*]Type) c_uint;
-    }.g_signal_newv(signal_name, itype, signal_flags, class_closure, @ptrCast(accumulator_closure.c_closure()), accumulator_closure.c_data(), c_marshaller, return_type, if (param_types) |some| @intCast(some.len) else 0, if (param_types) |some| some.ptr else null);
+    var accumulator_closure = closureZ(accumulator, accu_data, &[_]type{ bool, *GObject.SignalInvocationHint, *GObject.Value, *GObject.Value });
+    const g_signal_newv = @extern(*const fn ([*:0]const u8, Type, GObject.SignalFlags, ?*GObject.Closure, ?GObject.SignalAccumulator, ?*anyopaque, ?GObject.ClosureMarshal, Type, c_uint, ?[*]Type) callconv(.C) c_uint, .{ .name = "g_signal_newv" });
+    return g_signal_newv(signal_name, itype, signal_flags, class_closure, @ptrCast(accumulator_closure.c_closure()), accumulator_closure.c_data(), c_marshaller, return_type, if (param_types) |some| @intCast(some.len) else 0, if (param_types) |some| some.ptr else null);
 }
 
 pub const SignalFlagsZ = struct {
