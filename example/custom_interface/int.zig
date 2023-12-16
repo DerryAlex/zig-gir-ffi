@@ -50,7 +50,7 @@ pub const TypedInt = extern struct {
         interface._cmp = &cmp;
     }
 
-    pub fn @"type"() core.Type {
+    pub fn gType() core.Type {
         return core.registerType(TypedIntClass, TypedInt, "TypedInt", .{});
     }
 };

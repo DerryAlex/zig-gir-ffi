@@ -26,7 +26,7 @@ pub const PartialEq = extern struct {
         return !self.eq(rhs);
     }
 
-    pub fn @"type"() core.Type {
+    pub fn gType() core.Type {
         return core.registerInterface(PartialEq, "PartialEq");
     }
 };

@@ -65,7 +65,7 @@ pub const CustomButtonClass = extern struct {
     // @override
     pub fn constructed(arg_object: *Object) callconv(.C) void {
         var self = arg_object.tryInto(CustomButton).?;
-        self.__call("constructedV", .{CustomButton.Parent.type()});
+        self.__call("constructedV", .{CustomButton.Parent.gType()});
         _ = self.__call("bindProperty", .{ "number", self.into(Object), "label", .{ .sync_create = true } });
     }
 
@@ -121,7 +121,7 @@ pub const CustomButton = extern struct {
         return core.connect(self.into(core.Object), "zero-reached", handler, args, flags, &[_]type{ void, *CustomButton });
     }
 
-    pub fn @"type"() core.Type {
+    pub fn gType() core.Type {
         return core.registerType(CustomButtonClass, CustomButton, "CustomButton", .{});
     }
 };

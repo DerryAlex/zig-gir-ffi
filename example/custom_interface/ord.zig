@@ -75,7 +75,7 @@ pub const PartialOrd = extern struct {
         };
     }
 
-    pub fn @"type"() core.Type {
+    pub fn gType() core.Type {
         return core.registerInterface(PartialOrd, "PartialOrd");
     }
 };

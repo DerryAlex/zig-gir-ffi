@@ -58,8 +58,8 @@ pub const ExampleAppWindowClass = extern struct {
     pub fn dispose(arg_object: *Object) callconv(.C) void {
         var self = arg_object.tryInto(ExampleAppWindow).?;
         self.settings.__call("unref", .{});
-        self.__call("disposeTemplate", .{ExampleAppWindow.type()});
-        self.__call("disposeV", .{ExampleAppWindow.Parent.type()});
+        self.__call("disposeTemplate", .{ExampleAppWindow.gType()});
+        self.__call("disposeV", .{ExampleAppWindow.Parent.gType()});
     }
 
     // template callback
@@ -229,7 +229,7 @@ pub const ExampleAppWindow = extern struct {
         self.tc_lines.setText(@ptrCast(&buf));
     }
 
-    pub fn @"type"() core.Type {
+    pub fn gType() core.Type {
         return core.registerType(ExampleAppWindowClass, ExampleAppWindow, "ExampleAppWindow", .{ .final = true });
     }
 };

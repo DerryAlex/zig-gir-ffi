@@ -66,7 +66,7 @@ pub const ExampleAppPrefs = extern struct {
         return core.newObject(ExampleAppPrefs, property_names[0..], property_values[0..]);
     }
 
-    pub fn @"type"() core.Type {
+    pub fn gType() core.Type {
         return core.registerType(ExampleAppPrefsClass, ExampleAppPrefs, "ExampleAppPrefs", .{});
     }
 };

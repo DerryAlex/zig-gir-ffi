@@ -492,7 +492,7 @@ pub const CallableInfo = struct {
                 } else {
                     try writer.writeAll(", ");
                 }
-                try writer.writeAll("_type: core.Type");
+                try writer.writeAll("_gtype: core.Type");
             }
         }
         var iter = self.argsIter();
@@ -506,7 +506,7 @@ pub const CallableInfo = struct {
                 try writer.print("{}", .{arg});
             } else {
                 const arg_name = arg.asBase().name().?;
-                try writer.print("arg_{s}", .{arg_name});
+                try writer.print("_{s}", .{arg_name});
             }
         }
         if (self.canThrow()) {
@@ -692,13 +692,13 @@ pub const FunctionInfo = struct {
                 const arg_type = arg.type();
                 defer arg_type.asBase().deinit();
                 if (slice_info[idx].is_slice_ptr) {
-                    try writer.print("argz_{s}: ", .{arg.asBase().name().?});
+                    try writer.print("_{s}s: ", .{arg.asBase().name().?});
                     if (arg.isOptional()) {
                         try writer.writeAll("?");
                     }
                     try writer.print("[]{}", .{arg.type().paramType(0)});
                 } else if (closure_info[idx].is_func) {
-                    try writer.print("argz_{s}: anytype, argz_{s}_args: anytype", .{ arg.asBase().name().?, arg.asBase().name().? });
+                    try writer.print("{s}_fn: anytype, {s}_args: anytype", .{ arg.asBase().name().?, arg.asBase().name().? });
                 } else {
                     try writer.print("{}", .{arg});
                 }
@@ -787,20 +787,20 @@ pub const FunctionInfo = struct {
                 defer arg_type.asBase().deinit();
                 const ptr_arg = args[slice_info[idx].slice_ptr];
                 if (ptr_arg.isOptional()) {
-                    try writer.print("const arg_{s}: {} = if (argz_{s}) |some| @intCast(some.len) else 0;\n", .{ arg_name, arg_type, ptr_arg.asBase().name().? });
+                    try writer.print("const _{s}: {} = if (_{s}s) |some| @intCast(some.len) else 0;\n", .{ arg_name, arg_type, ptr_arg.asBase().name().? });
                 } else {
-                    try writer.print("const arg_{s}: {} = @intCast(argz_{s}.len);\n", .{ arg_name, arg_type, ptr_arg.asBase().name().? });
+                    try writer.print("const _{s}: {} = @intCast(_{s}s.len);\n", .{ arg_name, arg_type, ptr_arg.asBase().name().? });
                 }
             }
             if (slice_info[idx].is_slice_ptr) {
                 if (arg.isOptional()) {
-                    try writer.print("const arg_{s} = if (argz_{s}) |some| some.ptr else null;\n", .{ arg_name, arg_name });
+                    try writer.print("const _{s} = if (_{s}s) |some| some.ptr else null;\n", .{ arg_name, arg_name });
                 } else {
-                    try writer.print("const arg_{s} = argz_{s}.ptr;\n", .{ arg_name, arg_name });
+                    try writer.print("const _{s} = _{s}s.ptr;\n", .{ arg_name, arg_name });
                 }
             }
             if (closure_info[idx].is_func) {
-                try writer.print("var closure_{s} = core.ClosureZ(@TypeOf(&argz_{s}), @TypeOf(argz_{s}_args), &[_]type{{", .{ arg_name, arg_name, arg_name });
+                try writer.print("var closure_{s} = core.ClosureZ(@TypeOf(&{s}_fn), @TypeOf({s}_args), &[_]type{{", .{ arg_name, arg_name, arg_name });
                 const arg_type = arg.type();
                 defer arg_type.asBase().deinit();
                 if (arg_type.interface()) |interface| {
@@ -836,7 +836,7 @@ pub const FunctionInfo = struct {
                     try writer.writeAll("void");
                     std.log.warn("[Generic Callback] {s}", .{self.symbol()});
                 }
-                try writer.print("}}).new(null, argz_{s}, argz_{s}_args) catch @panic(\"Out of Memory\");\n", .{ arg_name, arg_name });
+                try writer.print("}}).new(null, {s}_fn, {s}_args) catch @panic(\"Out of Memory\");\n", .{ arg_name, arg_name });
                 switch (closure_info[idx].scope) {
                     .Call => {
                         try writer.print("defer closure_{s}.deinit();\n", .{arg_name});
@@ -849,15 +849,15 @@ pub const FunctionInfo = struct {
                     },
                     else => unreachable,
                 }
-                try writer.print("const arg_{s}: {$} = @ptrCast(closure_{s}.c_closure());\n", .{ arg_name, arg, arg_name });
+                try writer.print("const _{s}: {$} = @ptrCast(closure_{s}.c_closure());\n", .{ arg_name, arg, arg_name });
             }
             if (closure_info[idx].is_data) {
                 const func_arg = args[closure_info[idx].closure_func];
-                try writer.print("const arg_{s}: {$} = @ptrCast(closure_{s}.c_data());\n", .{ arg_name, arg, func_arg.asBase().name().? });
+                try writer.print("const _{s}: {$} = @ptrCast(closure_{s}.c_data());\n", .{ arg_name, arg, func_arg.asBase().name().? });
             }
             if (closure_info[idx].is_destroy) {
                 const func_arg = args[closure_info[idx].closure_func];
-                try writer.print("const arg_{s}: {$} = @ptrCast(closure_{s}.c_destroy());\n", .{ arg_name, arg, func_arg.asBase().name().? });
+                try writer.print("const _{s}: {$} = @ptrCast(closure_{s}.c_destroy());\n", .{ arg_name, arg, func_arg.asBase().name().? });
             }
         }
         // prepare output
@@ -867,11 +867,11 @@ pub const FunctionInfo = struct {
             const arg_type = arg.type();
             defer arg_type.asBase().deinit();
             if (arg.mayBeNull()) {
-                try writer.print("var out_{s}: {&?} = undefined;\n", .{ arg_name, arg_type });
+                try writer.print("var {s}_out: {&?} = undefined;\n", .{ arg_name, arg_type });
             } else {
-                try writer.print("var out_{s}: {&} = undefined;\n", .{ arg_name, arg_type });
+                try writer.print("var {s}_out: {&} = undefined;\n", .{ arg_name, arg_type });
             }
-            try writer.print("const arg_{s} = &out_{s};\n", .{ arg_name, arg_name });
+            try writer.print("const _{s} = &{s}_out;\n", .{ arg_name, arg_name });
         }
         try writer.writeAll("const cFn = @extern(*const fn");
         try self.asCallable().format_helper(writer, true, true, false);
@@ -920,14 +920,14 @@ pub const FunctionInfo = struct {
                 if (n_out > 1) {
                     try writer.print(".{s} = ", .{arg_name});
                 }
-                try writer.print("out_{s}", .{arg_name});
+                try writer.print("{s}_out", .{arg_name});
                 if (slice_info[idx].is_slice_ptr) {
                     const len_arg = args[slice_info[idx].slice_len];
                     try writer.writeAll("[0..@intCast(");
                     if (len_arg.direction() == .Out and !len_arg.isCallerAllocates()) {
-                        try writer.print("out_{s}", .{len_arg.asBase().name().?});
+                        try writer.print("{s}_out", .{len_arg.asBase().name().?});
                     } else {
-                        try writer.print("arg_{s}", .{len_arg.asBase().name().?});
+                        try writer.print("_{s}", .{len_arg.asBase().name().?});
                     }
                     try writer.writeAll(")]");
                 }
@@ -1044,7 +1044,7 @@ pub const VFuncInfo = struct {
         try writer.print("pub fn {s}V", .{vfunc_name});
         try self.asCallable().format_helper(writer, true, false, true);
         try writer.writeAll(" {\n");
-        try writer.print("const vFn = @as(*{s}, @ptrCast(core.typeClassPeek(_type))).{s}.?;", .{ class_name, raw_vfunc_name });
+        try writer.print("const vFn = @as(*{s}, @ptrCast(core.typeClassPeek(_gtype))).{s}.?;", .{ class_name, raw_vfunc_name });
         try writer.writeAll("const ret = vFn");
         try self.asCallable().format_helper(writer, false, false, true);
         try writer.writeAll(";\n");
@@ -1106,7 +1106,7 @@ pub const RegisteredTypeInfo = struct {
 
     pub fn format_helper(self: RegisteredTypeInfo, writer: anytype) !void {
         if (self.gType() != c.G_TYPE_NONE) {
-            try writer.writeAll("pub fn @\"type\"() core.Type {\n");
+            try writer.writeAll("pub fn gType() core.Type {\n");
             const init_fn = self.typeInit();
             if (std.mem.eql(u8, "intern", init_fn)) {
                 if (self.gType() < 256 * 4) {
@@ -2029,7 +2029,7 @@ pub const ArgInfo = struct {
         }
         if (!option_type_only) {
             const name = self.asBase().name().?;
-            try writer.print("arg_{s}: ", .{name});
+            try writer.print("_{s}: ", .{name});
         }
         const arg_type = self.type();
         defer arg_type.asBase().deinit();

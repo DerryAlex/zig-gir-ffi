@@ -67,7 +67,7 @@ pub const ExampleAppClass = extern struct {
         self.__call("addAction", .{action_quit.into(Action)});
         var quit_accels = [_:null]?[*:0]const u8{"<Ctrl>Q"};
         self.__call("setAccelsForAction", .{ "app.quit", &quit_accels });
-        self.__call("startupV", .{ExampleApp.Parent.type()});
+        self.__call("startupV", .{ExampleApp.Parent.gType()});
     }
 };
 
@@ -89,7 +89,7 @@ pub const ExampleApp = extern struct {
         return core.newObject(ExampleApp, property_names[0..], property_values[0..]);
     }
 
-    pub fn @"type"() core.Type {
+    pub fn gType() core.Type {
         return core.registerType(ExampleAppClass, ExampleApp, "ExampleApp", .{ .final = true });
     }
 };

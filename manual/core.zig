@@ -87,8 +87,8 @@ pub fn ValueZ(comptime T: type) type {
                 _ = value.init(.Variant);
             } else if (comptime T == GObject.ParamSpec) {
                 _ = value.init(.Param);
-            } else if (comptime @hasDecl(T, "type")) {
-                _ = value.init(T.type());
+            } else if (comptime @hasDecl(T, "gType")) {
+                _ = value.init(T.gType());
             } else {
                 @compileError(std.fmt.comptimePrint("cannot initialize GValue with type {s}", .{@typeName(T)}));
             }
@@ -254,7 +254,7 @@ pub inline fn downCast(comptime T: type, object: anytype) ?*T {
 }
 
 pub inline fn dynamicCast(comptime T: type, object: anytype) ?*T {
-    return if (GObject.typeCheckInstanceIsA(unsafeCast(GObject.TypeInstance, object), T.type())) unsafeCast(T, object) else null;
+    return if (GObject.typeCheckInstanceIsA(unsafeCast(GObject.TypeInstance, object), T.gType())) unsafeCast(T, object) else null;
 }
 
 pub inline fn unsafeCast(comptime T: type, object: anytype) *T {
@@ -579,7 +579,7 @@ fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?
 
 /// Wrapper for g_object_new_with_properties
 pub fn newObject(comptime T: type, names: ?[][*:0]const u8, values: ?[]GObject.Value) *T {
-    return unsafeCast(T, objectNewWithProperties(T.type(), names, values));
+    return unsafeCast(T, objectNewWithProperties(T.gType(), names, values));
 }
 
 fn signalNewv(signal_name: [*:0]const u8, itype: Type, signal_flags: GObject.SignalFlags, class_closure: ?*GObject.Closure, accumulator: anytype, accu_data: anytype, c_marshaller: ?GObject.ClosureMarshal, return_type: Type, param_types: ?[]Type) u32 {
@@ -614,7 +614,7 @@ pub fn newSignal(comptime Class: type, comptime Object: type, comptime signal_na
             }
         }
     }
-    const class_closure = GObject.signalTypeCclosureNew(Object.type(), @offsetOf(Class, &field_name));
+    const class_closure = GObject.signalTypeCclosureNew(Object.gType(), @offsetOf(Class, &field_name));
     const signal_field_type = meta.FieldType(Class, meta.stringToEnum(meta.FieldEnum(Class), &field_name).?);
     const signal_info = @typeInfo(meta.Child(meta.Child(signal_field_type))); // ?*const fn(args...) return_type
     const return_type = ValueZ(signal_info.Fn.return_type.?).init().value.g_type;
@@ -627,12 +627,12 @@ pub fn newSignal(comptime Class: type, comptime Object: type, comptime signal_na
             }
         }
         if (is_gtyped) {
-            ty.* = meta.Child(param.type.?).type();
+            ty.* = meta.Child(param.type.?).gType();
         } else {
             ty.* = ValueZ(param.type.?).init().value.g_type;
         }
     }
-    return signalNewv(signal_name.ptr, Object.type(), signal_flags, class_closure, accumulator, accu_data, null, return_type, param_types[0..]);
+    return signalNewv(signal_name.ptr, Object.gType(), signal_flags, class_closure, accumulator, accu_data, null, return_type, param_types[0..]);
 }
 
 const TypeTag = struct {
@@ -707,7 +707,7 @@ pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]cons
             .instance_init = @ptrCast(&instance_init),
             .value_table = null,
         };
-        const type_id = GObject.typeRegisterStatic(Object.Parent.type(), name, &info, flags);
+        const type_id = GObject.typeRegisterStatic(Object.Parent.gType(), name, &info, flags);
         if (@hasDecl(Object, "Private")) {
             typeTag(Object).private_offset = GObject.typeAddInstancePrivate(type_id, @sizeOf(Object.Private));
         }
@@ -726,7 +726,7 @@ pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]cons
                     .interface_finalize = null,
                     .interface_data = null,
                 };
-                GObject.typeAddInterfaceStatic(type_id, Interface.type(), &interface_info);
+                GObject.typeAddInterfaceStatic(type_id, Interface.gType(), &interface_info);
             }
         }
         GLib.onceInitLeave(&typeTag(Object).type_id, @intFromEnum(type_id));
@@ -765,7 +765,7 @@ pub fn registerInterface(comptime Interface: type, name: [*:0]const u8) Type {
         const type_id = GObject.typeRegisterStatic(.Interface, name, &info, .{});
         if (comptime @hasDecl(Interface, "Prerequisites")) {
             inline for (Interface.Prerequisites) |Prerequisite| {
-                GObject.typeInterfaceAddPrerequisite(type_id, Prerequisite.type());
+                GObject.typeInterfaceAddPrerequisite(type_id, Prerequisite.gType());
             }
         }
         GLib.onceInitLeave(&typeTag(Interface).type_id, @intFromEnum(type_id));
@@ -775,7 +775,7 @@ pub fn registerInterface(comptime Interface: type, name: [*:0]const u8) Type {
 
 pub fn typeInstanceGetInterface(comptime Interface: type, self: *Interface) *Interface {
     const class = unsafeCast(GObject.TypeInstance, self).g_class.?;
-    return unsafeCast(Interface, GObject.typeInterfacePeek(class, Interface.type()));
+    return unsafeCast(Interface, GObject.typeInterfacePeek(class, Interface.gType()));
 }
 
 // subclass end
