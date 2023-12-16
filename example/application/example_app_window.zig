@@ -50,8 +50,27 @@ pub const ExampleAppWindowClass = extern struct {
     pub fn init(class: *ExampleAppWindowClass) void {
         var widget_class: *WidgetClass = @ptrCast(class);
         widget_class.setTemplateFromResource("/org/gtk/exampleapp/window.ui");
-        template.bindChild(widget_class, ExampleAppWindow);
-        template.bindCallback(widget_class, ExampleAppWindowClass);
+        template.bindChild(widget_class, ExampleAppWindow, &[_]template.BindingZ{
+            .{ .name = "stack" },
+            .{ .name = "gears" },
+            .{ .name = "search" },
+            .{ .name = "searchbar" },
+            .{ .name = "searchentry" },
+            .{ .name = "sidebar" },
+            .{ .name = "words" },
+            .{ .name = "lines" },
+            .{ .name = "lines_label" },
+        }, null);
+        template.bindCallback(widget_class, ExampleAppWindowClass, &[_]template.BindingZ{
+            .{
+                .name = "search_text_changed",
+                .symbol = "searchTextChanged",
+            },
+            .{
+                .name = "visible_child_changed",
+                .symbol = "visibleChildChanged",
+            },
+        });
     }
 
     // @override
@@ -63,10 +82,10 @@ pub const ExampleAppWindowClass = extern struct {
     }
 
     // template callback
-    pub fn TCsearch_text_changed(entry: *Entry, self: *ExampleAppWindow) callconv(.C) void {
+    pub fn searchTextChanged(entry: *Entry, self: *ExampleAppWindow) callconv(.C) void {
         const text = entry.__call("getText", .{});
         if (text[0] == 0) return;
-        var tab = self.tc_stack.getVisibleChild().?.tryInto(ScrolledWindow).?;
+        var tab = self.stack.getVisibleChild().?.tryInto(ScrolledWindow).?;
         var view = tab.getChild().?.tryInto(TextView).?;
         var buffer = view.getBuffer();
         var start: TextIter = undefined;
@@ -80,9 +99,9 @@ pub const ExampleAppWindowClass = extern struct {
     }
 
     // template callback
-    pub fn TCvisible_child_changed(stack: *Stack, _: *ParamSpec, self: *ExampleAppWindow) callconv(.C) void {
+    pub fn visibleChildChanged(stack: *Stack, _: *ParamSpec, self: *ExampleAppWindow) callconv(.C) void {
         if (stack.__call("inDestruction", .{})) return;
-        self.tc_searchbar.setSearchMode(false);
+        self.searchbar.setSearchMode(false);
         self.updateWords();
         self.updateLines();
     }
@@ -91,15 +110,15 @@ pub const ExampleAppWindowClass = extern struct {
 pub const ExampleAppWindow = extern struct {
     parent: Parent,
     settings: *Settings,
-    tc_stack: *Stack, // template child
-    tc_gears: *MenuButton, // template child
-    tc_search: *ToggleButton, // template child
-    tc_searchbar: *SearchBar, // template child
-    tc_searchentry: *SearchEntry, // template child
-    tc_sidebar: *Revealer, // template child
-    tc_words: *ListBox, // template child
-    tc_lines: *Label, // template child
-    tc_lines_label: *Label, // template child
+    stack: *Stack, // template child
+    gears: *MenuButton, // template child
+    search: *ToggleButton, // template child
+    searchbar: *SearchBar, // template child
+    searchentry: *SearchEntry, // template child
+    sidebar: *Revealer, // template child
+    words: *ListBox, // template child
+    lines: *Label, // template child
+    lines_label: *Label, // template child
 
     pub const Parent = ApplicationWindow;
     pub usingnamespace core.Extend(ExampleAppWindow);
@@ -109,19 +128,19 @@ pub const ExampleAppWindow = extern struct {
         var builder = Builder.newFromResource("/org/gtk/exampleapp/gears-menu.ui");
         defer builder.__call("unref", .{});
         const menu = builder.getObject("menu").?.tryInto(MenuModel).?;
-        self.tc_gears.setMenuModel(menu);
+        self.gears.setMenuModel(menu);
         self.settings = Settings.new("org.gtk.exampleapp");
-        self.settings.bind("transition", self.tc_stack.into(Object), "transition-type", .{});
-        self.settings.bind("show-words", self.tc_sidebar.into(Object), "reveal-child", .{});
-        _ = self.tc_search.__call("bindProperty", .{ "active", self.tc_searchbar.into(Object), "search-mode-enabled", .{ .bidirectional = true } });
-        _ = self.tc_sidebar.__call("connectRevealChildNotify", .{ updateWords, .{self}, .{ .swapped = true } });
+        self.settings.bind("transition", self.stack.into(Object), "transition-type", .{});
+        self.settings.bind("show-words", self.sidebar.into(Object), "reveal-child", .{});
+        _ = self.search.__call("bindProperty", .{ "active", self.searchbar.into(Object), "search-mode-enabled", .{ .bidirectional = true } });
+        _ = self.sidebar.__call("connectRevealChildNotify", .{ updateWords, .{self}, .{ .swapped = true } });
         const action_show_words = self.settings.createAction("show-words");
         defer core.unsafeCast(Object, action_show_words).unref();
         self.__call("addAction", .{action_show_words});
-        var action_show_lines = PropertyAction.new("show-lines", self.tc_lines.into(Object), "visible");
+        var action_show_lines = PropertyAction.new("show-lines", self.lines.into(Object), "visible");
         defer action_show_lines.__call("unref", .{});
         self.__call("addAction", .{action_show_lines.into(Action)});
-        _ = self.tc_lines.__call("bindProperty", .{ "visible", self.tc_lines_label.into(Object), "visible", .{} });
+        _ = self.lines.__call("bindProperty", .{ "visible", self.lines_label.into(Object), "visible", .{} });
     }
 
     pub fn new(app: *ExampleApp) *ExampleAppWindow {
@@ -143,7 +162,7 @@ pub const ExampleAppWindow = extern struct {
         view.setEditable(false);
         view.setCursorVisible(false);
         scrolled.setChild(view.into(Widget));
-        _ = self.tc_stack.addTitled(scrolled.into(Widget), basename, basename);
+        _ = self.stack.addTitled(scrolled.into(Widget), basename, basename);
         var buffer = view.getBuffer();
         const result = file.loadContents(null) catch {
             var err = core.getError();
@@ -162,18 +181,18 @@ pub const ExampleAppWindow = extern struct {
         buffer.getStartIter(&start_iter);
         buffer.getEndIter(&end_iter);
         buffer.applyTag(tag, &start_iter, &end_iter);
-        self.tc_search.__call("setSensitive", .{true});
+        self.search.__call("setSensitive", .{true});
         self.updateWords();
         self.updateLines();
     }
 
     fn findWord(button: *Button, self: *ExampleAppWindow) void {
         const word = button.getLabel().?;
-        self.tc_searchentry.__call("setText", .{word});
+        self.searchentry.__call("setText", .{word});
     }
 
     pub fn updateWords(self: *ExampleAppWindow) void {
-        var tab = if (self.tc_stack.getVisibleChild()) |some| some.tryInto(ScrolledWindow).? else return;
+        var tab = if (self.stack.getVisibleChild()) |some| some.tryInto(ScrolledWindow).? else return;
         var view = tab.getChild().?.tryInto(gtk.TextView).?;
         var buffer = view.getBuffer();
         var start: TextIter = undefined;
@@ -204,9 +223,9 @@ pub const ExampleAppWindow = extern struct {
             start = end;
         }
         while (true) {
-            const child = self.tc_words.__call("getFirstChild", .{});
+            const child = self.words.__call("getFirstChild", .{});
             if (child) |some| {
-                self.tc_words.remove(some);
+                self.words.remove(some);
             } else {
                 break;
             }
@@ -215,18 +234,18 @@ pub const ExampleAppWindow = extern struct {
         while (iter.next()) |some| {
             var row = Button.newWithLabel(some.*);
             _ = row.connectClicked(findWord, .{self}, .{});
-            self.tc_words.insert(row.into(Widget), -1);
+            self.words.insert(row.into(Widget), -1);
         }
     }
 
     pub fn updateLines(self: *ExampleAppWindow) void {
-        var tab = if (self.tc_stack.getVisibleChild()) |some| some.tryInto(ScrolledWindow).? else return;
+        var tab = if (self.stack.getVisibleChild()) |some| some.tryInto(ScrolledWindow).? else return;
         var view = tab.getChild().?.tryInto(TextView).?;
         var buffer = view.getBuffer();
         const count = buffer.getLineCount();
         var buf: [22]u8 = undefined;
         _ = std.fmt.bufPrintZ(buf[0..], "{d}", .{count}) catch @panic("");
-        self.tc_lines.setText(@ptrCast(&buf));
+        self.lines.setText(@ptrCast(&buf));
     }
 
     pub fn gType() core.Type {

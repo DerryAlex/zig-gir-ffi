@@ -5,33 +5,33 @@ const Gtk = @import("Gtk.zig");
 const core = Gtk.core;
 const WidgetClass = Gtk.WidgetClass;
 
-/// Wrapper for gtk_widget_class_bind_template_child
-/// Template child should be named `"tc_" ++ name` or `"ti_" ++ name`(internal child)
-pub fn bindChild(class: *WidgetClass, comptime Object: type) void {
-    inline for (comptime meta.fieldNames(Object)) |name| {
-        if (comptime name.len <= 3 or name[0] != 't' or (name[1] != 'c' and name[1] != 'i') or name[2] != '_') continue;
-        comptime var name_c: [name.len - 3:0]u8 = undefined;
-        comptime std.mem.copy(u8, name_c[0..], name[3..]);
-        class.bindTemplateChildFull(&name_c, name[1] == 'i', @offsetOf(Object, name));
+pub const BindingZ = struct {
+    name: [:0]const u8,
+    symbol: ?[]const u8 = null,
+    internal: bool = false,
+};
+
+pub fn bindChild(class: *WidgetClass, comptime Object: type, comptime bindings: ?[]const BindingZ, comptime private_bindings: ?[]const BindingZ) void {
+    if (bindings) |some| {
+        inline for (some) |binding| {
+            const name = binding.name;
+            const symbol = binding.symbol orelse binding.name;
+            class.bindTemplateChildFull(name.ptr, binding.internal, @offsetOf(Object, symbol));
+        }
     }
-    if (@hasDecl(Object, "Private")) {
-        inline for (comptime meta.fieldNames(Object.Private)) |name| {
-            if (comptime name.len <= 3 or name[0] != 't' or (name[1] != 'c' and name[1] != 'i') or name[2] != '_') continue;
-            comptime var name_c: [name.len - 3:0]u8 = undefined;
-            comptime std.mem.copy(u8, name_c[0..], name[3..]);
-            class.bindTemplateChildFull(&name_c, name[1] == 'i', @offsetOf(Object.Private, name) + core.typeTag(Object).private_offset);
+    if (private_bindings) |some| {
+        inline for (some) |binding| {
+            const name = binding.name;
+            const symbol = binding.symbol orelse binding.name;
+            class.bindTemplateChildFull(name.ptr, binding.internal, @offsetOf(Object.Private, symbol) + core.typeTag(Object).private_offset);
         }
     }
 }
 
-/// Wrapper for gtk_widget_class_bind_template_callback
-/// Template callback should be named `"TC" ++ name`
-pub fn bindCallback(class: *WidgetClass, comptime Class: type) void {
-    inline for (comptime meta.declarations(Class)) |decl| {
-        const name = decl.name;
-        if (comptime name.len <= 2 or name[0] != 'T' or name[1] != 'C') continue;
-        comptime var name_c: [name.len - 2:0]u8 = undefined;
-        comptime std.mem.copy(u8, name_c[0..], name[2..]);
-        class.bindTemplateCallbackFull(&name_c, @ptrCast(&@field(Class, name)));
+pub fn bindCallback(class: *WidgetClass, comptime Class: type, comptime bindings: []const BindingZ) void {
+    inline for (bindings) |binding| {
+        const name = binding.name;
+        const symbol = binding.symbol orelse binding.name;
+        class.bindTemplateCallbackFull(name.ptr, @ptrCast(&@field(Class, symbol)));
     }
 }

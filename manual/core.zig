@@ -587,19 +587,6 @@ fn signalNewv(signal_name: [*:0]const u8, itype: Type, signal_flags: GObject.Sig
     return g_signal_newv(signal_name, itype, signal_flags, class_closure, @ptrCast(accumulator_closure.c_closure()), accumulator_closure.c_data(), c_marshaller, return_type, if (param_types) |some| @intCast(some.len) else 0, if (param_types) |some| some.ptr else null);
 }
 
-pub const SignalFlagsZ = struct {
-    run_first: bool = false,
-    run_last: bool = false,
-    run_cleanup: bool = false,
-    no_recurse: bool = false,
-    detailed: bool = false,
-    action: bool = false,
-    no_hooks: bool = false,
-    must_collect: bool = false,
-    deprecated: bool = false,
-    accumulator_first_run: bool = false,
-};
-
 /// Wrapper for g_signal_newv
 pub fn newSignal(comptime Class: type, comptime Object: type, comptime signal_name: [:0]const u8, signal_flags: GObject.SignalFlags, accumulator: anytype, accu_data: anytype) u32 {
     assert(signal_flags.run_first or signal_flags.run_last or signal_flags.run_cleanup);

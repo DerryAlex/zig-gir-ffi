@@ -21,7 +21,10 @@ const ExampleAppPrefsClass = extern struct {
     pub fn init(class: *ExampleAppPrefsClass) void {
         var widget_class: *WidgetClass = @ptrCast(class);
         widget_class.setTemplateFromResource("/org/gtk/exampleapp/prefs.ui");
-        template.bindChild(widget_class, ExampleAppPrefs);
+        template.bindChild(widget_class, ExampleAppPrefs, null, &[_]template.BindingZ{
+            .{ .name = "font" },
+            .{ .name = "transition" },
+        });
     }
 
     // @override
@@ -35,8 +38,8 @@ const ExampleAppPrefsClass = extern struct {
 
 const ExampleAppPrefsPrivate = struct {
     settings: *Settings,
-    tc_font: *FontButton, // template child
-    tc_transition: *ComboBoxText, // template child
+    font: *FontButton, // template child
+    transition: *ComboBoxText, // template child
 };
 
 pub const ExampleAppPrefs = extern struct {
@@ -50,8 +53,8 @@ pub const ExampleAppPrefs = extern struct {
     pub fn init(self: *ExampleAppPrefs) void {
         self.__call("initTemplate", .{});
         self.private.settings = Settings.new("org.gtk.exampleapp");
-        self.private.settings.__call("bind", .{ "font", self.private.tc_font.into(Object), "font", .{} });
-        self.private.settings.__call("bind", .{ "transition", self.private.tc_transition.into(Object), "active-id", .{} });
+        self.private.settings.__call("bind", .{ "font", self.private.font.into(Object), "font", .{} });
+        self.private.settings.__call("bind", .{ "transition", self.private.transition.into(Object), "active-id", .{} });
     }
 
     pub fn new(win: *ExampleAppWindow) *ExampleAppPrefs {
