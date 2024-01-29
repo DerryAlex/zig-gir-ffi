@@ -1,7 +1,6 @@
 const std = @import("std");
-const Builder = std.build.Builder;
 
-pub fn build(b: *Builder) !void {
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -13,7 +12,7 @@ pub fn build(b: *Builder) !void {
         .optimize = optimize,
         .target = target,
     });
-    exe.addModule("gtk", gtk.module("gtk"));
+    exe.root_module.addImport("gtk", gtk.module("gtk"));
     var pid = try std.os.fork();
     if (pid == 0) {
         const argv = [_:null]?[*:0]const u8{ "glib-compile-resources", "exampleapp.gresource.xml", "--target=resources.c", "--generate-source" };

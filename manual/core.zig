@@ -592,7 +592,7 @@ pub fn newSignal(comptime Class: type, comptime Object: type, comptime signal_na
     assert(signal_flags.run_first or signal_flags.run_last or signal_flags.run_cleanup);
     comptime var field_name: [signal_name.len:0]u8 = undefined;
     comptime {
-        std.mem.copy(u8, field_name[0..], signal_name[0..]);
+        @memcpy(field_name[0..], signal_name[0..]);
         for (&field_name) |*c| {
             if (c.* == '-') {
                 c.* = '_';

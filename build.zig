@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
         .target = target,
     });
-    exe.addModule("xml", xml.module("xml"));
+    exe.root_module.addImport("xml", xml.module("xml"));
     exe.linkLibC();
     exe.linkSystemLibrary("gobject-introspection-1.0");
     b.installArtifact(exe);
