@@ -2,12 +2,13 @@ const std = @import("std");
 pub const c = @cImport({
     @cInclude("girepository.h");
 });
+const config = @import("config");
 const emit = @import("helper.zig").emit;
 
 const output_path = "gtk4/";
 
 pub fn main() !void {
-    const version = "0.7.0";
+    const version = config.version;
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -48,7 +49,7 @@ pub fn main() !void {
         \\.{{
         \\    .name = "gtk4",
         \\    .version = "{s}",
-        \\    .path = .{{
+        \\    .paths = .{{
         \\        "build.zig",
         \\        "build.zig.zon",
         \\

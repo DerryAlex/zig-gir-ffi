@@ -1,6 +1,6 @@
 .{
     .name = "zig-gir-ffi",
-    .version = "0.7.0",
+    .version = "0.7.1",
     .paths = .{
         "build.zig",
         "build.zig.zon",

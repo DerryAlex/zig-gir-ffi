@@ -8,8 +8,8 @@
     },
     .dependencies = .{
         .gtk = .{
-            .url = "https://github.com/DerryAlex/zig-gir-ffi/releases/download/v0.7.0/gtk4.tar.gz",
-            .hash = "122080b7c45b673f11247401b3224a536f352f26068f8d7e1eafbc5e013f424cb9ce",
+            .url = "https://github.com/DerryAlex/zig-gir-ffi/releases/download/v0.7.1/gtk4.tar.gz",
+            .hash = "122067dfb6ec015000d389fc2d9b86212de3654670f488c847b169c5904853864c7d",
         },
     },
 }

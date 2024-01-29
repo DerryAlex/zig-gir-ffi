@@ -6,6 +6,10 @@ pub fn build(b: *std.Build) !void {
 
     const xml = b.dependency("xml", .{});
 
+    const options = b.addOptions();
+    const version = b.option([]const u8, "version", "application version string") orelse "0.7.1";
+    options.addOption([]const u8, "version", version);
+
     const exe = b.addExecutable(.{
         .name = "main",
         .root_source_file = .{ .path = "src/main.zig" },
@@ -13,6 +17,7 @@ pub fn build(b: *std.Build) !void {
         .target = target,
     });
     exe.root_module.addImport("xml", xml.module("xml"));
+    exe.root_module.addOptions("config", options);
     exe.linkLibC();
     exe.linkSystemLibrary("gobject-introspection-1.0");
     b.installArtifact(exe);

@@ -123,7 +123,7 @@ pub const CustomButton = extern struct {
         return core.newObject(CustomButton, null, null);
     }
 
-    pub fn @"type"() core.Type {
+    pub fn gType() core.Type {
         return core.registerType(CustomButtonClass, CustomButton, "CustomButton", .{});
     }
 
