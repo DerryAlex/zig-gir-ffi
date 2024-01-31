@@ -120,7 +120,7 @@ pub const CustomButton = extern struct {
     pub usingnamespace core.Extend(CustomButton);
 
     pub fn new() *CustomButton {
-        return core.newObject(CustomButton, null, null);
+        return core.newObject(CustomButton, .{});
     }
 
     pub fn gType() core.Type {

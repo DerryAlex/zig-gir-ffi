@@ -58,15 +58,10 @@ pub const ExampleAppPrefs = extern struct {
     }
 
     pub fn new(win: *ExampleAppWindow) *ExampleAppPrefs {
-        var transient_for = core.ValueZ(Window).init();
-        defer transient_for.deinit();
-        transient_for.set(win.into(Window));
-        var use_header_bar = core.ValueZ(bool).init();
-        defer use_header_bar.deinit();
-        use_header_bar.set(true);
-        var property_names = [_][*:0]const u8{ "transient-for", "use-header-bar" };
-        var property_values = [_]core.Value{ transient_for.value, use_header_bar.value };
-        return core.newObject(ExampleAppPrefs, property_names[0..], property_values[0..]);
+        return core.newObject(ExampleAppPrefs, .{
+            .@"transient-for" = win.into(Window),
+            .@"use-header-bar" = true,
+        });
     }
 
     pub fn gType() core.Type {

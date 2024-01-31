@@ -142,12 +142,9 @@ pub const ExampleAppWindow = extern struct {
     }
 
     pub fn new(app: *ExampleApp) *ExampleAppWindow {
-        var application = core.ValueZ(Application).init();
-        defer application.deinit();
-        application.set(app.into(Application));
-        var property_names = [_][*:0]const u8{"application"};
-        var property_values = [_]core.Value{application.value};
-        return core.newObject(ExampleAppWindow, property_names[0..], property_values[0..]);
+        return core.newObject(ExampleAppWindow, .{
+            .application = app.into(Application),
+        });
     }
 
     pub fn open(self: *ExampleAppWindow, file: *File) void {

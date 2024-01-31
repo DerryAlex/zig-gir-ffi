@@ -69,15 +69,10 @@ pub const ExampleApp = extern struct {
     pub usingnamespace core.Extend(ExampleApp);
 
     pub fn new() *ExampleApp {
-        var application_id = core.ValueZ([*:0]const u8).init();
-        defer application_id.deinit();
-        application_id.set("org.gtk.example");
-        var flags = core.ValueZ(core.ApplicationFlags).init();
-        defer flags.deinit();
-        flags.set(.{ .handles_open = true });
-        var property_names = [_][*:0]const u8{ "application-id", "flags" };
-        var property_values = [_]Value{ application_id.value, flags.value };
-        return core.newObject(ExampleApp, property_names[0..], property_values[0..]);
+        return core.newObject(ExampleApp, .{
+            .@"application-id" = "org.gtk.example",
+            .flags = core.ApplicationFlags{ .handles_open = true },
+        });
     }
 
     pub fn gType() core.Type {

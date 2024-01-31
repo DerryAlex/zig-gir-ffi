@@ -25,7 +25,7 @@ pub const TypedInt = extern struct {
     pub usingnamespace core.Extend(TypedInt);
 
     pub fn new(value: i32) *TypedInt {
-        var object = core.newObject(TypedInt, null, null);
+        var object = core.newObject(TypedInt, .{});
         object.private.value = value;
         return object;
     }

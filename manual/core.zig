@@ -41,6 +41,26 @@ pub const Type = enum(usize) {
 /// UCS-4
 pub const Unichar = u32;
 
+fn isBasicType(comptime T: type) bool {
+    if (T == void) return true;
+    if (T == bool) return true;
+    if (T == i8) return true;
+    if (T == u8) return true;
+    if (T == i16) return true;
+    if (T == u16) return true;
+    if (T == i32) return true;
+    if (T == u32) return true;
+    if (T == i64) return true;
+    if (T == u64) return true;
+    if (T == f32) return true;
+    if (T == f64) return true;
+    if (@typeInfo(T) == .Enum) return true; // Enum or Type
+    if (@typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .Packed) return true; // Flag
+    if (T == [*:0]const u8) return true; // String
+    if (@typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) return true; // Pointer
+    return false;
+}
+
 /// Wrapper for GValue
 pub fn ValueZ(comptime T: type) type {
     return struct {
@@ -99,27 +119,7 @@ pub fn ValueZ(comptime T: type) type {
             self.value.unset();
         }
 
-        const is_basic = gen_is_basic: {
-            if (T == void) break :gen_is_basic true;
-            if (T == bool) break :gen_is_basic true;
-            if (T == i8) break :gen_is_basic true;
-            if (T == u8) break :gen_is_basic true;
-            if (T == i16) break :gen_is_basic true;
-            if (T == u16) break :gen_is_basic true;
-            if (T == i32) break :gen_is_basic true;
-            if (T == u32) break :gen_is_basic true;
-            if (T == i64) break :gen_is_basic true;
-            if (T == u64) break :gen_is_basic true;
-            if (T == f32) break :gen_is_basic true;
-            if (T == f64) break :gen_is_basic true;
-            if (@typeInfo(T) == .Enum) break :gen_is_basic true; // Enum or Type
-            if (@typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .Packed) break :gen_is_basic true; // Flag
-            if (T == [*:0]const u8) break :gen_is_basic true; // String
-            if (@typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) break :gen_is_basic true; // Pointer
-            break :gen_is_basic false;
-        };
-
-        pub fn get(self: Self) if (is_basic) T else *T {
+        pub fn get(self: Self) if (isBasicType(T)) T else *T {
             if (comptime T == void) @compileError("Cannot initialize GValue with type void");
             if (comptime T == bool) return self.value.getBoolean();
             if (comptime T == i8) return self.value.getSchar();
@@ -148,7 +148,7 @@ pub fn ValueZ(comptime T: type) type {
             return @ptrCast(self.value.getBoxed().?);
         }
 
-        pub fn set(self: *Self, arg_value: if (is_basic) T else *T) void {
+        pub fn set(self: *Self, arg_value: if (isBasicType(T)) T else *T) void {
             if (comptime T == void) {
                 @compileError("Cannot initialize GValue with type void");
             } else if (comptime T == bool) {
@@ -577,8 +577,28 @@ fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?
 }
 
 /// Wrapper for g_object_new_with_properties
-pub fn newObject(comptime T: type, names: ?[][*:0]const u8, values: ?[]GObject.Value) *T {
-    return unsafeCast(T, objectNewWithProperties(T.gType(), names, values));
+pub fn newObject(comptime T: type, properties: anytype) *T {
+    const info = @typeInfo(@TypeOf(properties));
+    comptime assert(info == .Struct);
+    const n_props = info.Struct.fields.len;
+    var names: [n_props][*:0]const u8 = undefined;
+    var values: [n_props]GObject.Value = undefined;
+    inline for (info.Struct.fields, 0..) |field, idx| {
+        names[idx] = field.name;
+        const value_type = blk: {
+            if (@typeInfo(field.type) == .Pointer and @typeInfo(field.type).Pointer.size == .One) {
+                const pointer_child = @typeInfo(field.type).Pointer.child;
+                if (@typeInfo(pointer_child) == .Array and @typeInfo(pointer_child).Array.child == u8 and std.meta.sentinel(pointer_child) == @as(u8, 0)) break :blk [*:0]const u8;
+                if (comptime !isBasicType(pointer_child)) break :blk pointer_child;
+            }
+            break :blk field.type;
+        };
+        var value = ValueZ(value_type).init();
+        value.set(@field(properties, field.name));
+        values[idx] = value.value;
+    }
+    defer for (&values) |*value| value.unset();
+    return unsafeCast(T, objectNewWithProperties(T.gType(), if (n_props != 0) names[0..] else null, if (n_props != 0) values[0..] else null));
 }
 
 fn signalNewv(signal_name: [*:0]const u8, itype: Type, signal_flags: GObject.SignalFlags, class_closure: ?*GObject.Closure, accumulator: anytype, accu_data: anytype, c_marshaller: ?GObject.ClosureMarshal, return_type: Type, param_types: ?[]Type) u32 {
