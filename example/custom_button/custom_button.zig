@@ -23,18 +23,12 @@ pub const CustomButtonClass = extern struct {
     parent: ButtonClass,
     zero_reached: ?*const fn (self: *CustomButton) callconv(.C) void,
 
-    pub fn init(class: *CustomButtonClass) void {
-        var button_class: *ButtonClass = @ptrCast(class);
-        button_class.clicked = &clicked;
-    }
-
     pub fn properties() []*ParamSpec {
         _properties[@intFromEnum(Properties.Number)] = core.paramSpecInt("number", null, null, 0, 10, 10, .{ .readable = true, .writable = true });
         return _properties[0..];
     }
 
-    // @override
-    pub fn set_property(arg_object: *Object, arg_property_id: u32, arg_value: *Value, _: *ParamSpec) callconv(.C) void {
+    pub fn set_property_override(arg_object: *Object, arg_property_id: u32, arg_value: *Value, _: *ParamSpec) callconv(.C) void {
         var self = arg_object.tryInto(CustomButton).?;
         switch (@as(Properties, @enumFromInt(arg_property_id))) {
             .Number => {
@@ -43,8 +37,7 @@ pub const CustomButtonClass = extern struct {
         }
     }
 
-    // @override
-    pub fn get_property(arg_object: *Object, arg_property_id: u32, arg_value: *Value, _: *ParamSpec) callconv(.C) void {
+    pub fn get_property_override(arg_object: *Object, arg_property_id: u32, arg_value: *Value, _: *ParamSpec) callconv(.C) void {
         var self = arg_object.tryInto(CustomButton).?;
         switch (@as(Properties, @enumFromInt(arg_property_id))) {
             .Number => {
@@ -62,15 +55,13 @@ pub const CustomButtonClass = extern struct {
         return _signals[0..];
     }
 
-    // @override
-    pub fn constructed(arg_object: *Object) callconv(.C) void {
+    pub fn constructed_override(arg_object: *Object) callconv(.C) void {
         var self = arg_object.tryInto(CustomButton).?;
         self.__call("constructedV", .{CustomButton.Parent.gType()});
         _ = self.__call("bindProperty", .{ "number", self.into(Object), "label", .{ .sync_create = true } });
     }
 
-    // @override
-    pub fn clicked(arg_button: *Button) callconv(.C) void {
+    pub fn clicked_override(arg_button: *Button) callconv(.C) void {
         var self = arg_button.tryInto(CustomButton).?;
         const decremented_number = self.private.number - 1;
         self.setNumber(decremented_number);
@@ -87,6 +78,7 @@ pub const CustomButton = extern struct {
 
     pub const Parent = Button;
     pub const Private = CustomButtonPrivate;
+    pub const Class = CustomButtonClass;
     pub usingnamespace core.Extend(CustomButton);
 
     pub fn new() *CustomButton {
@@ -122,6 +114,6 @@ pub const CustomButton = extern struct {
     }
 
     pub fn gType() core.Type {
-        return core.registerType(CustomButtonClass, CustomButton, "CustomButton", .{});
+        return core.registerType(CustomButton, "CustomButton", .{});
     }
 };

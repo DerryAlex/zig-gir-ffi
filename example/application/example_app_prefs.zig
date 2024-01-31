@@ -27,8 +27,7 @@ const ExampleAppPrefsClass = extern struct {
         });
     }
 
-    // @override
-    fn dispose(arg_object: *Object) callconv(.C) void {
+    fn dispose_override(arg_object: *Object) callconv(.C) void {
         var self = arg_object.tryInto(ExampleAppPrefs).?;
         self.private.settings.__call("unref", .{});
         self.__call("disposeTemplate", .{ExampleAppPrefs.type()});
@@ -48,6 +47,7 @@ pub const ExampleAppPrefs = extern struct {
 
     pub const Parent = Dialog;
     pub const Private = ExampleAppPrefsPrivate;
+    pub const Class = ExampleAppPrefsClass;
     pub usingnamespace core.Extend(ExampleAppPrefs);
 
     pub fn init(self: *ExampleAppPrefs) void {
@@ -70,6 +70,6 @@ pub const ExampleAppPrefs = extern struct {
     }
 
     pub fn gType() core.Type {
-        return core.registerType(ExampleAppPrefsClass, ExampleAppPrefs, "ExampleAppPrefs", .{});
+        return core.registerType(ExampleAppPrefs, "ExampleAppPrefs", .{});
     }
 };

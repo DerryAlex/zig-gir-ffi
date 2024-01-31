@@ -18,22 +18,13 @@ const GApplicationClass = core.ApplicationClass;
 pub const ExampleAppClass = extern struct {
     parent: ApplicationClass,
 
-    pub fn init(class: *ExampleAppClass) void {
-        var gapplication_class: *GApplicationClass = @ptrCast(class);
-        gapplication_class.activate = &activate;
-        gapplication_class.open = &open;
-        gapplication_class.startup = &startup;
-    }
-
-    // @override
-    fn activate(arg_app: *GApplication) callconv(.C) void {
+    pub fn activate_override(arg_app: *GApplication) callconv(.C) void {
         const self = arg_app.tryInto(ExampleApp).?;
         var win = ExampleAppWindow.new(self);
         win.__call("present", .{});
     }
 
-    // @override
-    fn open(arg_app: *GApplication, arg_files: [*]*File, arg_n_files: i32, arg_hint: [*:0]const u8) callconv(.C) void {
+    pub fn open_override(arg_app: *GApplication, arg_files: [*]*File, arg_n_files: i32, arg_hint: [*:0]const u8) callconv(.C) void {
         var self = arg_app.tryInto(ExampleApp).?;
         _ = arg_hint;
         const windows = self.__call("getWindows", .{});
@@ -54,8 +45,7 @@ pub const ExampleAppClass = extern struct {
         self.__call("quit", .{});
     }
 
-    // @override
-    fn startup(arg_app: *GApplication) callconv(.C) void {
+    pub fn startup_override(arg_app: *GApplication) callconv(.C) void {
         var self = arg_app.tryInto(ExampleApp).?;
         var action_preferences = SimpleAction.new("preferences", null);
         defer action_preferences.__call("unref", .{});
@@ -75,6 +65,7 @@ pub const ExampleApp = extern struct {
     parent: Parent,
 
     pub const Parent = Application;
+    pub const Class = ExampleAppClass;
     pub usingnamespace core.Extend(ExampleApp);
 
     pub fn new() *ExampleApp {
@@ -90,6 +81,6 @@ pub const ExampleApp = extern struct {
     }
 
     pub fn gType() core.Type {
-        return core.registerType(ExampleAppClass, ExampleApp, "ExampleApp", .{ .final = true });
+        return core.registerType(ExampleApp, "ExampleApp", .{ .final = true });
     }
 };

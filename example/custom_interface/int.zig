@@ -20,6 +20,7 @@ pub const TypedInt = extern struct {
 
     pub const Parent = Object;
     pub const Private = TypeIntPrivate;
+    pub const Class = TypedIntClass;
     pub const Interfaces = [_]type{ PartialEq, PartialOrd };
     pub usingnamespace core.Extend(TypedInt);
 
@@ -51,6 +52,6 @@ pub const TypedInt = extern struct {
     }
 
     pub fn gType() core.Type {
-        return core.registerType(TypedIntClass, TypedInt, "TypedInt", .{});
+        return core.registerType(TypedInt, "TypedInt", .{});
     }
 };

@@ -643,17 +643,43 @@ fn init(comptime T: type, value: *T) void {
     }
 }
 
+fn overrideMethods(comptime Class: type, comptime C: type, class: *C) void {
+    const info = @typeInfo(C).Struct;
+    inline for (info.fields) |field| {
+        if (@hasDecl(Class, field.name ++ "_override")) {
+            const field_info = @typeInfo(field.type);
+            if (field_info == .Optional) {
+                const optional_child_info = @typeInfo(field_info.Optional.child);
+                if (optional_child_info == .Pointer) {
+                    const pointer_child_info = @typeInfo(optional_child_info.Pointer.child);
+                    if (pointer_child_info == .Fn) {
+                        @field(class, field.name) = &@field(Class, field.name ++ "_override");
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn doClassOverride(comptime Class: type, comptime T: type, class: *anyopaque) void {
+    if (comptime @hasDecl(T, "Parent")) {
+        doClassOverride(Class, T.Parent, class);
+    }
+    if (comptime @hasDecl(T, "Class")) {
+        overrideMethods(Class, T.Class, @ptrCast(@alignCast(class)));
+    }
+}
+
 /// Wrapper for g_type_register_static
-pub fn registerType(comptime Class: type, comptime Object: type, name: [*:0]const u8, flags: GObject.TypeFlags) Type {
+pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: GObject.TypeFlags) Type {
+    const Class: type = Object.Class;
     const class_init = struct {
         fn trampoline(class: *Class) callconv(.C) void {
             if (typeTag(Object).private_offset != 0) {
                 _ = GObject.typeClassAdjustPrivateOffset(class, &typeTag(Object).private_offset);
             }
-            inline for ([_][]const u8{ "constructed", "dispatch_properties_changed", "dispose", "finalize", "get_property", "notify", "set_property" }) |vfunc| {
-                if (comptime @hasDecl(Class, vfunc)) {
-                    @field(@as(*GObject.ObjectClass, @ptrCast(class)), vfunc) = &@field(Class, vfunc);
-                }
+            if (comptime @hasDecl(Object, "Parent")) {
+                doClassOverride(Class, Object.Parent, class);
             }
             if (comptime @hasDecl(Class, "properties")) {
                 @as(*GObject.ObjectClass, @ptrCast(class)).installProperties(Class.properties());

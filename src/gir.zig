@@ -1750,7 +1750,10 @@ pub const ObjectInfo = struct {
             try writer.writeAll("};\n");
         }
         if (self.parent()) |_parent| {
-            try writer.print("pub const Parent = {s}.{s};", .{ _parent.asRegisteredType().asBase().namespace(), _parent.asRegisteredType().asBase().name().? });
+            try writer.print("pub const Parent = {s}.{s};\n", .{ _parent.asRegisteredType().asBase().namespace(), _parent.asRegisteredType().asBase().name().? });
+        }
+        if (self.classStruct()) |_class| {
+            try writer.print("pub const Class = {s}.{s};\n", .{ _class.asRegisteredType().asBase().namespace(), _class.asRegisteredType().asBase().name().? });
         }
         var c_iter = self.constantIter();
         while (c_iter.next()) |constant| {

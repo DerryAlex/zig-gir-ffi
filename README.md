@@ -90,18 +90,17 @@ _ = button.connectClicked(Window.destroy, .{window.into(Window)}, .{ .swapped = 
 
 Custom widget and its class should be `extern struct` to provide a stable ABI. The first field should be `parent`. Custom widget may have a `private` field, which can be `struct` . Except `parent` and `private`, fields may have a default value.
 
-Class may have `init` function to override virtual functions and do other initializing stuff. (You don't need to overide virtual functions of `ObjectClass` manually.) For signals and properties, refer to [example/custom_button](./example/custom_button/custom_button.zig). For template, refer to [example/application](./example/application/example_app_prefs.zig).
+Class may have `init` function to do initializing stuff. (You don't need to overide virtual functions manually.) For signals and properties, refer to [example/custom_button](./example/custom_button/custom_button.zig). For template, refer to [example/application](./example/application/example_app_prefs.zig).
 
-Widget should have `new` and `type` function and may have `init` function. You should use `Extend(Self)` to enable `into`, `tryInto` and `__call`.
+Widget should have `new` and `gType` function and may have `init` function. You should use `Extend(Self)` to enable `into`, `tryInto` and `__call`.
 
 ```zig
 pub const CustomButtonClass = extern struct {
     parent: ButtonClass,
     // ...
 
-    pub fn init(class: *CustomButtonClass) void {
-        var button_class: *ButtonClass = @ptrCast(class);
-        button_class.clicked = &clicked;
+    pub fn clicked_override(arg_button: *Button) callconv(.C) void {
+        // ...
     }
 
     // ...
@@ -117,6 +116,7 @@ pub const CustomButton = extern struct {
 
     pub const Parent = Button;
     pub const Private = CustomButtonPrivate;
+    pub const Class = CustomButtonClass;
     pub usingnamespace core.Extend(CustomButton);
 
     pub fn new() *CustomButton {
@@ -124,7 +124,7 @@ pub const CustomButton = extern struct {
     }
 
     pub fn gType() core.Type {
-        return core.registerType(CustomButtonClass, CustomButton, "CustomButton", .{});
+        return core.registerType(CustomButton, "CustomButton", .{});
     }
 
     // ...

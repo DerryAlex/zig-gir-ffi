@@ -73,15 +73,13 @@ pub const ExampleAppWindowClass = extern struct {
         });
     }
 
-    // @override
-    pub fn dispose(arg_object: *Object) callconv(.C) void {
+    pub fn dispose_override(arg_object: *Object) callconv(.C) void {
         var self = arg_object.tryInto(ExampleAppWindow).?;
         self.settings.__call("unref", .{});
         self.__call("disposeTemplate", .{ExampleAppWindow.gType()});
         self.__call("disposeV", .{ExampleAppWindow.Parent.gType()});
     }
 
-    // template callback
     pub fn searchTextChanged(entry: *Entry, self: *ExampleAppWindow) callconv(.C) void {
         const text = entry.__call("getText", .{});
         if (text[0] == 0) return;
@@ -98,7 +96,6 @@ pub const ExampleAppWindowClass = extern struct {
         }
     }
 
-    // template callback
     pub fn visibleChildChanged(stack: *Stack, _: *ParamSpec, self: *ExampleAppWindow) callconv(.C) void {
         if (stack.__call("inDestruction", .{})) return;
         self.searchbar.setSearchMode(false);
@@ -121,6 +118,7 @@ pub const ExampleAppWindow = extern struct {
     lines_label: *Label, // template child
 
     pub const Parent = ApplicationWindow;
+    pub const Class = ExampleAppWindowClass;
     pub usingnamespace core.Extend(ExampleAppWindow);
 
     pub fn init(self: *ExampleAppWindow) void {
@@ -249,6 +247,6 @@ pub const ExampleAppWindow = extern struct {
     }
 
     pub fn gType() core.Type {
-        return core.registerType(ExampleAppWindowClass, ExampleAppWindow, "ExampleAppWindow", .{ .final = true });
+        return core.registerType(ExampleAppWindow, "ExampleAppWindow", .{ .final = true });
     }
 };
