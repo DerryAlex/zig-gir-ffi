@@ -608,7 +608,8 @@ fn signalNewv(signal_name: [*:0]const u8, itype: Type, signal_flags: GObject.Sig
 }
 
 /// Wrapper for g_signal_newv
-pub fn newSignal(comptime Class: type, comptime Object: type, comptime signal_name: [:0]const u8, signal_flags: GObject.SignalFlags, accumulator: anytype, accu_data: anytype) u32 {
+pub fn newSignal(comptime Object: type, comptime signal_name: [:0]const u8, signal_flags: GObject.SignalFlags, accumulator: anytype, accu_data: anytype) u32 {
+    const Class = Object.Class;
     assert(signal_flags.run_first or signal_flags.run_last or signal_flags.run_cleanup);
     comptime var field_name: [signal_name.len:0]u8 = undefined;
     comptime {

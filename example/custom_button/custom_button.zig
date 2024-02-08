@@ -24,7 +24,9 @@ pub const CustomButtonClass = extern struct {
     zero_reached: ?*const fn (self: *CustomButton) callconv(.C) void,
 
     pub fn properties() []*ParamSpec {
-        _properties[@intFromEnum(Properties.Number)] = core.paramSpecInt("number", null, null, 0, 10, 10, .{ .readable = true, .writable = true });
+        @memcpy(_properties[1..], &[_]*ParamSpec{
+            core.paramSpecInt("number", null, null, 0, 10, 10, .{ .readable = true, .writable = true }),
+        });
         return _properties[0..];
     }
 
@@ -47,11 +49,13 @@ pub const CustomButtonClass = extern struct {
     }
 
     pub fn signals() []u32 {
-        _signals[@intFromEnum(Signals.ZeroReached)] = core.newSignal(CustomButtonClass, CustomButton, "zero-reached", .{
-            .run_last = true,
-            .no_recurse = true,
-            .no_hooks = true,
-        }, {}, .{});
+        @memcpy(_signals[0..], &[_]u32{
+            core.newSignal(CustomButton, "zero-reached", .{
+                .run_last = true,
+                .no_recurse = true,
+                .no_hooks = true,
+            }, {}, .{}),
+        });
         return _signals[0..];
     }
 
