@@ -2,13 +2,15 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
+    const optimize = b.standardOptimizeOption(.{
+        .preferred_optimize_mode = .ReleaseSafe,
+    });
 
     const gtk = b.dependency("gtk", .{});
 
     const exe = b.addExecutable(.{
         .name = "example",
-        .root_source_file = .{ .path = "example.zig" },
+        .root_source_file = b.path("example.zig"),
         .optimize = optimize,
         .target = target,
     });

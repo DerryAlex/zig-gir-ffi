@@ -2,11 +2,18 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
+    const optimize = b.standardOptimizeOption(.{
+        .preferred_optimize_mode = .ReleaseSafe,
+    });
 
     const gtk = b.dependency("gtk", .{});
 
-    const exe = b.addExecutable(.{ .name = "main", .root_source_file = .{ .path = "main.zig" }, .optimize = optimize, .target = target });
+    const exe = b.addExecutable(.{
+        .name = "main",
+        .root_source_file = b.path("main.zig"),
+        .optimize = optimize,
+        .target = target,
+    });
     exe.root_module.addImport("gtk", gtk.module("gtk"));
     exe.linkLibC();
     exe.linkSystemLibrary("gtk4");

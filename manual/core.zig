@@ -55,7 +55,7 @@ fn isBasicType(comptime T: type) bool {
     if (T == f32) return true;
     if (T == f64) return true;
     if (@typeInfo(T) == .Enum) return true; // Enum or Type
-    if (@typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .Packed) return true; // Flag
+    if (@typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .@"packed") return true; // Flag
     if (T == [*:0]const u8) return true; // String
     if (@typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) return true; // Pointer
     return false;
@@ -137,7 +137,7 @@ pub fn ValueZ(comptime T: type) type {
                 comptime assert(@typeInfo(T).Enum.is_exhaustive);
                 return @enumFromInt(self.value.getEnum());
             }
-            if (comptime @typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .Packed) {
+            if (comptime @typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .@"packed") {
                 return @bitCast(self.value.getFlags());
             }
             if (comptime T == [*:0]const u8) return self.value.getString();
@@ -178,7 +178,7 @@ pub fn ValueZ(comptime T: type) type {
             } else if (comptime @typeInfo(T) == .Enum) {
                 comptime assert(@typeInfo(T).Enum.is_exhaustive);
                 self.value.setEnum(@intFromEnum(arg_value));
-            } else if (comptime @typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .Packed) {
+            } else if (comptime @typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .@"packed") {
                 self.value.setFlags(@bitCast(arg_value));
             } else if (comptime T == [*:0]const u8) {
                 self.value.setString(arg_value);
