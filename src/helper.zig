@@ -96,8 +96,19 @@ pub fn isZigKeyword(str: []const u8) bool {
     return false;
 }
 
+pub fn docPrefix(namespace: []const u8) ?[]const u8 {
+    const data = std.ComptimeStringMap([]const u8, .{
+        .{ "Gtk", "https://docs.gtk.org/gtk4" },
+        .{ "Gdk", "https://docs.gtk.org/gdk4" },
+        .{ "Gsk", "https://docs.gtk.org/gsk4" },
+        .{ "GObject", "https://docs.gtk.org/gobject" },
+        .{ "Gio", "https://docs.gtk.org/gio" },
+        .{ "Pango", "https://docs.gtk.org/pango" },
+    });
+    return data.get(namespace);
+}
+
 // TODO: https://gitlab.gnome.org/GNOME/gobject-introspection/-/issues/246
-// For xml parser, see https://github.com/ianprime0509/zig-gobject/
 pub fn fieldInfoGetSize(field_info: FieldInfo) !usize {
     const xml_reader_option: xml.ReaderOptions = .{
         .DecoderType = xml.encoding.Utf8Decoder,

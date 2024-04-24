@@ -1213,6 +1213,11 @@ pub const EnumInfo = struct {
     }
 
     fn formatEnum(self: EnumInfo, writer: anytype) !void {
+        const namespace = self.asRegisteredType().asBase().namespace();
+        if (helper.docPrefix(namespace)) |prefix| {
+            const name = self.asRegisteredType().asBase().name().?;
+            try writer.print("/// {s}/enum.{s}.html\n", .{ prefix, name });
+        }
         try writer.print("pub const {s} = enum", .{self.asRegisteredType().asBase().name().?});
         switch (self.storageType()) {
             .Int32 => {
@@ -1254,6 +1259,11 @@ pub const EnumInfo = struct {
     }
 
     fn formatFlag(self: EnumInfo, writer: anytype) !void {
+        const namespace = self.asRegisteredType().asBase().namespace();
+        if (helper.docPrefix(namespace)) |prefix| {
+            const name = self.asRegisteredType().asBase().name().?;
+            try writer.print("/// {s}/flags.{s}.html\n", .{ prefix, name });
+        }
         try writer.print("pub const {s} = packed struct", .{self.asRegisteredType().asBase().name().?});
         switch (self.storageType()) {
             .Int32 => {
@@ -1413,11 +1423,17 @@ pub const StructInfo = struct {
         _ = fmt;
         _ = options;
         if (self.asRegisteredType().asBase().isDeprecated() and !enable_deprecated) return;
+        const namespace = self.asRegisteredType().asBase().namespace();
+        if (helper.docPrefix(namespace)) |prefix| {
+            if (self.size() != 0) {
+                const name = self.asRegisteredType().asBase().name().?;
+                try writer.print("/// {s}/struct.{s}.html\n", .{ prefix, name });
+            }
+        }
         const name = self.asRegisteredType().asBase().name().?;
         try writer.print("pub const {s} = {s}{{\n", .{ name, if (self.size() == 0) "opaque" else "extern struct" });
         BitField.reset();
         var iter = self.fieldIter();
-        const namespace = self.asRegisteredType().asBase().namespace();
         while (iter.next()) |field| {
             // TODO: https://github.com/ziglang/zig/issues/12325
             if (std.mem.eql(u8, namespace, "GObject") and std.mem.eql(u8, name, "Closure") and std.mem.eql(u8, field.asBase().name().?, "notifiers")) {
@@ -1517,6 +1533,11 @@ pub const UnionInfo = struct {
         _ = fmt;
         _ = options;
         if (self.asRegisteredType().asBase().isDeprecated() and !enable_deprecated) return;
+        const namespace = self.asRegisteredType().asBase().namespace();
+        if (helper.docPrefix(namespace)) |prefix| {
+            const name = self.asRegisteredType().asBase().name().?;
+            try writer.print("/// {s}/union.{s}.html\n", .{ prefix, name });
+        }
         try writer.print("pub const {s} = extern union{{\n", .{self.asRegisteredType().asBase().name().?});
         var iter = self.fieldIter();
         while (iter.next()) |field| {
@@ -1724,6 +1745,11 @@ pub const ObjectInfo = struct {
         _ = fmt;
         _ = options;
         if (self.asRegisteredType().asBase().isDeprecated() and !enable_deprecated) return;
+        const namespace = self.asRegisteredType().asBase().namespace();
+        if (helper.docPrefix(namespace)) |prefix| {
+            const name = self.asRegisteredType().asBase().name().?;
+            try writer.print("/// {s}/class.{s}.html\n", .{ prefix, name });
+        }
         const name = self.asRegisteredType().asBase().name().?;
         var iter = self.fieldIter();
         try writer.print("pub const {s} = {s} {{\n", .{ name, if (iter.capacity == 0) "opaque" else "extern struct" });
@@ -1923,6 +1949,11 @@ pub const InterfaceInfo = struct {
         _ = fmt;
         _ = options;
         if (self.asRegisteredType().asBase().isDeprecated() and !enable_deprecated) return;
+        const namespace = self.asRegisteredType().asBase().namespace();
+        if (helper.docPrefix(namespace)) |prefix| {
+            const name = self.asRegisteredType().asBase().name().?;
+            try writer.print("/// {s}/iface.{s}.html\n", .{ prefix, name });
+        }
         const name = self.asRegisteredType().asBase().name().?;
         try writer.print("pub const {s} = opaque {{\n", .{name});
         var pre_iter = self.prerequisiteIter();
