@@ -40,7 +40,6 @@ pub fn main() !void {
     defer build_zig_zon.close();
     try build_zig.writer().writeAll(
         \\const std = @import("std");
-        \\const LazyPath = std.Build.LazyPath;
         \\
         \\pub fn build(b: *std.Build) !void{
         \\
@@ -103,7 +102,7 @@ pub fn main() !void {
         });
         std.debug.assert(fmt_result.stderr.len == 0);
 
-        try build_zig.writer().print("    _ = b.addModule(\"{c}{s}\", .{{ .root_source_file = LazyPath{{ .path = \"{s}.zig\" }} }});\n", .{ std.ascii.toLower(namespace[0]), namespace[1..], namespace });
+        try build_zig.writer().print("    _ = b.addModule(\"{c}{s}\", .{{ .root_source_file = b.path(\"{s}.zig\") }});\n", .{ std.ascii.toLower(namespace[0]), namespace[1..], namespace });
         try build_zig_zon.writer().print("        \"{s}.zig\",\n", .{namespace});
     }
 
