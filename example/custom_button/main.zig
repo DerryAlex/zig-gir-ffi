@@ -18,7 +18,7 @@ pub fn main() u8 {
 pub fn activate(arg_app: *GApplication) void {
     const app = arg_app.tryInto(Application).?;
     var window = ApplicationWindow.new(app);
-    var box = Box.new(.Vertical, 12);
+    var box = Box.new(.vertical, 12);
     window.__call("setChild", .{box.into(Widget)});
     var button = CustomButton.new();
     _ = button.connectZeroReached(CustomButton.setNumber, .{10}, .{});

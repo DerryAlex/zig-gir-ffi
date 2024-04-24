@@ -18,9 +18,9 @@ pub fn activate(arg_app: *GApplication) void {
     var window = ApplicationWindow.new(app);
     window.__call("setTitle", .{"Window"});
     window.__call("setDefaultSize", .{ 200, 200 });
-    var box = Box.new(.Vertical, 0);
-    box.__call("setHalign", .{.Center});
-    box.__call("setValign", .{.Center});
+    var box = Box.new(.vertical, 0);
+    box.__call("setHalign", .{.center});
+    box.__call("setValign", .{.center});
     window.__call("setChild", .{box.into(Widget)});
     var button = Button.newWithLabel("Hello, World");
     _ = button.connectClicked(printHello, .{}, .{});

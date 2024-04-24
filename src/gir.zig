@@ -1184,10 +1184,9 @@ pub const EnumInfo = struct {
     }
 
     fn formatValue(self: EnumInfo, value: ValueInfo, convert_func: ?[]const u8, writer: anytype) !void {
-        var buf: [256]u8 = undefined;
-        const value_name = snakeToCamel(value.asBase().name().?, buf[0..]);
-        if (std.ascii.isAlphabetic(value_name[0])) {
-            try writer.print("{c}{s}", .{ std.ascii.toUpper(value_name[0]), value_name[1..] });
+        const value_name = value.asBase().name().?;
+        if (std.ascii.isAlphabetic(value_name[0]) and !helper.isZigKeyword(value_name)) {
+            try writer.print("{s}", .{value_name});
         } else {
             try writer.print("@\"{s}\"", .{value_name});
         }
