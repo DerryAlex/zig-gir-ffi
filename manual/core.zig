@@ -647,8 +647,11 @@ const TypeTag = struct {
 };
 
 pub fn typeTag(comptime Object: type) *TypeTag {
-    _ = Object;
     const Static = struct {
+        comptime {
+            _ = Object;
+        }
+
         var tag = TypeTag{};
     };
     return &Static.tag;
