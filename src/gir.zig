@@ -86,7 +86,7 @@ pub const TypeTag = enum(c.GITypeTag) {
 pub const FieldInfoFlags = packed struct(c.GIFieldInfoFlags) {
     readable: bool = false,
     writable: bool = false,
-    _padding: u30 = 0,
+    _: u30 = 0,
 };
 
 test "FieldInfoFlags" {
@@ -110,7 +110,7 @@ pub const FunctionInfoFlags = packed struct(c.GIFunctionInfoFlags) {
     is_setter: bool = false,
     wraps_vfunc: bool = false,
     throws: bool = false,
-    _padding: u26 = 0,
+    _: u26 = 0,
 };
 
 test "FunctionInfoFlags" {
@@ -156,7 +156,7 @@ pub const ParamFlags = packed struct(c.GParamFlags) {
     static_name: bool = false,
     static_nick: bool = false,
     static_blurb: bool = false,
-    _padding0: u22 = 0,
+    _8: u22 = 0,
     explicit_notify: bool = false,
     deprecated: bool = false,
 };
@@ -225,9 +225,9 @@ pub const SignalFlags = packed struct(c.GSignalFlags) {
     no_hooks: bool = false,
     must_collect: bool = false,
     deprecated: bool = false,
-    _padding0: u8 = 0,
+    _9: u8 = 0,
     accumulator_first_run: bool = false,
-    _padding: u14 = 0,
+    _: u14 = 0,
 };
 
 test "SignalFlags" {
@@ -289,7 +289,7 @@ pub const VFuncInfoFlags = packed struct(c.GIVFuncInfoFlags) {
     must_override: bool = false,
     must_not_override: bool = false,
     throws: bool = false,
-    _padding: u28 = 0,
+    _: u28 = 0,
 };
 
 test "VFuncInfoFlags" {
@@ -1291,12 +1291,11 @@ pub const EnumInfo = struct {
             const name_dup = allocator.dupe(u8, name) catch @panic("Out of Memory");
             values.put(idx, name_dup) catch @panic("Out of Memory");
         }
-        var padding_count: usize = 0;
         var padding_bits: usize = 0;
         for (0..32) |idx| {
             if (values.get(idx)) |name| {
                 if (padding_bits != 0) {
-                    try writer.print("_padding{d}: u{d} = 0,\n", .{ padding_count, padding_bits });
+                    try writer.print("_{d}: u{d} = 0,\n", .{ idx, padding_bits });
                     padding_bits = 0;
                 }
                 if (isZigKeyword(name) or !std.ascii.isAlphabetic(name[0])) {
@@ -1305,14 +1304,11 @@ pub const EnumInfo = struct {
                     try writer.print("{s}: bool = false,\n", .{name});
                 }
             } else {
-                if (padding_bits == 0) {
-                    padding_count += 1;
-                }
                 padding_bits += 1;
             }
         }
         if (padding_bits != 0) {
-            try writer.print("_padding: u{d} = 0,\n", .{padding_bits});
+            try writer.print("_: u{d} = 0,\n", .{padding_bits});
         }
         iter = self.valueIter();
         while (iter.next()) |value| {
@@ -2153,7 +2149,7 @@ pub const BitField = struct {
     pub fn end(writer: anytype) !void {
         assert(BitField.remaining != null);
         if (BitField.remaining.? != 0) {
-            try writer.print("_padding: u{d},\n", .{BitField.remaining.?});
+            try writer.print("_: u{d},\n", .{BitField.remaining.?});
         }
         BitField.remaining = null;
         try writer.writeAll("},\n");
