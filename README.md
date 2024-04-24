@@ -1,6 +1,6 @@
 # Zig GIR FFI
 
-GObject Introspection for zig. Generated [GTK4 binding](https://github.com/DerryAlex/zig-gir-ffi/releases) can be downloaded.
+GObject Introspection for zig. Generated [GTK4 binding](https://github.com/DerryAlex/zig-gir-ffi/releases) (currently targeting zig 0.12.0) can be downloaded.
 
 ## Documentation
 
@@ -15,7 +15,7 @@ Zig container enables shorter code.
 ```zig
 // GtkBox *box = GTK_BOX(gtk_box_new(GTK_ORIENTATIOON_VERTICAL, 0));
 // gtk_box_append(box, GTK_WIDGET(button));
-var box = Box.new(.Vertical, 0);
+var box = Box.new(.vertical, 0);
 box.append(button.into(Widget));
 ```
 
@@ -23,15 +23,15 @@ The binding also makes use of zig's richer type system.
 
 ```zig
 pub const Orientation = enum(u32) {
-    Horizontal = 0,
-    Vertical = 1,
+    horizontal = 0,
+    vertical = 1,
 };
 
 pub const ApplicationFlags = packed struct(u32) {
     is_service: bool = false,
     // ...
     replace: bool = false,
-    _padding: u23 = 0,
+    _: u23 = 0,
 };
 
 // int g_application_run (GApplication* application, int argc, char** argv);
@@ -71,7 +71,7 @@ Users can use `__call` convinience function to call inherited functions. It will
 
 ```zig
 // You may need explict cast in case desired function is shadowed
-box.__call("setHalign", .{.Center}); // box.into(Widget).setHalign(.Center)
+box.__call("setHalign", .{.center}); // box.into(Widget).setHalign(.center)
 ```
 
 A nice type-safe wrapper for `connect` is created so that one does not need to provide a C callback.
