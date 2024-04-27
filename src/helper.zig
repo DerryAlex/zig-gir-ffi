@@ -122,7 +122,7 @@ pub fn fieldInfoGetSize(field_info: FieldInfo) !usize {
     const allocator = Static.gpa.allocator();
 
     const namespace = field_info.asBase().namespace();
-    const query_record_name = field_info.asBase().container().name().?;
+    const query_record_name = field_info.asBase().container().?.name().?;
     const query_field_name = field_info.asBase().name().?;
     if (Static.table.get(namespace)) |subtable| {
         if (subtable.get(query_record_name)) |subsubtable| {

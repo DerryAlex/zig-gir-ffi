@@ -371,8 +371,11 @@ pub const BaseInfo = struct {
         return std.mem.span(c.g_base_info_get_namespace(self.info));
     }
 
-    pub fn container(self: BaseInfo) BaseInfo {
-        return .{ .info = c.g_base_info_get_container(self.info) };
+    pub fn container(self: BaseInfo) ?BaseInfo {
+        if (@as(?*c.GIBaseInfo, c.g_base_info_get_container(self.info))) |info| {
+            return .{ .info = info };
+        }
+        return null;
     }
 
     pub fn @"type"(self: BaseInfo) InfoType {
@@ -478,7 +481,7 @@ pub const CallableInfo = struct {
             } else {
                 try writer.writeAll(", ");
             }
-            const container = self.asBase().container();
+            const container = self.asBase().container().?;
             switch (type_annotation) {
                 .Disable => try writer.writeAll("self"),
                 .Enable => try writer.print("self: *{s}", .{container.name().?}),
@@ -546,7 +549,7 @@ pub const CallableInfo = struct {
                     }
                 }
                 if (generic_gtk_widget) {
-                    const container = self.asBase().container();
+                    const container = self.asBase().container().?;
                     if (self.mayReturnNull()) {
                         try writer.writeAll("?");
                     }
@@ -607,6 +610,20 @@ pub const FunctionInfo = struct {
         _ = fmt;
         _ = options;
         if (self.asCallable().asBase().isDeprecated() and !enable_deprecated) return;
+        if (self.asCallable().asBase().container()) |container| {
+            const namespace = self.asCallable().asBase().namespace();
+            if (helper.docPrefix(namespace)) |prefix| {
+                var ctor = false;
+                const return_type = self.asCallable().returnType();
+                defer return_type.asBase().deinit();
+                if (return_type.interface()) |interface| {
+                    if (std.mem.eql(u8, "Gtk", interface.namespace()) and std.mem.eql(u8, "Widget", interface.name().?)) {
+                        ctor = true;
+                    }
+                }
+                try writer.print("/// {s}/{s}.{s}.{s}.html\n", .{ prefix, if (ctor) "ctor" else "method", container.name().?, self.asCallable().asBase().name().? });
+            }
+        }
         var buffer: [4096]u8 = undefined;
         var fixed_buffer_allocator = std.heap.FixedBufferAllocator.init(buffer[0..]);
         const allocator = fixed_buffer_allocator.allocator();
@@ -677,7 +694,7 @@ pub const FunctionInfo = struct {
                 } else {
                     try writer.writeAll(", ");
                 }
-                const container = self.asCallable().asBase().container();
+                const container = self.asCallable().asBase().container().?;
                 try writer.print("self: *{s}", .{container.name().?});
             }
             for (args, 0..) |arg, idx| {
@@ -728,7 +745,7 @@ pub const FunctionInfo = struct {
                 if (return_bool) {
                     try writer.writeAll("bool");
                 } else if (generic_gtk_widget) {
-                    const container = self.asCallable().asBase().container();
+                    const container = self.asCallable().asBase().container().?;
                     if (self.asCallable().mayReturnNull()) {
                         try writer.writeAll("?");
                     }
@@ -981,10 +998,14 @@ pub const SignalInfo = struct {
         _ = fmt;
         _ = options;
         if (self.asCallable().asBase().isDeprecated() and !enable_deprecated) return;
-        const container_name = self.asCallable().asBase().container().name().?;
+        const container_name = self.asCallable().asBase().container().?.name().?;
         var buf: [256]u8 = undefined;
         const raw_name = self.asCallable().asBase().name().?;
         const name = snakeToCamel(raw_name, buf[0..]);
+        const namespace = self.asCallable().asBase().namespace();
+        if (helper.docPrefix(namespace)) |prefix| {
+            try writer.print("/// {s}/signal.{s}.{s}.html\n", .{ prefix, container_name, raw_name });
+        }
         try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, comptime flags: core.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
         try writer.print("return core.connect(self.into(core.Object), \"{s}\", handler, args, flags, &[_]type{{", .{raw_name});
         const return_type = self.asCallable().returnType();
@@ -1034,7 +1055,7 @@ pub const VFuncInfo = struct {
         var buf: [256]u8 = undefined;
         const raw_vfunc_name = self.asCallable().asBase().name().?;
         const vfunc_name = snakeToCamel(raw_vfunc_name, buf[0..]);
-        const container = self.asCallable().asBase().container();
+        const container = self.asCallable().asBase().container().?;
         const class = switch (container.type()) {
             .Object => container.asRegisteredType().asObject().classStruct().?,
             .Interface => container.asRegisteredType().asInterface().ifaceStruct().?,
@@ -1042,6 +1063,10 @@ pub const VFuncInfo = struct {
         };
         defer class.asRegisteredType().asBase().deinit();
         const class_name = class.asRegisteredType().asBase().name().?;
+        const namespace = self.asCallable().asBase().namespace();
+        if (helper.docPrefix(namespace)) |prefix| {
+            try writer.print("/// {s}/vfunc.{s}.{s}.html\n", .{ prefix, container.name().?, raw_vfunc_name });
+        }
         try writer.print("pub fn {s}V", .{vfunc_name});
         try self.asCallable().format_helper(writer, .Enable, false, true);
         try writer.writeAll(" {\n");
@@ -1425,10 +1450,8 @@ pub const StructInfo = struct {
         if (self.asRegisteredType().asBase().isDeprecated() and !enable_deprecated) return;
         const namespace = self.asRegisteredType().asBase().namespace();
         if (helper.docPrefix(namespace)) |prefix| {
-            if (self.size() != 0) {
-                const name = self.asRegisteredType().asBase().name().?;
-                try writer.print("/// {s}/struct.{s}.html\n", .{ prefix, name });
-            }
+            const name = self.asRegisteredType().asBase().name().?;
+            try writer.print("/// {s}/struct.{s}.html\n", .{ prefix, name });
         }
         const name = self.asRegisteredType().asBase().name().?;
         try writer.print("pub const {s} = {s}{{\n", .{ name, if (self.size() == 0) "opaque" else "extern struct" });
@@ -1447,7 +1470,7 @@ pub const StructInfo = struct {
         }
         var m_iter = self.methodIter();
         while (m_iter.next()) |method| {
-            try writer.print("{}", .{method});
+            try writer.print("\n{}", .{method});
         }
         try self.asRegisteredType().format_helper(writer);
         try writer.writeAll("};\n");
@@ -2321,14 +2344,18 @@ pub const PropertyInfo = struct {
         var buf: [256]u8 = undefined;
         const raw_name = self.asBase().name().?;
         const name = snakeToCamel(raw_name, buf[0..]);
-        const container_name = self.asBase().container().name().?;
+        const container_name = self.asBase().container().?.name().?;
         const property_type = self.type();
         defer property_type.asBase().deinit();
         const _flags = self.flags();
+        const namespace = self.asBase().namespace();
         if (_flags.readable) {
             if (self.getter()) |some| {
                 defer some.asCallable().asBase().deinit();
             } else {
+                if (helper.docPrefix(namespace)) |prefix| {
+                    try writer.print("/// {s}/property.{s}.{s}.html\n", .{ prefix, container_name, raw_name });
+                }
                 try writer.print("pub fn get{c}{s}(self: *{s}) {s}{&} {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name, if (self.isBasicTypeProperty()) "" else "*", property_type });
                 try writer.print("var property_value = core.ValueZ({}).init();\n", .{property_type});
                 try writer.writeAll("defer property_value.deinit();\n");
@@ -2341,12 +2368,18 @@ pub const PropertyInfo = struct {
             if (self.setter()) |some| {
                 defer some.asCallable().asBase().deinit();
             } else {
+                if (helper.docPrefix(namespace)) |prefix| {
+                    try writer.print("/// {s}/property.{s}.{s}.html\n", .{ prefix, container_name, raw_name });
+                }
                 try writer.print("pub fn set{c}{s}(self: *{s}, arg_value: {s}{}) void {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name, if (self.isBasicTypeProperty()) "" else "*", property_type });
                 try writer.print("var property_value = core.ValueZ({}).init();\n", .{property_type});
                 try writer.writeAll("defer property_value.deinit();\n");
                 try writer.writeAll("property_value.set(arg_value);\n");
                 try writer.print("self.__call(\"setProperty\", .{{ \"{s}\", &property_value.value }});\n", .{raw_name});
-                try writer.writeAll("}");
+                try writer.writeAll("}\n");
+            }
+            if (helper.docPrefix(namespace)) |prefix| {
+                try writer.print("/// {s}/property.{s}.{s}.html\n", .{ prefix, container_name, raw_name });
             }
             try writer.print("pub fn connect{c}{s}Notify(self: *{s}, handler: anytype, args: anytype, comptime flags: core.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
             try writer.print("return core.connect(self.into(core.Object), \"notify::{s}\", handler, args, flags, &[_]type{{ void, *{s}, *core.ParamSpec }});\n", .{ raw_name, container_name });
