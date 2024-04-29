@@ -13,6 +13,10 @@ pub fn emit(info: BaseInfo, writer: anytype) !void {
     const info_type = info.type();
     switch (info_type) {
         .Function => {
+            const namespace = info.namespace();
+            if (docPrefix(namespace)) |prefix| {
+                try writer.print("/// {s}/func.{s}.html\n", .{ prefix, info.name().? });
+            }
             try writer.print("{}", .{info.asCallable().asFunction()});
         },
         .Callback => {
