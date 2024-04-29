@@ -613,15 +613,21 @@ pub const FunctionInfo = struct {
         if (self.asCallable().asBase().container()) |container| {
             const namespace = self.asCallable().asBase().namespace();
             if (helper.docPrefix(namespace)) |prefix| {
-                var ctor = false;
-                const return_type = self.asCallable().returnType();
-                defer return_type.asBase().deinit();
-                if (return_type.interface()) |interface| {
-                    if (std.mem.eql(u8, "Gtk", interface.namespace()) and std.mem.eql(u8, "Widget", interface.name().?)) {
-                        ctor = true;
+                const container_name = container.name().?;
+                const name = self.asCallable().asBase().name().?;
+                if (self.asCallable().isMethod()) {
+                    if (container_name.len >= 5 and std.mem.eql(u8, "Class", container_name[container_name.len - 5 ..]) and container.asRegisteredType().asStruct().isGTypeStruct() != 0) {
+                        try writer.print("/// {s}/class_method.{s}.{s}.html\n", .{ prefix, container_name, name });
+                    } else {
+                        try writer.print("/// {s}/method.{s}.{s}.html\n", .{ prefix, container_name, name });
+                    }
+                } else {
+                    if (name.len >= 3 and std.mem.eql(u8, "new", name[0..3])) {
+                        try writer.print("/// {s}/ctor.{s}.{s}.html\n", .{ prefix, container_name, name });
+                    } else {
+                        try writer.print("/// {s}/type_func.{s}.{s}.html\n", .{ prefix, container_name, name });
                     }
                 }
-                try writer.print("/// {s}/{s}.{s}.{s}.html\n", .{ prefix, if (ctor) "ctor" else "method", container.name().?, self.asCallable().asBase().name().? });
             }
         }
         var buffer: [4096]u8 = undefined;
@@ -1241,7 +1247,11 @@ pub const EnumInfo = struct {
         const namespace = self.asRegisteredType().asBase().namespace();
         if (helper.docPrefix(namespace)) |prefix| {
             const name = self.asRegisteredType().asBase().name().?;
-            try writer.print("/// {s}/enum.{s}.html\n", .{ prefix, name });
+            if (name.len >= 5 and std.mem.eql(u8, "Error", name[name.len - 5 ..])) {
+                try writer.print("/// {s}/error.{s}.html\n", .{ prefix, name });
+            } else {
+                try writer.print("/// {s}/enum.{s}.html\n", .{ prefix, name });
+            }
         }
         try writer.print("pub const {s} = enum", .{self.asRegisteredType().asBase().name().?});
         switch (self.storageType()) {
@@ -1392,7 +1402,7 @@ pub const StructInfo = struct {
         return c.g_struct_info_get_size(self.info);
     }
 
-    pub fn isGTypeStruct(self: StructInfo) usize {
+    pub fn isGTypeStruct(self: StructInfo) c_int {
         return c.g_struct_info_is_gtype_struct(self.info);
     }
 
@@ -1451,7 +1461,15 @@ pub const StructInfo = struct {
         const namespace = self.asRegisteredType().asBase().namespace();
         if (helper.docPrefix(namespace)) |prefix| {
             const name = self.asRegisteredType().asBase().name().?;
-            try writer.print("/// {s}/struct.{s}.html\n", .{ prefix, name });
+            if (self.isGTypeStruct() != 0 and name.len >= 5 and std.mem.eql(u8, "Class", name[name.len - 5 ..])) {
+                // do nothing
+            } else if (self.isGTypeStruct() != 0 and name.len >= 9 and std.mem.eql(u8, "Interface", name[name.len - 9 ..])) {
+                // do nothing
+            } else if (name.len >= 7 and std.mem.eql(u8, "Private", name[name.len - 7 ..])) {
+                // do nothing
+            } else {
+                try writer.print("/// {s}/struct.{s}.html\n", .{ prefix, name });
+            }
         }
         const name = self.asRegisteredType().asBase().name().?;
         try writer.print("pub const {s} = {s}{{\n", .{ name, if (self.size() == 0) "opaque" else "extern struct" });
@@ -2125,6 +2143,10 @@ pub const ConstantInfo = struct {
         _ = fmt;
         _ = options;
         if (self.asBase().isDeprecated() and !enable_deprecated) return;
+        const namespace = self.asBase().namespace();
+        if (helper.docPrefix(namespace)) |prefix| {
+            try writer.print("/// {s}/const.{s}.html\n", .{ prefix, self.asBase().name().? });
+        }
         try writer.print("pub const {s} = ", .{self.asBase().name().?});
         var value: c.GIArgument = undefined;
         _ = c.g_constant_info_get_value(self.info, &value);

@@ -16,6 +16,10 @@ pub fn emit(info: BaseInfo, writer: anytype) !void {
             try writer.print("{}", .{info.asCallable().asFunction()});
         },
         .Callback => {
+            const namespace = info.namespace();
+            if (docPrefix(namespace)) |prefix| {
+                try writer.print("/// {s}/callback.{s}.html\n", .{ prefix, info.name().? });
+            }
             try writer.print("pub const {s} = {};\n", .{ info.name().?, info.asCallable().asCallback() });
         },
         .Struct => {
@@ -100,10 +104,13 @@ pub fn docPrefix(namespace: []const u8) ?[]const u8 {
     const data = std.ComptimeStringMap([]const u8, .{
         .{ "Gtk", "https://docs.gtk.org/gtk4" },
         .{ "Gdk", "https://docs.gtk.org/gdk4" },
+        .{ "GdkPixbuf", "https://docs.gtk.org/gdk-pixbuf" },
         .{ "Gsk", "https://docs.gtk.org/gsk4" },
         .{ "GObject", "https://docs.gtk.org/gobject" },
         .{ "Gio", "https://docs.gtk.org/gio" },
+        .{ "GLib", "https://doc.gtk.org/glib" },
         .{ "Pango", "https://docs.gtk.org/pango" },
+        .{ "PangoCario", "https://docs.gtk.org/PangoCairo" },
     });
     return data.get(namespace);
 }
