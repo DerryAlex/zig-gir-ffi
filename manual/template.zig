@@ -6,11 +6,13 @@ const core = Gtk.core;
 const WidgetClass = Gtk.WidgetClass;
 
 pub const BindingZ = struct {
+    /// The name in the template XML
     name: [:0]const u8,
     symbol: ?[]const u8 = null,
     internal: bool = false,
 };
 
+/// Binds a child widget defined in a template
 pub fn bindChild(class: *WidgetClass, comptime Object: type, comptime bindings: ?[]const BindingZ, comptime private_bindings: ?[]const BindingZ) void {
     if (bindings) |some| {
         inline for (some) |binding| {
@@ -28,6 +30,7 @@ pub fn bindChild(class: *WidgetClass, comptime Object: type, comptime bindings: 
     }
 }
 
+/// Binds a callback function defined in a template
 pub fn bindCallback(class: *WidgetClass, comptime Class: type, comptime bindings: []const BindingZ) void {
     inline for (bindings) |binding| {
         const name = binding.name;
