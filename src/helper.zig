@@ -108,7 +108,7 @@ pub fn docPrefix(namespace: []const u8) ?[]const u8 {
         .{ "Gsk", "https://docs.gtk.org/gsk4" },
         .{ "GObject", "https://docs.gtk.org/gobject" },
         .{ "Gio", "https://docs.gtk.org/gio" },
-        .{ "GLib", "https://doc.gtk.org/glib" },
+        .{ "GLib", "https://docs.gtk.org/glib" },
         .{ "Pango", "https://docs.gtk.org/Pango" },
         .{ "PangoCario", "https://docs.gtk.org/PangoCairo" },
     });
