@@ -1340,7 +1340,7 @@ pub const EnumInfo = struct {
         for (0..32) |idx| {
             if (values.get(idx)) |name| {
                 if (padding_bits != 0) {
-                    try writer.print("_{d}: u{d} = 0,\n", .{ idx, padding_bits });
+                    try writer.print("_{d}: u{d} = 0,\n", .{ idx - padding_bits, padding_bits });
                     padding_bits = 0;
                 }
                 if (isZigKeyword(name) or !std.ascii.isAlphabetic(name[0])) {
@@ -2208,18 +2208,15 @@ pub const ConstantInfo = struct {
 
 pub const BitField = struct {
     var remaining: ?usize = null;
-    var id: usize = 0;
 
     pub fn reset() void {
         BitField.remaining = null;
-        BitField.id = 0;
     }
 
-    pub fn begin(bits: usize, writer: anytype) !void {
+    pub fn begin(bits: usize, offset: usize, writer: anytype) !void {
         assert(BitField.remaining == null);
         BitField.remaining = bits;
-        id += 1;
-        try writer.print("packed{d}: packed struct(u{d}) {{\n", .{ id, bits });
+        try writer.print("_{d} : packed struct(u{d}) {{\n", .{ offset, bits });
     }
 
     pub fn end(writer: anytype) !void {
@@ -2231,11 +2228,11 @@ pub const BitField = struct {
         try writer.writeAll("},\n");
     }
 
-    pub fn ensure(bits: usize, alloc: usize, writer: anytype) !void {
+    pub fn ensure(bits: usize, alloc: usize, offset: usize, writer: anytype) !void {
         assert(BitField.remaining != null);
         if (BitField.remaining.? < bits) {
             try BitField.end(writer);
-            try BitField.begin(alloc, writer);
+            try BitField.begin(alloc, offset, writer);
         }
     }
 
@@ -2285,9 +2282,9 @@ pub const FieldInfo = struct {
                 else => unreachable,
             };
             if (BitField.remaining == null) {
-                try BitField.begin(field_container_bits, writer);
+                try BitField.begin(field_container_bits, self.offset(), writer);
             } else {
-                try BitField.ensure(field_size, field_container_bits, writer);
+                try BitField.ensure(field_size, field_container_bits, self.offset(), writer);
             }
             BitField.emit(field_size);
         } else if (BitField.remaining != null) {
