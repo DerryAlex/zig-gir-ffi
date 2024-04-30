@@ -131,7 +131,7 @@ pub const ExampleAppWindow = extern struct {
         self.settings.bind("transition", self.stack.into(Object), "transition-type", .{});
         self.settings.bind("show-words", self.sidebar.into(Object), "reveal-child", .{});
         _ = self.search.__call("bindProperty", .{ "active", self.searchbar.into(Object), "search-mode-enabled", .{ .bidirectional = true } });
-        _ = self.sidebar.__call("connectRevealChildNotify", .{ updateWords, .{self}, .{ .swapped = true } });
+        _ = self.sidebar.connectNotify("reveal-child", updateWords, .{self}, .{ .swapped = true });
         const action_show_words = self.settings.createAction("show-words");
         defer core.unsafeCast(Object, action_show_words).unref();
         self.__call("addAction", .{action_show_words});

@@ -340,7 +340,6 @@ fn callMethod(self: anytype, comptime method: []const u8, args: anytype) switch 
     unreachable;
 }
 
-/// Helper for object
 pub fn Extend(comptime Self: type) type {
     return struct {
         /// Calls inherited method
@@ -359,6 +358,37 @@ pub fn Extend(comptime Self: type) type {
         /// Converts to derived type T
         pub fn tryInto(self: *Self, comptime T: type) ?*T {
             return downCast(T, self);
+        }
+
+        /// Gets a property of an object
+        pub fn get(self: *Self, comptime T: type, property_name: [*:0]const u8) if (isBasicType(T)) T else *T {
+            var property = ValueZ(T).init();
+            defer property.deinit();
+            self.into(GObject.Object).getProperty(property_name, &property.value);
+            return property.get();
+        }
+
+        /// Sets a property on an object
+        pub fn set(self: *Self, comptime T: type, property_name: [*:0]const u8, value: if (isBasicType(T)) T else *T) void {
+            var property = ValueZ(T).init();
+            defer property.deinit();
+            property.set(value);
+            self.into(GObject.Object).setProperty(property_name, &property.value);
+        }
+
+        /// Connects a callback function to a signal for a particular object
+        pub fn connect(self: *Self, signal: [*:0]const u8, handler: anytype, args: anytype, comptime flags: GObject.ConnectFlags, comptime signature: []const type) usize {
+            var closure = closureZ(handler, args, if (flags.swapped) signature[0..1] else signature);
+            const clousre_new_fn = if (flags.swapped) cclosureNewSwap else cclosureNew;
+            const cclosure = clousre_new_fn(@ptrCast(closure.c_closure()), closure.c_data(), @ptrCast(closure.c_destroy()));
+            return GObject.signalConnectClosure(self.into(GObject.Object), signal, cclosure, flags.after);
+        }
+
+        /// Connects a notify signal for a property
+        pub fn connectNotify(self: *Self, property_name: [*:0]const u8, handler: anytype, args: anytype, comptime flags: GObject.ConnectFlags) usize {
+            var buf: [32]u8 = undefined;
+            const signal = std.fmt.bufPrintZ(buf[0..], "notify::{s}", .{property_name}) catch @panic("No Space Left");
+            return self.connect(signal, handler, args, flags, &[_]type{ void, *Self, *GObject.ParamSpec });
         }
     };
 }
@@ -580,14 +610,6 @@ fn cclosureNew(callback_func: GObject.Callback, user_data: ?*anyopaque, destroy_
 fn cclosureNewSwap(callback_func: GObject.Callback, user_data: ?*anyopaque, destroy_data: GObject.ClosureNotify) *GObject.Closure {
     const g_cclosure_new_swap = @extern(*const fn (GObject.Callback, ?*anyopaque, GObject.ClosureNotify) callconv(.C) *GObject.Closure, .{ .name = "g_cclosure_new_swap" });
     return g_cclosure_new_swap(callback_func, user_data, destroy_data);
-}
-
-/// Connects a callback function to a signal for a particular object
-pub fn connect(object: *GObject.Object, signal: [*:0]const u8, handler: anytype, args: anytype, comptime flags: GObject.ConnectFlags, comptime signature: []const type) usize {
-    var closure = closureZ(handler, args, if (flags.swapped) signature[0..1] else signature);
-    const clousre_new_fn = if (flags.swapped) cclosureNewSwap else cclosureNew;
-    const cclosure = clousre_new_fn(@ptrCast(closure.c_closure()), closure.c_data(), @ptrCast(closure.c_destroy()));
-    return GObject.signalConnectClosure(object, signal, cclosure, flags.after);
 }
 
 // closure end

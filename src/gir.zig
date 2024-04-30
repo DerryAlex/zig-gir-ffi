@@ -1013,7 +1013,7 @@ pub const SignalInfo = struct {
             try writer.print("/// {s}/signal.{s}.{s}.html\n", .{ prefix, container_name, raw_name });
         }
         try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, comptime flags: core.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
-        try writer.print("return core.connect(self.into(core.Object), \"{s}\", handler, args, flags, &[_]type{{", .{raw_name});
+        try writer.print("return self.connect(\"{s}\", handler, args, flags, &[_]type{{", .{raw_name});
         const return_type = self.asCallable().returnType();
         defer return_type.asBase().deinit();
         if (self.asCallable().mayReturnNull()) {
@@ -1791,6 +1791,10 @@ pub const ObjectInfo = struct {
             const name = self.asRegisteredType().asBase().name().?;
             try writer.print("/// {s}/class.{s}.html\n", .{ prefix, name });
         }
+        var p_iter = self.propertyIter();
+        while (p_iter.next()) |property| {
+            try writer.print("{}", .{property});
+        }
         const name = self.asRegisteredType().asBase().name().?;
         var iter = self.fieldIter();
         try writer.print("pub const {s} = {s} {{\n", .{ name, if (iter.capacity == 0) "opaque" else "extern struct" });
@@ -1828,10 +1832,6 @@ pub const ObjectInfo = struct {
         var v_iter = self.vfuncIter();
         while (v_iter.next()) |vfunc| {
             try writer.print("{}", .{vfunc});
-        }
-        var p_iter = self.propertyIter();
-        while (p_iter.next()) |property| {
-            try writer.print("{}", .{property});
         }
         var s_iter = self.signalIter();
         while (s_iter.next()) |signal| {
@@ -1995,6 +1995,10 @@ pub const InterfaceInfo = struct {
             const name = self.asRegisteredType().asBase().name().?;
             try writer.print("/// {s}/iface.{s}.html\n", .{ prefix, name });
         }
+        var p_iter = self.propertyIter();
+        while (p_iter.next()) |property| {
+            try writer.print("{}", .{property});
+        }
         const name = self.asRegisteredType().asBase().name().?;
         try writer.print("pub const {s} = opaque {{\n", .{name});
         var pre_iter = self.prerequisiteIter();
@@ -2022,10 +2026,6 @@ pub const InterfaceInfo = struct {
         var v_iter = self.vfuncIter();
         while (v_iter.next()) |vfunc| {
             try writer.print("{}", .{vfunc});
-        }
-        var p_iter = self.propertyIter();
-        while (p_iter.next()) |property| {
-            try writer.print("{}", .{property});
         }
         var s_iter = self.signalIter();
         while (s_iter.next()) |signal| {
@@ -2360,50 +2360,26 @@ pub const PropertyInfo = struct {
     pub fn format(self: PropertyInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
-        var buf: [256]u8 = undefined;
         const raw_name = self.asBase().name().?;
-        const name = snakeToCamel(raw_name, buf[0..]);
-        const container_name = self.asBase().container().?.name().?;
         const property_type = self.type();
         defer property_type.asBase().deinit();
         const _flags = self.flags();
         const namespace = self.asBase().namespace();
+        const container = self.asBase().container().?;
+        const container_name = container.name().?;
+        try writer.writeAll("/// \n");
+        if (helper.docPrefix(namespace)) |prefix| {
+            try writer.print("/// [{s}]({s}/property.{s}.{s}.html): ", .{ raw_name, prefix, container_name, raw_name });
+        } else {
+            try writer.print("/// {s}: ", .{raw_name});
+        }
         if (_flags.readable) {
-            if (self.getter()) |some| {
-                defer some.asCallable().asBase().deinit();
-            } else {
-                if (helper.docPrefix(namespace)) |prefix| {
-                    try writer.print("/// {s}/property.{s}.{s}.html\n", .{ prefix, container_name, raw_name });
-                }
-                try writer.print("pub fn get{c}{s}(self: *{s}) {s}{&} {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name, if (self.isBasicTypeProperty()) "" else "*", property_type });
-                try writer.print("var property_value = core.ValueZ({}).init();\n", .{property_type});
-                try writer.writeAll("defer property_value.deinit();\n");
-                try writer.print("self.__call(\"getProperty\", .{{ \"{s}\", &property_value.value }});\n", .{raw_name});
-                try writer.writeAll("return property_value.get();\n");
-                try writer.writeAll("}\n");
-            }
+            try writer.writeAll("(readable) ");
         }
         if (_flags.writable and !_flags.construct_only) {
-            if (self.setter()) |some| {
-                defer some.asCallable().asBase().deinit();
-            } else {
-                if (helper.docPrefix(namespace)) |prefix| {
-                    try writer.print("/// {s}/property.{s}.{s}.html\n", .{ prefix, container_name, raw_name });
-                }
-                try writer.print("pub fn set{c}{s}(self: *{s}, arg_value: {s}{}) void {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name, if (self.isBasicTypeProperty()) "" else "*", property_type });
-                try writer.print("var property_value = core.ValueZ({}).init();\n", .{property_type});
-                try writer.writeAll("defer property_value.deinit();\n");
-                try writer.writeAll("property_value.set(arg_value);\n");
-                try writer.print("self.__call(\"setProperty\", .{{ \"{s}\", &property_value.value }});\n", .{raw_name});
-                try writer.writeAll("}\n");
-            }
-            if (helper.docPrefix(namespace)) |prefix| {
-                try writer.print("/// {s}/property.{s}.{s}.html\n", .{ prefix, container_name, raw_name });
-            }
-            try writer.print("pub fn connect{c}{s}Notify(self: *{s}, handler: anytype, args: anytype, comptime flags: core.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
-            try writer.print("return core.connect(self.into(core.Object), \"notify::{s}\", handler, args, flags, &[_]type{{ void, *{s}, *core.ParamSpec }});\n", .{ raw_name, container_name });
-            try writer.writeAll("}\n");
+            try writer.writeAll("(writeable) ");
         }
+        try writer.print("{s}\n", .{property_type});
     }
 };
 
