@@ -622,7 +622,7 @@ pub const FunctionInfo = struct {
                         try writer.print("/// {s}/method.{s}.{s}.html\n", .{ prefix, container_name, name });
                     }
                 } else {
-                    if (name.len >= 3 and std.mem.eql(u8, "new", name[0..3])) {
+                    if (self.flags().is_constructor) {
                         try writer.print("/// {s}/ctor.{s}.{s}.html\n", .{ prefix, container_name, name });
                     } else {
                         try writer.print("/// {s}/type_func.{s}.{s}.html\n", .{ prefix, container_name, name });
