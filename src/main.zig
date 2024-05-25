@@ -51,6 +51,8 @@ pub fn main() !void {
         \\    .paths = .{{
         \\        "build.zig",
         \\        "build.zig.zon",
+        \\        "core.zig",
+        \\        "template.zig",
         \\
     , .{version});
 
