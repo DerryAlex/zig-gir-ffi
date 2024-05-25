@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) !void {
     const xml = b.dependency("xml", .{});
 
     const options = b.addOptions();
-    const version = b.option([]const u8, "version", "application version string") orelse "0.8.1";
+    const version = b.option([]const u8, "version", "application version string") orelse "0.8.2";
     options.addOption([]const u8, "version", version);
 
     const exe = b.addExecutable(.{
