@@ -7,10 +7,5 @@
         "src",
         "manual",
     },
-    .dependencies = .{
-        .xml = .{
-            .url = "https://github.com/ianprime0509/zig-xml/archive/5d995ef95bb5796f38bf16c0d4750cba06d86549.tar.gz",
-            .hash = "1220d70515390ed942a0864fe3aad2f3b485b3fcb9df07d61dbefea9873373647e33",
-        },
-    },
+    .dependencies = .{},
 }
