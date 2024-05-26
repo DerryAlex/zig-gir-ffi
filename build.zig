@@ -4,8 +4,6 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
 
-    const xml = b.dependency("xml", .{});
-
     const options = b.addOptions();
     const version = b.option([]const u8, "version", "application version string") orelse "0.8.2";
     options.addOption([]const u8, "version", version);
@@ -16,7 +14,6 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
         .target = target,
     });
-    exe.root_module.addImport("xml", xml.module("xml"));
     exe.root_module.addOptions("config", options);
     exe.linkLibC();
     exe.linkSystemLibrary("gobject-introspection-1.0");

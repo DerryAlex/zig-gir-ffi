@@ -15,6 +15,7 @@ pub fn main() !void {
     const cwd = std.fs.cwd();
 
     const repository: *c.GIRepository = c.g_irepository_get_default();
+    c.g_irepository_prepend_search_path("lib/girepository-1.0");
     var gerror: ?*c.GError = null;
     _ = c.g_irepository_require(repository, "Gtk", null, 0, &gerror);
     if (gerror) |err| {

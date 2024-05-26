@@ -1,0 +1,12 @@
+--- a/girepository/girnode.c
++++ b/girepository/girnode.c
+@@ -1580,7 +1580,8 @@ _g_ir_node_build_typelib (GIrNode         *node,
+ 	blob->readable = field->readable;
+ 	blob->writable = field->writable;
+ 	blob->reserved = 0;
+-	blob->bits = 0;
++	blob->bits = field->bits;
++	blob->reserved2 = 0;
+ 	if (field->offset >= 0)
+ 	  blob->struct_offset = field->offset;
+ 	else

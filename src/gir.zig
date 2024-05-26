@@ -1798,8 +1798,12 @@ pub const ObjectInfo = struct {
         const name = self.asRegisteredType().asBase().name().?;
         var iter = self.fieldIter();
         try writer.print("pub const {s} = {s} {{\n", .{ name, if (iter.capacity == 0) "opaque" else "extern struct" });
+        BitField.reset();
         while (iter.next()) |field| {
             try writer.print("{}", .{field});
+        }
+        if (BitField.remaining != null) {
+            try BitField.end(writer);
         }
         var i_iter = self.interfaceIter();
         if (i_iter.capacity > 0) {
@@ -2258,11 +2262,7 @@ pub const FieldInfo = struct {
     }
 
     pub fn size(self: FieldInfo) usize {
-        // TODO: https://gitlab.gnome.org/GNOME/gobject-introspection/-/issues/246
-        // return @intCast(c.g_field_info_get_size(self.info));
-        return fieldInfoGetSize(self) catch |err| {
-            @panic(@errorName(err));
-        };
+        return @intCast(c.g_field_info_get_size(self.info));
     }
 
     pub fn @"type"(self: FieldInfo) TypeInfo {
