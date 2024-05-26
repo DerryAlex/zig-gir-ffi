@@ -1016,7 +1016,15 @@ pub const SignalInfo = struct {
         try writer.print("return self.connect(\"{s}\", handler, args, flags, &[_]type{{", .{raw_name});
         const return_type = self.asCallable().returnType();
         defer return_type.asBase().deinit();
-        if (self.asCallable().mayReturnNull()) {
+        var interface_returned = false;
+        if (return_type.interface()) |child_type| {
+            defer child_type.deinit();
+            switch (child_type.type()) {
+                .Enum, .Flags => {},
+                else => interface_returned = true,
+            }
+        }
+        if (self.asCallable().mayReturnNull() or interface_returned) {
             try writer.print("{&*}", .{return_type});
         } else {
             try writer.print("{&}", .{return_type});
@@ -1024,7 +1032,7 @@ pub const SignalInfo = struct {
         try writer.print(", *{s}", .{container_name});
         var iter = self.asCallable().argsIter();
         while (iter.next()) |arg| {
-            try writer.print(", {$}", .{arg});
+            try writer.print(", {$*}", .{arg});
         }
         try writer.writeAll("});\n");
         try writer.writeAll("}\n");
@@ -2093,9 +2101,13 @@ pub const ArgInfo = struct {
     pub fn format(self: ArgInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = options;
         var option_type_only = false;
+        var option_signal_param = false;
         for (fmt) |ch| {
             if (ch == '$') {
                 option_type_only = true;
+            }
+            if (ch == '*') {
+                option_signal_param = true;
             }
         }
         if (!option_type_only) {
@@ -2104,7 +2116,18 @@ pub const ArgInfo = struct {
         }
         const arg_type = self.type();
         defer arg_type.asBase().deinit();
-        if (self.direction() != .In) {
+        if (option_signal_param) {
+            if (arg_type.interface()) |child_type| {
+                defer child_type.deinit();
+                switch (child_type.type()) {
+                    .Enum, .Flags => option_signal_param = false,
+                    else => {},
+                }
+            } else {
+                option_signal_param = false;
+            }
+        }
+        if (self.direction() != .In or option_signal_param) {
             if (self.isOptional()) {
                 if (self.mayBeNull()) {
                     try writer.print("{_&?*}", .{arg_type});
