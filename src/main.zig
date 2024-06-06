@@ -155,8 +155,8 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *c.GIRepositor
         \\
     , .{ pkg_config.name, pkg_config.version, @import("builtin").zig_version_string });
     try build_zig_zon.writer().writeAll(
-        \\    .dependencies = .{{}},
-        \\    .paths = .{{
+        \\    .dependencies = .{},
+        \\    .paths = .{
         \\        "build.zig",
         \\        "build.zig.zon",
         \\
