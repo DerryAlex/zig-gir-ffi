@@ -49,13 +49,15 @@ pub fn main() !void {
         \\.{{
         \\    .name = "gtk4",
         \\    .version = "{s}",
+        \\    .minimum_zig_version = "{s}",
+        \\    .dependencies = .{{}},
         \\    .paths = .{{
         \\        "build.zig",
         \\        "build.zig.zon",
         \\        "core.zig",
         \\        "template.zig",
         \\
-    , .{version});
+    , .{ @import("builtin").zig_version_string, version });
 
     const namespaces: [*:null]?[*:0]const u8 = c.g_irepository_get_loaded_namespaces(repository);
     for (std.mem.span(namespaces)) |namespaceZ| {
@@ -114,7 +116,6 @@ pub fn main() !void {
     );
     try build_zig_zon.writer().writeAll(
         \\    },
-        \\    .dependencies = .{},
         \\}
     );
 }
