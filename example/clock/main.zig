@@ -1,5 +1,7 @@
 const std = @import("std");
 const gtk = @import("gtk");
+const glib = gtk.GLib;
+const gio = gtk.Gio;
 const core = gtk.core;
 
 pub fn main() u8 {
@@ -9,14 +11,14 @@ pub fn main() u8 {
     return @intCast(app.__call("run", .{std.os.argv}));
 }
 
-pub fn buildUi(arg_app: *core.Application) void {
+pub fn buildUi(arg_app: *gio.Application) void {
     const app = arg_app.tryInto(gtk.Application).?;
     var window = gtk.ApplicationWindow.new(app);
     window.__call("setTitle", .{"Clock Example"});
     window.__call("setDefaultSize", .{ 260, 40 });
     var label = gtk.Label.new(null);
     _ = tick(label);
-    _ = core.timeoutAddSeconds(core.PRIORITY_DEFAULT, 1, tick, .{label});
+    _ = glib.timeoutAddSeconds(glib.PRIORITY_DEFAULT, 1, tick, .{label});
     window.__call("setChild", .{label.into(gtk.Widget)});
     window.__call("present", .{});
 }

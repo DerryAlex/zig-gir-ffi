@@ -1,19 +1,21 @@
 const std = @import("std");
 const gtk = @import("gtk");
 const core = gtk.core;
+const gobject = gtk.GObject;
+const gio = gtk.Gio;
 const meta = std.meta;
 const assert = std.debug.assert;
 const ExampleAppWindow = @import("example_app_window.zig").ExampleAppWindow;
 const ExampleAppPrefs = @import("example_app_prefs.zig").ExampleAppPrefs;
-const Action = core.Action;
+const Action = gio.Action;
 const Application = gtk.Application;
 const ApplicationClass = gtk.ApplicationClass;
-const ApplicationFlags = core.ApplicationFlags;
-const File = core.File;
-const SimpleAction = core.SimpleAction;
-const Value = core.Value;
-const GApplication = core.Application;
-const GApplicationClass = core.ApplicationClass;
+const ApplicationFlags = gio.ApplicationFlags;
+const File = gio.File;
+const SimpleAction = gio.SimpleAction;
+const Value = gobject.Value;
+const GApplication = gio.Application;
+const GApplicationClass = gio.ApplicationClass;
 
 pub const ExampleAppClass = extern struct {
     parent: ApplicationClass,
@@ -71,7 +73,7 @@ pub const ExampleApp = extern struct {
     pub fn new() *ExampleApp {
         return core.newObject(ExampleApp, .{
             .@"application-id" = "org.gtk.example",
-            .flags = core.ApplicationFlags{ .handles_open = true },
+            .flags = ApplicationFlags{ .handles_open = true },
         });
     }
 

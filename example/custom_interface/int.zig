@@ -1,8 +1,9 @@
 const std = @import("std");
 const gtk = @import("gtk");
 const core = gtk.core;
-const Object = core.Object;
-const ObjectClass = core.ObjectClass;
+const gobject = gtk.GObject;
+const Object = gobject.Object;
+const ObjectClass = gobject.ObjectClass;
 const PartialEq = @import("eq.zig").PartialEq;
 const PartialOrd = @import("ord.zig").PartialOrd;
 

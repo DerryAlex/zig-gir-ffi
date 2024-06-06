@@ -1,13 +1,14 @@
 const std = @import("std");
 const gtk = @import("gtk");
 const core = gtk.core;
+const gio = gtk.Gio;
 const Application = gtk.Application;
 const ApplicationWindow = gtk.ApplicationWindow;
 const Box = gtk.Box;
 const Button = gtk.Button;
 const Widget = gtk.Widget;
 const Window = gtk.Window;
-const GApplication = core.Application;
+const GApplication = gio.Application;
 
 pub fn printHello() void {
     std.log.info("Hello World", .{});
@@ -26,7 +27,7 @@ pub fn activate(arg_app: *GApplication) void {
     _ = button.connectClicked(printHello, .{}, .{});
     _ = button.connectClicked(Window.destroy, .{window.into(Window)}, .{ .swapped = true });
     box.append(button.into(Widget));
-    window.__call("show", .{});
+    window.__call("setVisible", .{true});
 }
 
 pub fn main() u8 {

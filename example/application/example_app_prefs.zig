@@ -1,6 +1,8 @@
 const std = @import("std");
 const gtk = @import("gtk");
 const core = gtk.core;
+const gobject = gtk.GObject;
+const gio = gtk.Gio;
 const template = gtk.template;
 const meta = std.meta;
 const assert = std.debug.assert;
@@ -9,9 +11,9 @@ const ComboBoxText = gtk.ComboBoxText;
 const Dialog = gtk.Dialog;
 const DialogClass = gtk.DialogClass;
 const FontButton = gtk.FontButton;
-const Object = core.Object;
-const ObjectClass = core.ObjectClass;
-const Settings = core.Settings;
+const Object = gobject.Object;
+const ObjectClass = gobject.ObjectClass;
+const Settings = gio.Settings;
 const WidgetClass = gtk.WidgetClass;
 const Window = gtk.Window;
 

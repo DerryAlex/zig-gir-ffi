@@ -1,31 +1,34 @@
 const std = @import("std");
 const gtk = @import("gtk");
 const core = gtk.core;
+const glib = gtk.GLib;
+const gobject = gtk.GObject;
+const gio = gtk.Gio;
 const template = gtk.template;
 const meta = std.meta;
 const assert = std.debug.assert;
 const ExampleApp = @import("example_app.zig").ExampleApp;
-const Action = core.Action;
+const Action = gio.Action;
 const Application = gtk.Application;
 const ApplicationWindow = gtk.ApplicationWindow;
 const ApplicationWindowClass = gtk.ApplicationWindowClass;
 const Builder = gtk.Builder;
 const Button = gtk.Button;
 const Entry = gtk.Entry;
-const File = core.File;
+const File = gio.File;
 const Label = gtk.Label;
 const ListBox = gtk.ListBox;
 const MenuButton = gtk.MenuButton;
-const MenuModel = core.MenuModel;
-const Object = core.Object;
-const ObjectClass = core.ObjectClass;
-const ParamSpec = core.ParamSpec;
-const PropertyAction = core.PropertyAction;
+const MenuModel = gio.MenuModel;
+const Object = gobject.Object;
+const ObjectClass = gobject.ObjectClass;
+const ParamSpec = gobject.ParamSpec;
+const PropertyAction = gio.PropertyAction;
 const Revealer = gtk.Revealer;
 const ScrolledWindow = gtk.ScrolledWindow;
 const SearchBar = gtk.SearchBar;
 const SearchEntry = gtk.SearchEntry;
-const Settings = core.Settings;
+const Settings = gio.Settings;
 const Stack = gtk.Stack;
 const TextIter = gtk.TextIter;
 const TextTag = gtk.TextTag;
@@ -149,7 +152,7 @@ pub const ExampleAppWindow = extern struct {
 
     pub fn open(self: *ExampleAppWindow, file: *File) void {
         const basename = file.getBasename().?;
-        defer core.free(basename);
+        defer glib.free(basename);
         var scrolled = ScrolledWindow.new();
         scrolled.__call("setHexpand", .{true});
         scrolled.__call("setVexpand", .{true});
@@ -165,8 +168,8 @@ pub const ExampleAppWindow = extern struct {
             std.log.warn("{s}", .{err.message.?});
             return;
         };
-        defer core.free(result.contents.ptr);
-        defer core.free(result.etag_out);
+        defer glib.free(result.contents.ptr);
+        defer glib.free(result.etag_out);
         buffer.setText(@ptrCast(result.contents.ptr), @intCast(result.contents.len));
         var tag = TextTag.new(null);
         _ = buffer.getTagTable().add(tag);
@@ -202,7 +205,7 @@ pub const ExampleAppWindow = extern struct {
         defer {
             var iter = strings.keyIterator();
             while (iter.next()) |some| {
-                core.free(some.*);
+                glib.free(some.*);
             }
             strings.deinit();
         }
@@ -213,8 +216,8 @@ pub const ExampleAppWindow = extern struct {
             end = start;
             if (!end.forwardWordEnd()) break :outer;
             const word = buffer.getText(&start, &end, false);
-            defer core.free(word);
-            strings.put(core.utf8Strdown(word, -1), {}) catch @panic("");
+            defer glib.free(word);
+            strings.put(glib.utf8Strdown(word, -1), {}) catch @panic("");
             start = end;
         }
         while (true) {

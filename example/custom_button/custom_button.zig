@@ -1,12 +1,13 @@
 const std = @import("std");
 const gtk = @import("gtk");
 const core = gtk.core;
+const gobject = gtk.GObject;
 const meta = std.meta;
 const Button = gtk.Button;
 const ButtonClass = gtk.ButtonClass;
-const ParamSpec = core.ParamSpec;
-const Object = core.Object;
-const Value = core.Value;
+const ParamSpec = gobject.ParamSpec;
+const Object = gobject.Object;
+const Value = gobject.Value;
 
 const Properties = enum(u32) {
     Number = 1,
@@ -25,7 +26,7 @@ pub const CustomButtonClass = extern struct {
 
     pub fn properties() []*ParamSpec {
         @memcpy(_properties[1..], &[_]*ParamSpec{
-            core.paramSpecInt("number", null, null, 0, 10, 10, .{ .readable = true, .writable = true }),
+            gobject.paramSpecInt("number", null, null, 0, 10, 10, .{ .readable = true, .writable = true }),
         });
         return _properties[0..];
     }
@@ -100,16 +101,16 @@ pub const CustomButton = extern struct {
         }
         self.private.number = number;
         if (number == 0) {
-            var instance = core.ValueZ(CustomButton).init();
-            defer instance.deinit();
-            instance.set(self);
-            var params = [_]Value{instance.value};
-            _ = core.signalEmitv(&params, _signals[@intFromEnum(Signals.ZeroReached)], 0, null);
+            var instance = gobject.Value.default(CustomButton);
+            defer instance.unset();
+            instance.set(CustomButton, self);
+            var params = [_]Value{instance};
+            _ = gobject.signalEmitv(&params, _signals[@intFromEnum(Signals.ZeroReached)], 0, null);
         }
         self.__call("notifyByPspec", .{_properties[@intFromEnum(Properties.Number)]});
     }
 
-    pub fn connectZeroReached(self: *CustomButton, comptime handler: anytype, args: anytype, comptime flags: core.ConnectFlags) usize {
+    pub fn connectZeroReached(self: *CustomButton, comptime handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags) usize {
         return self.connect("zero-reached", handler, args, flags, &[_]type{ void, *CustomButton });
     }
 
