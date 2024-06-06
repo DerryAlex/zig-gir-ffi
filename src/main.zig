@@ -6,17 +6,21 @@ pub const c = @cImport({
 });
 const emit = @import("helper.zig").emit;
 
-const output_path = "gtk4/";
-
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    // defer _ = gpa.deinit();
+    defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
+    // Declare cli options
     const params = comptime clap.parseParamsComptime(
-        \\-h, --help            Display this help and exit
-        \\-n, --namespace <str> GI namespace to use, e.g. "Gtk"
-        \\-v, --version <str>   Version of namespace
+        \\-h, --help                 Display this help and exit
+        \\--version                  Display version
+        \\-N, --gi-namespace <str>   GI namespace to use (default: Gtk)
+        \\-V, --gi-version <str>     Version of namespace (default: null)
+        \\--includedir <str>...      Include directories in GIR search path
+        \\--outputdir <str>          Output directory (default: output)
+        \\--pkg-name <str>           Generated package name (default: ${gi-namespace})
+        \\--pkg-version <str>        Generated package version (default: ${gi-version})
         \\
     );
     var diag = clap.Diagnostic{};
@@ -29,42 +33,110 @@ pub fn main() !void {
     };
     defer res.deinit();
 
+    // Process cli options
     if (res.args.help != 0) {
-        return clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
+        return clap.help(std.io.getStdOut().writer(), clap.Help, &params, .{});
     }
-    var gi_namespace = config.namespace;
-    var gi_namespace_version = config.namespace_version;
-    if (res.args.namespace) |n| {
+    if (res.args.version != 0) {
+        try std.io.getStdOut().writeAll(config.version ++ "\n");
+        return;
+    }
+    var gi_namespace = config.gi_namespace;
+    var gi_version = config.gi_version;
+    if (res.args.@"gi-namespace") |n| {
         gi_namespace = n;
-        gi_namespace_version = null;
+        gi_version = null;
     }
-    if (res.args.version) |v| {
-        gi_namespace_version = v;
+    if (res.args.@"gi-version") |v| {
+        if (res.args.@"gi-namespace" == null) {
+            try std.io.getStdErr().writeAll("GI namespace unspecified\n");
+            return error.InvalidParameter;
+        }
+        gi_version = v;
+    }
+    const includedir = res.args.includedir;
+    var outputdir = config.outputdir;
+    if (res.args.outputdir) |o| {
+        outputdir = o;
+    }
+    var pkg_name = gi_namespace;
+    if (res.args.@"pkg-name") |p| {
+        pkg_name = p;
+    }
+    var pkg_version = gi_version orelse "0.0.0";
+    if (res.args.@"pkg-version") |p| {
+        pkg_version = p;
     }
 
-    const version = config.version;
-    const cwd = std.fs.cwd();
+    // Load GIR
     const repository: *c.GIRepository = c.g_irepository_get_default();
-    c.g_irepository_prepend_search_path("lib/girepository-1.0");
+    for (includedir) |i| {
+        c.g_irepository_prepend_search_path(i.ptr);
+    }
     var gerror: ?*c.GError = null;
-    _ = c.g_irepository_require(repository, gi_namespace.ptr, if (gi_namespace_version) |v| v.ptr else null, 0, &gerror);
+    _ = c.g_irepository_require(repository, gi_namespace.ptr, if (gi_version) |v| v.ptr else null, 0, &gerror);
     if (gerror) |err| {
         std.log.warn("{s}", .{err.message});
         return error.UnexpectedError;
     }
 
-    cwd.makeDir(output_path) catch |err| switch (err) {
+    // Create output directory
+    const cwd = std.fs.cwd();
+    cwd.makeDir(outputdir) catch |err| switch (err) {
         error.PathAlreadyExists => {},
         else => return err,
     };
-    var output_dir = try cwd.openDir(output_path, .{});
+    var output_dir = try cwd.openDir(outputdir, .{});
     defer output_dir.close();
-    inline for ([_][]const u8{ "core.zig", "template.zig" }) |filename| {
-        output_dir.symLink("../manual/" ++ filename, filename, .{}) catch |err| switch (err) {
-            error.PathAlreadyExists => {},
-            else => return err,
-        };
+    const outputdir_realpath = try output_dir.realpathAlloc(allocator, ".");
+    defer allocator.free(outputdir_realpath);
+
+    var manual_dir = try cwd.openDir("manual", .{ .iterate = true });
+    defer manual_dir.close();
+    const manualdir_realpath = try manual_dir.realpathAlloc(allocator, ".");
+    defer allocator.free(manualdir_realpath);
+    // Symlink files in manual directory
+    var manual_files = std.ArrayList([]const u8).init(allocator);
+    defer {
+        for (manual_files.items) |i| {
+            allocator.free(i);
+        }
+        manual_files.deinit();
     }
+    var manual_dir_walker = try manual_dir.walk(allocator);
+    defer manual_dir_walker.deinit();
+    while (try manual_dir_walker.next()) |e| {
+        switch (e.kind) {
+            .file => {
+                const filename = try allocator.dupe(u8, e.basename);
+                try manual_files.append(filename);
+                const target = try std.mem.concat(allocator, u8, &.{ manualdir_realpath, "/", filename });
+                defer allocator.free(target);
+                const symlink = try std.mem.concat(allocator, u8, &.{ outputdir_realpath, "/", filename });
+                defer allocator.free(symlink);
+                manual_dir.symLink(target, symlink, .{}) catch |err| switch (err) {
+                    error.PathAlreadyExists => {},
+                    else => return err,
+                };
+            },
+            else => {},
+        }
+    }
+
+    try generateBindings(allocator, repository, output_dir, .{
+        .name = pkg_name,
+        .version = pkg_version,
+        .extra_files = manual_files.items,
+        .enable_deprecated = false,
+    });
+}
+
+pub fn generateBindings(allocator: std.mem.Allocator, repository: *c.GIRepository, output_dir: std.fs.Dir, pkg_config: struct {
+    name: []const u8,
+    version: []const u8,
+    extra_files: [][]const u8,
+    enable_deprecated: bool,
+}) !void {
     var build_zig = try output_dir.createFile("build.zig", .{});
     defer build_zig.close();
     var build_zig_zon = try output_dir.createFile("build.zig.zon", .{});
@@ -77,17 +149,24 @@ pub fn main() !void {
     );
     try build_zig_zon.writer().print(
         \\.{{
-        \\    .name = "gtk4",
+        \\    .name = "{s}",
         \\    .version = "{s}",
         \\    .minimum_zig_version = "{s}",
+        \\
+    , .{ pkg_config.name, pkg_config.version, @import("builtin").zig_version_string });
+    try build_zig_zon.writer().writeAll(
         \\    .dependencies = .{{}},
         \\    .paths = .{{
         \\        "build.zig",
         \\        "build.zig.zon",
-        \\        "core.zig",
-        \\        "template.zig",
         \\
-    , .{ @import("builtin").zig_version_string, version });
+    );
+    for (pkg_config.extra_files) |e| {
+        try build_zig_zon.writer().print(
+            \\        "{s}",
+            \\
+        , .{e});
+    }
 
     const namespaces: [*:null]?[*:0]const u8 = c.g_irepository_get_loaded_namespaces(repository);
     for (std.mem.span(namespaces)) |namespaceZ| {
@@ -129,12 +208,16 @@ pub fn main() !void {
             try emit(.{ .info = info }, writer);
         }
         file.close();
-        const longer_file_name = try std.mem.concat(allocator, u8, &[_][]const u8{ output_path, file_name });
+        const outputdir = try output_dir.realpathAlloc(allocator, ".");
+        defer allocator.free(outputdir);
+        const longer_file_name = try std.mem.concat(allocator, u8, &.{ outputdir, "/", file_name });
         defer allocator.free(longer_file_name);
         const fmt_result = try std.ChildProcess.run(.{
             .allocator = allocator,
             .argv = &[_][]const u8{ "zig", "fmt", longer_file_name },
         });
+        defer allocator.free(fmt_result.stdout);
+        defer allocator.free(fmt_result.stderr);
         std.debug.assert(fmt_result.stderr.len == 0);
 
         try build_zig.writer().print("    _ = b.addModule(\"{c}{s}\", .{{ .root_source_file = b.path(\"{s}.zig\") }});\n", .{ std.ascii.toLower(namespace[0]), namespace[1..], namespace });
