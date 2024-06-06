@@ -2,7 +2,12 @@
     .name = "gir_ffi",
     .version = "0.8.3",
     .minimum_zig_version = "0.12.0",
-    .dependencies = .{},
+    .dependencies = .{
+        .clap = .{
+            .url = "https://github.com/Hejsil/zig-clap/archive/1d413d9ffcbd394904fa683ca975b5adbc19e615.tar.gz",
+            .hash = "1220949d4e88864579067b6d4cdad6476c6176f27e782782c2c39b7f2c4817a10efb",
+        },
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",

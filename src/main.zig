@@ -1,23 +1,53 @@
 const std = @import("std");
+const config = @import("config");
+const clap = @import("clap");
 pub const c = @cImport({
     @cInclude("girepository.h");
 });
-const config = @import("config");
 const emit = @import("helper.zig").emit;
 
 const output_path = "gtk4/";
 
 pub fn main() !void {
-    const version = config.version;
-
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    // defer _ = gpa.deinit();
     const allocator = gpa.allocator();
-    const cwd = std.fs.cwd();
 
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help            Display this help and exit
+        \\-n, --namespace <str> GI namespace to use, e.g. "Gtk"
+        \\-v, --version <str>   Version of namespace
+        \\
+    );
+    var diag = clap.Diagnostic{};
+    var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
+        .diagnostic = &diag,
+        .allocator = allocator,
+    }) catch |err| {
+        diag.report(std.io.getStdErr().writer(), err) catch {};
+        return err;
+    };
+    defer res.deinit();
+
+    if (res.args.help != 0) {
+        return clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
+    }
+    var gi_namespace = config.namespace;
+    var gi_namespace_version = config.namespace_version;
+    if (res.args.namespace) |n| {
+        gi_namespace = n;
+        gi_namespace_version = null;
+    }
+    if (res.args.version) |v| {
+        gi_namespace_version = v;
+    }
+
+    const version = config.version;
+    const cwd = std.fs.cwd();
     const repository: *c.GIRepository = c.g_irepository_get_default();
     c.g_irepository_prepend_search_path("lib/girepository-1.0");
     var gerror: ?*c.GError = null;
-    _ = c.g_irepository_require(repository, "Gtk", null, 0, &gerror);
+    _ = c.g_irepository_require(repository, gi_namespace.ptr, if (gi_namespace_version) |v| v.ptr else null, 0, &gerror);
     if (gerror) |err| {
         std.log.warn("{s}", .{err.message});
         return error.UnexpectedError;
