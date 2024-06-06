@@ -11,7 +11,7 @@ pub fn build(b: *std.Build) !void {
     options.addOption([]const u8, "gi_namespace", namespace);
     const namespace_version = b.option([]const u8, "gi-version", "Version of namespace, may be null for latest");
     options.addOption(?[]const u8, "gi_version", namespace_version);
-    const outputdir = b.option([]const u8, "outputdir", "Output directory") orelse "output";
+    const outputdir = b.option([]const u8, "outputdir", "Output directory") orelse "gi-output";
     options.addOption([]const u8, "outputdir", outputdir);
 
     const clap = b.dependency("clap", .{}).module("clap");

@@ -824,7 +824,7 @@ pub const FunctionInfo = struct {
                 }
             }
             if (closure_info[idx].is_func) {
-                try writer.print("var closure_{s} = core.closureZ({s}, {s}_args, &[_]type{{", .{ arg_name, arg_name, arg_name });
+                try writer.print("var closure_{s} = core.closure({s}, {s}_args, &[_]type{{", .{ arg_name, arg_name, arg_name });
                 const arg_type = arg.type();
                 defer arg_type.asBase().deinit();
                 if (arg_type.interface()) |interface| {
@@ -1012,7 +1012,7 @@ pub const SignalInfo = struct {
         if (helper.docPrefix(namespace)) |prefix| {
             try writer.print("/// {s}/signal.{s}.{s}.html\n", .{ prefix, container_name, raw_name });
         }
-        try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, comptime flags: core.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
+        try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, comptime flags: GObject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
         try writer.print("return self.connect(\"{s}\", handler, args, flags, &[_]type{{", .{raw_name});
         const return_type = self.asCallable().returnType();
         defer return_type.asBase().deinit();
@@ -1084,7 +1084,7 @@ pub const VFuncInfo = struct {
         try writer.print("pub fn {s}V", .{vfunc_name});
         try self.asCallable().format_helper(writer, .Enable, false, true);
         try writer.writeAll(" {\n");
-        try writer.print("const vFn = @as(*{s}, @ptrCast(core.typeClassPeek(_gtype))).{s}.?;", .{ class_name, raw_vfunc_name });
+        try writer.print("const vFn = @as(*{s}, @ptrCast(GObject.typeClassPeek(_gtype))).{s}.?;", .{ class_name, raw_vfunc_name });
         try writer.writeAll("const ret = vFn");
         try self.asCallable().format_helper(writer, .Disable, false, true);
         try writer.writeAll(";\n");
@@ -1498,6 +1498,10 @@ pub const StructInfo = struct {
         while (m_iter.next()) |method| {
             try writer.print("\n{}", .{method});
         }
+        // ValueExt
+        if (std.mem.eql(u8, namespace, "GObject") and std.mem.eql(u8, name, "Value")) {
+            try writer.writeAll("pub usingnamespace core.ValueExt;\n");
+        }
         try self.asRegisteredType().format_helper(writer);
         try writer.writeAll("};\n");
     }
@@ -1818,6 +1822,7 @@ pub const ObjectInfo = struct {
             var first = true;
             try writer.writeAll("pub const Interfaces = [_]type{");
             while (i_iter.next()) |interface| {
+                if (interface.asRegisteredType().asBase().isDeprecated()) continue;
                 if (first) {
                     first = false;
                 } else {

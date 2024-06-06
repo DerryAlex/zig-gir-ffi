@@ -1,9 +1,7 @@
 const GLib = @import("GLib.zig");
 const GObject = @import("GObject.zig");
 const Gio = @import("Gio.zig");
-pub usingnamespace GLib;
-pub usingnamespace GObject;
-pub usingnamespace Gio;
+
 const std = @import("std");
 const meta = std.meta;
 const assert = std.debug.assert;
@@ -41,6 +39,15 @@ pub const Type = enum(usize) {
 /// UCS-4
 pub const Unichar = u32;
 
+// re-exports
+pub const Array = GLib.Array;
+pub const ByteArray = GLib.ByteArray;
+pub const Error = GLib.Error;
+pub const HashTable = GLib.HashTable;
+pub const List = GLib.List;
+pub const PtrArray = GLib.PtrArray;
+pub const SList = GLib.SList;
+
 fn isBasicType(comptime T: type) bool {
     if (T == void) return true;
     if (T == bool) return true;
@@ -61,145 +68,136 @@ fn isBasicType(comptime T: type) bool {
     return false;
 }
 
-/// A structure used to hold different types of values
-pub fn ValueZ(comptime T: type) type {
-    return struct {
-        value: GObject.Value,
-
-        const Self = @This();
-
-        const Int = @Type(@typeInfo(c_int));
-        const Uint = @Type(@typeInfo(c_uint));
-        const Long = @Type(@typeInfo(c_long));
-        const Ulong = @Type(@typeInfo(c_ulong));
-
-        /// Initializes `Value(T)` with the default value
-        pub fn init() Self {
-            var value = std.mem.zeroes(GObject.Value);
-            if (comptime T == void) {
-                value.g_type = .none; // for internal use
-            } else if (comptime T == bool) {
-                _ = value.init(.boolean);
-            } else if (comptime T == i8) {
-                _ = value.init(.char);
-            } else if (comptime T == u8) {
-                _ = value.init(.uchar);
-            } else if (comptime T == Int) {
-                _ = value.init(.int);
-            } else if (comptime T == Uint) {
-                _ = value.init(.uint);
-            } else if (comptime T == i64) {
-                _ = value.init(.int64);
-            } else if (comptime T == u64) {
-                _ = value.init(.uint64);
-            } else if (comptime T == Long) {
-                _ = value.init(.long);
-            } else if (comptime T == Ulong) {
-                _ = value.init(.ulong);
-            } else if (comptime T == f32) {
-                _ = value.init(.float);
-            } else if (comptime T == f64) {
-                _ = value.init(.double);
-            } else if (comptime T == [*:0]const u8) {
-                _ = value.init(.string);
-            } else if (comptime @typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) {
-                _ = value.init(.pointer);
-            } else if (comptime T == GLib.Variant) {
-                _ = value.init(.variant);
-            } else if (comptime T == GObject.ParamSpec) {
-                _ = value.init(.param);
-            } else if (comptime @hasDecl(T, "gType")) {
-                _ = value.init(T.gType());
-            } else {
-                @compileError(std.fmt.comptimePrint("cannot initialize GValue with type {s}", .{@typeName(T)}));
-            }
-            return .{ .value = value };
-        }
-
-        /// Clears the current value in `Value(T)`
-        pub fn deinit(self: *Self) void {
-            self.value.unset();
-        }
-
-        /// Get the contents of a `Value(T)`
-        pub fn get(self: Self) if (isBasicType(T)) T else *T {
-            if (comptime T == void) @compileError("Cannot initialize GValue with type void");
-            if (comptime T == bool) return self.value.getBoolean();
-            if (comptime T == i8) return self.value.getSchar();
-            if (comptime T == u8) return self.value.getUchar();
-            if (comptime T == Int) return self.value.getInt();
-            if (comptime T == Uint) return self.value.getUint();
-            if (comptime T == i64) return self.value.getInt64();
-            if (comptime T == u64) return self.value.getUint64();
-            if (comptime T == Long) return self.value.getLong();
-            if (comptime T == Ulong) return self.value.getUlong();
-            if (comptime T == f32) return self.value.getFloat();
-            if (comptime T == f64) return self.value.getDouble();
-            if (comptime T == Type) return self.value.getGtype();
-            if (comptime @typeInfo(T) == .Enum) {
-                comptime assert(@typeInfo(T).Enum.is_exhaustive);
-                return @enumFromInt(self.value.getEnum());
-            }
-            if (comptime @typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .@"packed") {
-                return @bitCast(self.value.getFlags());
-            }
-            if (comptime T == [*:0]const u8) return self.value.getString();
-            if (comptime @typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) return @ptrCast(self.gvalue.getPointer());
-            if (comptime T == GLib.Variant) return self.value.getVariant().?;
-            if (comptime T == GObject.ParamSpec) return self.value.getParam();
-            if (comptime @hasDecl(T, "__call")) return downCast(T, self.value.getObject()).?;
-            return @ptrCast(self.value.getBoxed().?);
-        }
-
-        /// Set the contents of a `Value(T)`
-        pub fn set(self: *Self, arg_value: if (isBasicType(T)) T else *T) void {
-            if (comptime T == void) {
-                @compileError("Cannot initialize GValue with type void");
-            } else if (comptime T == bool) {
-                self.value.setBoolean(arg_value);
-            } else if (comptime T == i8) {
-                self.value.setSchar(arg_value);
-            } else if (comptime T == u8) {
-                self.value.setUchar(arg_value);
-            } else if (comptime T == Int) {
-                self.value.setInt(arg_value);
-            } else if (comptime T == Uint) {
-                self.value.setUint(arg_value);
-            } else if (comptime T == i64) {
-                self.value.setInt64(arg_value);
-            } else if (comptime T == u64) {
-                self.value.setUint64(arg_value);
-            } else if (comptime T == Long) {
-                self.value.setLong(arg_value);
-            } else if (comptime T == Ulong) {
-                self.value.setUlong(arg_value);
-            } else if (comptime T == f32) {
-                self.value.setFloat(arg_value);
-            } else if (comptime T == f64) {
-                self.value.setDouble(arg_value);
-            } else if (comptime T == Type) {
-                self.value.setGtype(arg_value);
-            } else if (comptime @typeInfo(T) == .Enum) {
-                comptime assert(@typeInfo(T).Enum.is_exhaustive);
-                self.value.setEnum(@intFromEnum(arg_value));
-            } else if (comptime @typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .@"packed") {
-                self.value.setFlags(@bitCast(arg_value));
-            } else if (comptime T == [*:0]const u8) {
-                self.value.setString(arg_value);
-            } else if (comptime @typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) {
-                self.value.setPointer(arg_value);
-            } else if (comptime T == GLib.Variant) {
-                self.value.setVariant(arg_value);
-            } else if (comptime T == GObject.ParamSpec) {
-                self.value.setParam(arg_value);
-            } else if (comptime @hasDecl(T, "__call")) {
-                self.value.setObject(upCast(GObject.Object, arg_value));
-            } else {
-                self.value.setBoxed(arg_value);
-            }
-        }
-    };
+fn Arg(comptime T: type) type {
+    return if (isBasicType(T)) T else *T;
 }
+
+pub const ValueExt = struct {
+    const Self = GObject.Value;
+
+    const Int = @Type(@typeInfo(c_int));
+    const Uint = @Type(@typeInfo(c_uint));
+    const Long = @Type(@typeInfo(c_long));
+    const Ulong = @Type(@typeInfo(c_ulong));
+
+    pub fn default(comptime T: type) Self {
+        var value = std.mem.zeroes(Self);
+        if (comptime T == void) {
+            value.g_type = .none; // for internal use
+        } else if (comptime T == bool) {
+            _ = value.init(.boolean);
+        } else if (comptime T == i8) {
+            _ = value.init(.char);
+        } else if (comptime T == u8) {
+            _ = value.init(.uchar);
+        } else if (comptime T == Int) {
+            _ = value.init(.int);
+        } else if (comptime T == Uint) {
+            _ = value.init(.uint);
+        } else if (comptime T == i64) {
+            _ = value.init(.int64);
+        } else if (comptime T == u64) {
+            _ = value.init(.uint64);
+        } else if (comptime T == Long) {
+            _ = value.init(.long);
+        } else if (comptime T == Ulong) {
+            _ = value.init(.ulong);
+        } else if (comptime T == f32) {
+            _ = value.init(.float);
+        } else if (comptime T == f64) {
+            _ = value.init(.double);
+        } else if (comptime T == [*:0]const u8) {
+            _ = value.init(.string);
+        } else if (comptime @typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) {
+            _ = value.init(.pointer);
+        } else if (comptime T == GLib.Variant) {
+            _ = value.init(.variant);
+        } else if (comptime T == GObject.ParamSpec) {
+            _ = value.init(.param);
+        } else if (comptime @hasDecl(T, "gType")) {
+            _ = value.init(T.gType());
+        } else {
+            @compileError(std.fmt.comptimePrint("Cannot initialize Value with type {s}", .{@typeName(T)}));
+        }
+        return value;
+    }
+
+    pub fn get(self: Self, comptime T: type) Arg(T) {
+        if (comptime T == void) @compileError("Cannot initialize Value with type void");
+        if (comptime T == bool) return self.getBoolean();
+        if (comptime T == i8) return self.getSchar();
+        if (comptime T == u8) return self.getUchar();
+        if (comptime T == Int) return self.getInt();
+        if (comptime T == Uint) return self.getUint();
+        if (comptime T == i64) return self.getInt64();
+        if (comptime T == u64) return self.getUint64();
+        if (comptime T == Long) return self.getLong();
+        if (comptime T == Ulong) return self.getUlong();
+        if (comptime T == f32) return self.getFloat();
+        if (comptime T == f64) return self.getDouble();
+        if (comptime T == Type) return self.getGtype();
+        if (comptime @typeInfo(T) == .Enum) {
+            comptime assert(@typeInfo(T).Enum.is_exhaustive);
+            return @enumFromInt(self.getEnum());
+        }
+        if (comptime @typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .@"packed") {
+            return @bitCast(self.getFlags());
+        }
+        if (comptime T == [*:0]const u8) return self.getString();
+        if (comptime @typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) return @ptrCast(self.getPointer());
+        if (comptime T == GLib.Variant) return self.getVariant().?;
+        if (comptime T == GObject.ParamSpec) return self.getParam();
+        if (comptime @hasDecl(T, "__call")) return downCast(T, self.getObject()).?;
+        return @ptrCast(self.getBoxed().?);
+    }
+
+    pub fn set(self: *Self, comptime T: type, arg_value: Arg(T)) void {
+        if (comptime T == void) {
+            @compileError("Cannot initialize Value with type void");
+        } else if (comptime T == bool) {
+            self.setBoolean(arg_value);
+        } else if (comptime T == i8) {
+            self.setSchar(arg_value);
+        } else if (comptime T == u8) {
+            self.setUchar(arg_value);
+        } else if (comptime T == Int) {
+            self.setInt(arg_value);
+        } else if (comptime T == Uint) {
+            self.setUint(arg_value);
+        } else if (comptime T == i64) {
+            self.setInt64(arg_value);
+        } else if (comptime T == u64) {
+            self.setUint64(arg_value);
+        } else if (comptime T == Long) {
+            self.setLong(arg_value);
+        } else if (comptime T == Ulong) {
+            self.setUlong(arg_value);
+        } else if (comptime T == f32) {
+            self.setFloat(arg_value);
+        } else if (comptime T == f64) {
+            self.setDouble(arg_value);
+        } else if (comptime T == Type) {
+            self.setGtype(arg_value);
+        } else if (comptime @typeInfo(T) == .Enum) {
+            comptime assert(@typeInfo(T).Enum.is_exhaustive);
+            self.setEnum(@intFromEnum(arg_value));
+        } else if (comptime @typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .@"packed") {
+            self.setFlags(@bitCast(arg_value));
+        } else if (comptime T == [*:0]const u8) {
+            self.setString(arg_value);
+        } else if (comptime @typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) {
+            self.setPointer(arg_value);
+        } else if (comptime T == GLib.Variant) {
+            self.setVariant(arg_value);
+        } else if (comptime T == GObject.ParamSpec) {
+            self.setParam(arg_value);
+        } else if (comptime @hasDecl(T, "__call")) {
+            self.setObject(upCast(GObject.Object, arg_value));
+        } else {
+            self.setBoxed(arg_value);
+        }
+    }
+};
 
 // type end
 // --------
@@ -230,20 +228,20 @@ pub fn getError() *GLib.Error {
 /// Returns a function to check whether a type can be cast to T
 pub fn isA(comptime T: type) fn (type) bool {
     return struct {
-        pub fn trait(comptime Ty: type) bool {
-            if (Ty == T) return true;
-            if (@hasDecl(Ty, "Prerequisites")) {
-                for (Ty.Prerequisites) |Prerequisite| {
+        pub fn trait(comptime U: type) bool {
+            if (U == T) return true;
+            if (@hasDecl(U, "Prerequisites")) {
+                for (U.Prerequisites) |Prerequisite| {
                     if (trait(Prerequisite)) return true;
                 }
             }
-            if (@hasDecl(Ty, "Interfaces")) {
-                for (Ty.Interfaces) |Interface| {
+            if (@hasDecl(U, "Interfaces")) {
+                for (U.Interfaces) |Interface| {
                     if (trait(Interface)) return true;
                 }
             }
-            if (@hasDecl(Ty, "Parent")) {
-                if (trait(Ty.Parent)) return true;
+            if (@hasDecl(U, "Parent")) {
+                if (trait(U.Parent)) return true;
             }
             return false;
         }
@@ -285,7 +283,7 @@ fn CallMethod(comptime T: type, comptime method: []const u8) union(enum) {
     if (comptime @hasDecl(T, "Prerequisites")) {
         inline for (T.Prerequisites) |Prerequisite| {
             switch (comptime CallMethod(Prerequisite, method)) {
-                .Ok => |Ty| return .{ .Ok = Ty },
+                .Ok => |U| return .{ .Ok = U },
                 .Err => {},
             }
         }
@@ -293,14 +291,14 @@ fn CallMethod(comptime T: type, comptime method: []const u8) union(enum) {
     if (comptime @hasDecl(T, "Interfaces")) {
         inline for (T.Interfaces) |Interface| {
             switch (comptime CallMethod(Interface, method)) {
-                .Ok => |Ty| return .{ .Ok = Ty },
+                .Ok => |U| return .{ .Ok = U },
                 .Err => {},
             }
         }
     }
     if (comptime @hasDecl(T, "Parent")) {
         switch (comptime CallMethod(T.Parent, method)) {
-            .Ok => |Ty| return .{ .Ok = Ty },
+            .Ok => |U| return .{ .Ok = U },
             .Err => {},
         }
     }
@@ -361,26 +359,26 @@ pub fn Extend(comptime Self: type) type {
         }
 
         /// Gets a property of an object
-        pub fn get(self: *Self, comptime T: type, property_name: [*:0]const u8) if (isBasicType(T)) T else *T {
-            var property = ValueZ(T).init();
-            defer property.deinit();
-            self.into(GObject.Object).getProperty(property_name, &property.value);
-            return property.get();
+        pub fn get(self: *Self, comptime T: type, property_name: [*:0]const u8) Arg(T) {
+            var property = GObject.Value.default(T);
+            defer property.unset();
+            self.into(GObject.Object).getProperty(property_name, &property);
+            return property.get(T);
         }
 
         /// Sets a property on an object
         pub fn set(self: *Self, comptime T: type, property_name: [*:0]const u8, value: if (isBasicType(T)) T else *T) void {
-            var property = ValueZ(T).init();
-            defer property.deinit();
-            property.set(value);
-            self.into(GObject.Object).setProperty(property_name, &property.value);
+            var property = GObject.Value.default(T);
+            defer property.unset();
+            property.set(T, value);
+            self.into(GObject.Object).setProperty(property_name, &property);
         }
 
         /// Connects a callback function to a signal for a particular object
         pub fn connect(self: *Self, signal: [*:0]const u8, handler: anytype, args: anytype, comptime flags: GObject.ConnectFlags, comptime signature: []const type) usize {
-            var closure = closureZ(handler, args, if (flags.swapped) signature[0..1] else signature);
+            var closure_ = closure(handler, args, if (flags.swapped) signature[0..1] else signature);
             const clousre_new_fn = if (flags.swapped) cclosureNewSwap else cclosureNew;
-            const cclosure = clousre_new_fn(@ptrCast(closure.c_closure()), closure.c_data(), @ptrCast(closure.c_destroy()));
+            const cclosure = clousre_new_fn(@ptrCast(closure_.c_closure()), closure_.c_data(), @ptrCast(closure_.c_destroy()));
             return GObject.signalConnectClosure(self.into(GObject.Object), signal, cclosure, flags.after);
         }
 
@@ -388,7 +386,7 @@ pub fn Extend(comptime Self: type) type {
         pub fn connectNotify(self: *Self, property_name: [*:0]const u8, handler: anytype, args: anytype, comptime flags: GObject.ConnectFlags) usize {
             var buf: [32]u8 = undefined;
             const signal = std.fmt.bufPrintZ(buf[0..], "notify::{s}", .{property_name}) catch @panic("No Space Left");
-            return self.connect(signal, handler, args, flags, &[_]type{ void, *Self, *GObject.ParamSpec });
+            return self.connect(signal, handler, args, flags, &.{ void, *Self, *GObject.ParamSpec });
         }
     };
 }
@@ -400,7 +398,7 @@ pub fn Extend(comptime Self: type) type {
 // closure begin
 
 /// A closure represents a callback supplied by the programmer
-pub fn ClosureZ(comptime FnPtr: type, comptime Args: type, comptime signature: []const type) type {
+pub fn Closure(comptime FnPtr: type, comptime Args: type, comptime signature: []const type) type {
     comptime assert(@typeInfo(Args) == .Struct and @typeInfo(Args).Struct.is_tuple);
     comptime assert(@typeInfo(FnPtr) == .Pointer and @typeInfo(FnPtr).Pointer.size == .One);
     const n_arg = @typeInfo(Args).Struct.fields.len;
@@ -439,11 +437,11 @@ pub fn ClosureZ(comptime FnPtr: type, comptime Args: type, comptime signature: [
         /// Creates a new closure which invokes `handler` with `args` as the last parameters
         pub fn new(handler: FnPtr, args: Args) !*Self {
             const allocator = std.heap.c_allocator;
-            var closure = try allocator.create(Self);
-            closure.handler = handler;
-            closure.args = args;
-            closure.once = false;
-            return closure;
+            var closure_ = try allocator.create(Self);
+            closure_.handler = handler;
+            closure_.args = args;
+            closure_.once = false;
+            return closure_;
         }
 
         pub usingnamespace if (signature.len == 1) struct {
@@ -598,8 +596,8 @@ pub fn ClosureZ(comptime FnPtr: type, comptime Args: type, comptime signature: [
 }
 
 /// Creates a new closure which invokes `handler` with `args` as the last parameters
-pub fn closureZ(handler: anytype, args: anytype, comptime signature: []const type) *ClosureZ(@TypeOf(&handler), @TypeOf(args), signature) {
-    return ClosureZ(@TypeOf(&handler), @TypeOf(args), signature).new(&handler, args) catch @panic("Out of Memory");
+pub fn closure(handler: anytype, args: anytype, comptime signature: []const type) *Closure(@TypeOf(&handler), @TypeOf(args), signature) {
+    return Closure(@TypeOf(&handler), @TypeOf(args), signature).new(&handler, args) catch @panic("Out of Memory");
 }
 
 fn cclosureNew(callback_func: GObject.Callback, user_data: ?*anyopaque, destroy_data: GObject.ClosureNotify) *GObject.Closure {
@@ -637,7 +635,7 @@ pub fn newObject(comptime T: type, properties: anytype) *T {
     var values: [n_props]GObject.Value = undefined;
     inline for (info.Struct.fields, 0..) |field, idx| {
         names[idx] = field.name;
-        const value_type = blk: {
+        const V = blk: {
             if (@typeInfo(field.type) == .Pointer and @typeInfo(field.type).Pointer.size == .One) {
                 const pointer_child = @typeInfo(field.type).Pointer.child;
                 if (@typeInfo(pointer_child) == .Array and @typeInfo(pointer_child).Array.child == u8 and std.meta.sentinel(pointer_child) == @as(u8, 0)) break :blk [*:0]const u8;
@@ -645,16 +643,15 @@ pub fn newObject(comptime T: type, properties: anytype) *T {
             }
             break :blk field.type;
         };
-        var value = ValueZ(value_type).init();
-        value.set(@field(properties, field.name));
-        values[idx] = value.value;
+        values[idx] = GObject.Value.default(V);
+        values[idx].set(V, @field(properties, field.name));
     }
     defer for (&values) |*value| value.unset();
     return unsafeCast(T, objectNewWithProperties(T.gType(), if (n_props != 0) names[0..] else null, if (n_props != 0) values[0..] else null));
 }
 
 fn signalNewv(signal_name: [*:0]const u8, itype: Type, signal_flags: GObject.SignalFlags, class_closure: ?*GObject.Closure, accumulator: anytype, accu_data: anytype, c_marshaller: ?GObject.ClosureMarshal, return_type: Type, param_types: ?[]Type) u32 {
-    var accumulator_closure = closureZ(accumulator, accu_data, &[_]type{ bool, *GObject.SignalInvocationHint, *GObject.Value, *GObject.Value });
+    var accumulator_closure = closure(accumulator, accu_data, &.{ bool, *GObject.SignalInvocationHint, *GObject.Value, *GObject.Value });
     const g_signal_newv = @extern(*const fn ([*:0]const u8, Type, GObject.SignalFlags, ?*GObject.Closure, ?GObject.SignalAccumulator, ?*anyopaque, ?GObject.ClosureMarshal, Type, c_uint, ?[*]Type) callconv(.C) c_uint, .{ .name = "g_signal_newv" });
     return g_signal_newv(signal_name, itype, signal_flags, class_closure, @ptrCast(accumulator_closure.c_closure()), accumulator_closure.c_data(), c_marshaller, return_type, if (param_types) |some| @intCast(some.len) else 0, if (param_types) |some| some.ptr else null);
 }
@@ -675,9 +672,9 @@ pub fn newSignal(comptime Object: type, comptime signal_name: [:0]const u8, sign
     const class_closure = GObject.signalTypeCclosureNew(Object.gType(), @offsetOf(Class, &field_name));
     const signal_field_type = meta.FieldType(Class, meta.stringToEnum(meta.FieldEnum(Class), &field_name).?);
     const signal_info = @typeInfo(meta.Child(meta.Child(signal_field_type))); // ?*const fn(args...) return_type
-    const return_type = ValueZ(signal_info.Fn.return_type.?).init().value.g_type;
+    const return_type = GObject.Value.default(signal_info.Fn.return_type.?).g_type;
     var param_types: [signal_info.Fn.params.len - 1]Type = undefined;
-    inline for (signal_info.Fn.params[1..], &param_types) |param, *ty| {
+    inline for (signal_info.Fn.params[1..], &param_types) |param, *T| {
         var is_gtyped = false;
         if (@typeInfo(param.type.?) == .Pointer and @typeInfo(param.type.?).Pointer.size == .One) {
             if (@hasDecl(meta.Child(param.type.?), "type")) {
@@ -685,9 +682,9 @@ pub fn newSignal(comptime Object: type, comptime signal_name: [:0]const u8, sign
             }
         }
         if (is_gtyped) {
-            ty.* = meta.Child(param.type.?).gType();
+            T.* = meta.Child(param.type.?).gType();
         } else {
-            ty.* = ValueZ(param.type.?).init().value.g_type;
+            T.* = GObject.Value.default(param.type.?).g_type;
         }
     }
     return signalNewv(signal_name.ptr, Object.gType(), signal_flags, class_closure, accumulator, accu_data, null, return_type, param_types[0..]);
