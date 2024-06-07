@@ -127,7 +127,6 @@ pub fn main() !void {
         .name = pkg_name,
         .version = pkg_version,
         .extra_files = manual_files.items,
-        .enable_deprecated = false,
     });
 }
 
@@ -135,7 +134,6 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *c.GIRepositor
     name: []const u8,
     version: []const u8,
     extra_files: [][]const u8,
-    enable_deprecated: bool,
 }) !void {
     var build_zig = try output_dir.createFile("build.zig", .{});
     defer build_zig.close();

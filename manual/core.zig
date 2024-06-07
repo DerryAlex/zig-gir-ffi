@@ -3,8 +3,18 @@ const GObject = @import("GObject.zig");
 const Gio = @import("Gio.zig");
 
 const std = @import("std");
+const root = @import("root");
 const meta = std.meta;
 const assert = std.debug.assert;
+
+pub const Config = struct {
+    disable_deprecated: bool = true,
+};
+
+pub const config: Config = if (@hasDecl(root, "gi_config")) root.gi_config else .{};
+
+/// deprecated
+pub const Deprecated = opaque {};
 
 // ----------
 // type begin

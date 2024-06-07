@@ -2,27 +2,27 @@ const std = @import("std");
 const gir = @import("gir.zig");
 const BaseInfo = gir.BaseInfo;
 const FieldInfo = gir.FieldInfo;
-const c = @import("root").c;
-
-pub const enable_deprecated = false;
 
 pub fn emit(info: BaseInfo, writer: anytype) !void {
-    if (info.isDeprecated() and !enable_deprecated) return;
     const info_type = info.type();
     switch (info_type) {
         .Function => {
             const namespace = info.namespace();
             if (docPrefix(namespace)) |prefix| {
-                try writer.print("/// {s}/func.{s}.html\n", .{ prefix, info.name().? });
+                try writer.print("/// func [{s}]({s}/func.{s}.html)\n", .{ info.name().?, prefix, info.name().? });
             }
             try writer.print("{}", .{info.asCallable().asFunction()});
         },
         .Callback => {
             const namespace = info.namespace();
             if (docPrefix(namespace)) |prefix| {
-                try writer.print("/// {s}/callback.{s}.html\n", .{ prefix, info.name().? });
+                try writer.print("/// callback [{s}]({s}/callback.{s}.html)\n", .{ info.name().?, prefix, info.name().? });
             }
-            try writer.print("pub const {s} = {};\n", .{ info.name().?, info.asCallable().asCallback() });
+            if (info.isDeprecated()) {
+                try writer.print("pub const {s} = if (core.config.disable_deprecated) core.Deprecated else {};\n", .{ info.name().?, info.asCallable().asCallback() });
+            } else {
+                try writer.print("pub const {s} = {};\n", .{ info.name().?, info.asCallable().asCallback() });
+            }
         },
         .Struct => {
             try writer.print("{}", .{info.asRegisteredType().asStruct()});

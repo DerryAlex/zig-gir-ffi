@@ -2,7 +2,6 @@ const c = @import("root").c;
 const std = @import("std");
 const assert = std.debug.assert;
 const helper = @import("helper.zig");
-const enable_deprecated = helper.enable_deprecated;
 const snakeToCamel = helper.snakeToCamel;
 const camelToSnake = helper.camelToSnake;
 const isZigKeyword = helper.isZigKeyword;
@@ -609,7 +608,6 @@ pub const FunctionInfo = struct {
     pub fn format(self: FunctionInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
-        if (self.asCallable().asBase().isDeprecated() and !enable_deprecated) return;
         if (self.asCallable().asBase().container()) |container| {
             const namespace = self.asCallable().asBase().namespace();
             if (helper.docPrefix(namespace)) |prefix| {
@@ -617,15 +615,15 @@ pub const FunctionInfo = struct {
                 const name = self.asCallable().asBase().name().?;
                 if (self.asCallable().isMethod()) {
                     if (container_name.len >= 5 and std.mem.eql(u8, "Class", container_name[container_name.len - 5 ..]) and container.asRegisteredType().asStruct().isGTypeStruct() != 0) {
-                        try writer.print("/// {s}/class_method.{s}.{s}.html\n", .{ prefix, container_name, name });
+                        try writer.print("/// method [{s}]({s}/class_method.{s}.{s}.html)\n", .{ name, prefix, container_name, name });
                     } else {
-                        try writer.print("/// {s}/method.{s}.{s}.html\n", .{ prefix, container_name, name });
+                        try writer.print("/// method [{s}]({s}/method.{s}.{s}.html)\n", .{ name, prefix, container_name, name });
                     }
                 } else {
                     if (self.flags().is_constructor) {
-                        try writer.print("/// {s}/ctor.{s}.{s}.html\n", .{ prefix, container_name, name });
+                        try writer.print("/// ctor [{s}]({s}/ctor.{s}.{s}.html)\n", .{ name, prefix, container_name, name });
                     } else {
-                        try writer.print("/// {s}/type_func.{s}.{s}.html\n", .{ prefix, container_name, name });
+                        try writer.print("/// type func [{s}]({s}/type_func.{s}.{s}.html)\n", .{ name, prefix, container_name, name });
                     }
                 }
             }
@@ -635,6 +633,18 @@ pub const FunctionInfo = struct {
         const allocator = fixed_buffer_allocator.allocator();
         var buf: [256]u8 = undefined;
         const func_name = snakeToCamel(self.asCallable().asBase().name().?, buf[0..]);
+        if (self.asCallable().asBase().isDeprecated()) {
+            try writer.writeAll("pub usingnamespace if (core.config.disable_deprecated) struct{\n");
+            if (isZigKeyword(func_name)) {
+                try writer.print("pub const @\"{s}\"", .{func_name});
+            } else if (std.mem.eql(u8, "self", func_name)) {
+                try writer.writeAll("pub const getSelf");
+            } else {
+                try writer.print("pub const {s}", .{func_name});
+            }
+            try writer.writeAll(" = core.Deprecated;\n");
+            try writer.writeAll("} else struct{\n");
+        }
         if (isZigKeyword(func_name)) {
             try writer.print("pub fn @\"{s}\"", .{func_name});
         } else if (std.mem.eql(u8, "self", func_name)) {
@@ -962,6 +972,9 @@ pub const FunctionInfo = struct {
         }
         try writer.writeAll(";\n");
         try writer.writeAll("}\n");
+        if (self.asCallable().asBase().isDeprecated()) {
+            try writer.writeAll("};\n");
+        }
     }
 };
 
@@ -975,7 +988,6 @@ pub const CallbackInfo = struct {
     pub fn format(self: CallbackInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
-        if (self.asCallable().asBase().isDeprecated() and !enable_deprecated) return;
         try writer.writeAll("*const fn ");
         try self.asCallable().format_helper(writer, .Enable, true, false);
     }
@@ -1003,14 +1015,18 @@ pub const SignalInfo = struct {
     pub fn format(self: SignalInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
-        if (self.asCallable().asBase().isDeprecated() and !enable_deprecated) return;
         const container_name = self.asCallable().asBase().container().?.name().?;
         var buf: [256]u8 = undefined;
         const raw_name = self.asCallable().asBase().name().?;
         const name = snakeToCamel(raw_name, buf[0..]);
         const namespace = self.asCallable().asBase().namespace();
+        if (self.asCallable().asBase().isDeprecated()) {
+            try writer.writeAll("pub usingnamespace if (core.config.disable_deprecated) struct {\n");
+            try writer.print("pub const connect{c}{s} = core.Deprecated;\n", .{ std.ascii.toUpper(name[0]), name[1..] });
+            try writer.writeAll("} else struct {\n");
+        }
         if (helper.docPrefix(namespace)) |prefix| {
-            try writer.print("/// {s}/signal.{s}.{s}.html\n", .{ prefix, container_name, raw_name });
+            try writer.print("/// signal [{s}]({s}/signal.{s}.{s}.html)\n", .{ raw_name, prefix, container_name, raw_name });
         }
         try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, comptime flags: GObject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
         try writer.print("return self.connect(\"{s}\", handler, args, flags, &.{{", .{raw_name});
@@ -1036,6 +1052,9 @@ pub const SignalInfo = struct {
         }
         try writer.writeAll("});\n");
         try writer.writeAll("}\n");
+        if (self.asCallable().asBase().isDeprecated()) {
+            try writer.writeAll("};\n");
+        }
     }
 };
 
@@ -1065,7 +1084,6 @@ pub const VFuncInfo = struct {
     pub fn format(self: VFuncInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
-        if (self.asCallable().asBase().isDeprecated() and !enable_deprecated) return;
         var buf: [256]u8 = undefined;
         const raw_vfunc_name = self.asCallable().asBase().name().?;
         const vfunc_name = snakeToCamel(raw_vfunc_name, buf[0..]);
@@ -1078,8 +1096,11 @@ pub const VFuncInfo = struct {
         defer class.asRegisteredType().asBase().deinit();
         const class_name = class.asRegisteredType().asBase().name().?;
         const namespace = self.asCallable().asBase().namespace();
+        if (self.asCallable().asBase().isDeprecated()) {
+            try writer.writeAll("pub usingnamespace struct {} else struct {\n");
+        }
         if (helper.docPrefix(namespace)) |prefix| {
-            try writer.print("/// {s}/vfunc.{s}.{s}.html\n", .{ prefix, container.name().?, raw_vfunc_name });
+            try writer.print("/// vfunc [{s}]({s}/vfunc.{s}.{s}.html)\n", .{ raw_vfunc_name, prefix, container.name().?, raw_vfunc_name });
         }
         try writer.print("pub fn {s}V", .{vfunc_name});
         try self.asCallable().format_helper(writer, .Enable, false, true);
@@ -1097,6 +1118,9 @@ pub const VFuncInfo = struct {
             try writer.writeAll("return ret;\n");
         }
         try writer.writeAll("}\n");
+        if (self.asCallable().asBase().isDeprecated()) {
+            try writer.writeAll("};\n");
+        }
     }
 };
 
@@ -1256,12 +1280,16 @@ pub const EnumInfo = struct {
         if (helper.docPrefix(namespace)) |prefix| {
             const name = self.asRegisteredType().asBase().name().?;
             if (name.len >= 5 and std.mem.eql(u8, "Error", name[name.len - 5 ..])) {
-                try writer.print("/// {s}/error.{s}.html\n", .{ prefix, name });
+                try writer.print("/// Error [{s}]({s}/error.{s}.html)\n", .{ name, prefix, name });
             } else {
-                try writer.print("/// {s}/enum.{s}.html\n", .{ prefix, name });
+                try writer.print("/// Enum [{s}]({s}/enum.{s}.html)\n", .{ name, prefix, name });
             }
         }
-        try writer.print("pub const {s} = enum", .{self.asRegisteredType().asBase().name().?});
+        if (self.asRegisteredType().asBase().isDeprecated()) {
+            try writer.print("pub const {s} = if (core.config.disable_deprecated) core.Deprecated else enum", .{self.asRegisteredType().asBase().name().?});
+        } else {
+            try writer.print("pub const {s} = enum", .{self.asRegisteredType().asBase().name().?});
+        }
         switch (self.storageType()) {
             .Int32 => {
                 try writer.writeAll("(i32)");
@@ -1305,9 +1333,13 @@ pub const EnumInfo = struct {
         const namespace = self.asRegisteredType().asBase().namespace();
         if (helper.docPrefix(namespace)) |prefix| {
             const name = self.asRegisteredType().asBase().name().?;
-            try writer.print("/// {s}/flags.{s}.html\n", .{ prefix, name });
+            try writer.print("/// Flags [{s}]({s}/flags.{s}.html)\n", .{ name, prefix, name });
         }
-        try writer.print("pub const {s} = packed struct", .{self.asRegisteredType().asBase().name().?});
+        if (self.asRegisteredType().asBase().isDeprecated()) {
+            try writer.print("pub const {s} = if (core.config.disable_deprecated) core.Deprecated else packed struct", .{self.asRegisteredType().asBase().name().?});
+        } else {
+            try writer.print("pub const {s} = packed struct", .{self.asRegisteredType().asBase().name().?});
+        }
         switch (self.storageType()) {
             .Int32 => {
                 try writer.writeAll("(i32)");
@@ -1379,7 +1411,6 @@ pub const EnumInfo = struct {
 
     pub fn format(self: EnumInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = options;
-        if (self.asRegisteredType().asBase().isDeprecated() and !enable_deprecated) return;
         var option_is_flag = false;
         for (fmt) |ch| {
             if (ch == '_') {
@@ -1465,7 +1496,6 @@ pub const StructInfo = struct {
     pub fn format(self: StructInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
-        if (self.asRegisteredType().asBase().isDeprecated() and !enable_deprecated) return;
         const namespace = self.asRegisteredType().asBase().namespace();
         if (helper.docPrefix(namespace)) |prefix| {
             const name = self.asRegisteredType().asBase().name().?;
@@ -1476,11 +1506,15 @@ pub const StructInfo = struct {
             } else if (name.len >= 7 and std.mem.eql(u8, "Private", name[name.len - 7 ..])) {
                 // do nothing
             } else {
-                try writer.print("/// {s}/struct.{s}.html\n", .{ prefix, name });
+                try writer.print("/// Struct [{s}]({s}/struct.{s}.html)\n", .{ name, prefix, name });
             }
         }
         const name = self.asRegisteredType().asBase().name().?;
-        try writer.print("pub const {s} = {s}{{\n", .{ name, if (self.size() == 0) "opaque" else "extern struct" });
+        if (self.asRegisteredType().asBase().isDeprecated()) {
+            try writer.print("pub const {s} = if (core.config.disable_deprecated) core.Deprecated else {s}{{\n", .{ name, if (self.size() == 0) "opaque" else "extern struct" });
+        } else {
+            try writer.print("pub const {s} = {s}{{\n", .{ name, if (self.size() == 0) "opaque" else "extern struct" });
+        }
         BitField.reset();
         var iter = self.fieldIter();
         while (iter.next()) |field| {
@@ -1585,13 +1619,16 @@ pub const UnionInfo = struct {
     pub fn format(self: UnionInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
-        if (self.asRegisteredType().asBase().isDeprecated() and !enable_deprecated) return;
         const namespace = self.asRegisteredType().asBase().namespace();
         if (helper.docPrefix(namespace)) |prefix| {
             const name = self.asRegisteredType().asBase().name().?;
-            try writer.print("/// {s}/union.{s}.html\n", .{ prefix, name });
+            try writer.print("/// Union [{s}]({s}/union.{s}.html)\n", .{ name, prefix, name });
         }
-        try writer.print("pub const {s} = extern union{{\n", .{self.asRegisteredType().asBase().name().?});
+        if (self.asRegisteredType().asBase().isDeprecated()) {
+            try writer.print("pub const {s} = if (core.config.disable_deprecated) core.Deprecated else extern union{{\n", .{self.asRegisteredType().asBase().name().?});
+        } else {
+            try writer.print("pub const {s} = extern union{{\n", .{self.asRegisteredType().asBase().name().?});
+        }
         var iter = self.fieldIter();
         while (iter.next()) |field| {
             try writer.print("{}", .{field});
@@ -1797,11 +1834,10 @@ pub const ObjectInfo = struct {
     pub fn format(self: ObjectInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
-        if (self.asRegisteredType().asBase().isDeprecated() and !enable_deprecated) return;
         const namespace = self.asRegisteredType().asBase().namespace();
         if (helper.docPrefix(namespace)) |prefix| {
             const name = self.asRegisteredType().asBase().name().?;
-            try writer.print("/// {s}/class.{s}.html\n", .{ prefix, name });
+            try writer.print("/// Class [{s}]({s}/class.{s}.html)\n", .{ name, prefix, name });
         }
         var p_iter = self.propertyIter();
         while (p_iter.next()) |property| {
@@ -1809,7 +1845,11 @@ pub const ObjectInfo = struct {
         }
         const name = self.asRegisteredType().asBase().name().?;
         var iter = self.fieldIter();
-        try writer.print("pub const {s} = {s} {{\n", .{ name, if (iter.capacity == 0) "opaque" else "extern struct" });
+        if (self.asRegisteredType().asBase().isDeprecated()) {
+            try writer.print("pub const {s} = if (core.config.disable_deprecated) core.Deprecated else {s} {{\n", .{ name, if (iter.capacity == 0) "opaque" else "extern struct" });
+        } else {
+            try writer.print("pub const {s} = {s} {{\n", .{ name, if (iter.capacity == 0) "opaque" else "extern struct" });
+        }
         BitField.reset();
         while (iter.next()) |field| {
             try writer.print("{}", .{field});
@@ -1822,7 +1862,6 @@ pub const ObjectInfo = struct {
             var first = true;
             try writer.writeAll("pub const Interfaces = [_]type{");
             while (i_iter.next()) |interface| {
-                if (interface.asRegisteredType().asBase().isDeprecated()) continue;
                 if (first) {
                     first = false;
                 } else {
@@ -2006,18 +2045,21 @@ pub const InterfaceInfo = struct {
     pub fn format(self: InterfaceInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
-        if (self.asRegisteredType().asBase().isDeprecated() and !enable_deprecated) return;
         const namespace = self.asRegisteredType().asBase().namespace();
         if (helper.docPrefix(namespace)) |prefix| {
             const name = self.asRegisteredType().asBase().name().?;
-            try writer.print("/// {s}/iface.{s}.html\n", .{ prefix, name });
+            try writer.print("/// Iface [{s}]({s}/iface.{s}.html)\n", .{ name, prefix, name });
         }
         var p_iter = self.propertyIter();
         while (p_iter.next()) |property| {
             try writer.print("{}", .{property});
         }
         const name = self.asRegisteredType().asBase().name().?;
-        try writer.print("pub const {s} = opaque {{\n", .{name});
+        if (self.asRegisteredType().asBase().isDeprecated()) {
+            try writer.print("pub const {s} = if (core.config.disable_deprecated) core.Deprecated else opaque {{\n", .{name});
+        } else {
+            try writer.print("pub const {s} = opaque {{\n", .{name});
+        }
         var pre_iter = self.prerequisiteIter();
         if (pre_iter.capacity > 0) {
             var first = true;
@@ -2174,12 +2216,15 @@ pub const ConstantInfo = struct {
     pub fn format(self: ConstantInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
-        if (self.asBase().isDeprecated() and !enable_deprecated) return;
         const namespace = self.asBase().namespace();
         if (helper.docPrefix(namespace)) |prefix| {
-            try writer.print("/// {s}/const.{s}.html\n", .{ prefix, self.asBase().name().? });
+            try writer.print("/// const [{s}]({s}/const.{s}.html)\n", .{ self.asBase().name().?, prefix, self.asBase().name().? });
         }
-        try writer.print("pub const {s} = ", .{self.asBase().name().?});
+        if (self.asBase().isDeprecated()) {
+            try writer.print("pub const {s} = if (core.config.disable_deprecated) core.Deprecated else ", .{self.asBase().name().?});
+        } else {
+            try writer.print("pub const {s} = ", .{self.asBase().name().?});
+        }
         var value: c.GIArgument = undefined;
         _ = c.g_constant_info_get_value(self.info, &value);
         defer c.g_constant_info_free_value(self.info, &value);
@@ -2395,18 +2440,15 @@ pub const PropertyInfo = struct {
         const namespace = self.asBase().namespace();
         const container = self.asBase().container().?;
         const container_name = container.name().?;
-        try writer.writeAll("/// \n");
         if (helper.docPrefix(namespace)) |prefix| {
-            try writer.print("/// [{s}]({s}/property.{s}.{s}.html): ", .{ raw_name, prefix, container_name, raw_name });
+            try writer.print("/// - property [{s}]({s}/property.{s}.{s}.html): ", .{ raw_name, prefix, container_name, raw_name });
         } else {
-            try writer.print("/// {s}: ", .{raw_name});
+            try writer.print("/// - property {s}: ", .{raw_name});
         }
-        if (_flags.readable) {
-            try writer.writeAll("(readable) ");
-        }
-        if (_flags.writable and !_flags.construct_only) {
-            try writer.writeAll("(writeable) ");
-        }
+        try writer.writeAll("(");
+        try writer.writeAll(if (_flags.readable) "r" else "-");
+        try writer.writeAll(if (_flags.writable and !_flags.construct_only) "w" else "-");
+        try writer.writeAll(") ");
         try writer.print("{s}\n", .{property_type});
     }
 };
