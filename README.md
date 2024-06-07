@@ -1,136 +1,70 @@
 # Zig GIR FFI
 
-GObject Introspection for zig. Generated [GTK4 binding](https://github.com/DerryAlex/zig-gir-ffi/releases) (currently targeting zig 0.12.0) can be downloaded.
+GObject Introspection for zig. Generated [GTK4 binding](https://github.com/DerryAlex/zig-gir-ffi/releases) can be downloaded.
 
-## Documentation
+- [Usage](#usage)
 
-- [GTK Documentation](https://docs.gtk.org/)
-- [Zig Language Reference](https://ziglang.org/documentation/master/)
-- [Zig Build System](https://ziglang.org/learn/build-system/)
+- [Usage of Bindings](#usage-of-bindings)
+  
+  ## Usage
 
-### Basics
-
-Zig container enables shorter code.
-
-```zig
-// GtkBox *box = GTK_BOX(gtk_box_new(GTK_ORIENTATIOON_VERTICAL, 0));
-// gtk_box_append(box, GTK_WIDGET(button));
-var box = Box.new(.vertical, 0);
-box.append(button.into(Widget));
+```bash
+# generate bindings for Gtk
+zig build run -- -N Gtk
+# generate bindings for Gtk-3.0
+zig build run -- -N Gtk -V 3.0
+# display help
+zig build run -- --help
 ```
 
-The binding also makes use of zig's richer type system.
+Typelibs need to be patched as bitfield info is currently not embedded.
 
-```zig
-pub const Orientation = enum(u32) {
-    horizontal = 0,
-    vertical = 1,
-};
-
-pub const ApplicationFlags = packed struct(u32) {
-    is_service: bool = false,
-    // ...
-    replace: bool = false,
-    _: u23 = 0,
-};
-
-// int g_application_run (GApplication* application, int argc, char** argv);
-pub fn run(*Application, [][*:0]const u8) i32 {
-    // ...
-}
-
-// gboolean g_file_load_contents (GFile* file, GCancellable* cancellable,
-//                                char** contents, gsize* length,
-//                                char** etag_out, GError** error);
-pub fn loadContents(*File, ?*Gio.Cancellable) error{GError}!struct {
-    // boolean return value indicating error is ignored
-    contents: []u8,
-    etag_out: ?[*:0]u8,
-} {
-    // ...
-}
-// handle GError
-const result = file.loadContents(null) catch {
-    var err = core.getError();
-    defer err.free();
-    std.log.warn("{s}", .{err.message.?});
-    return;
-};
+```bash
+cd lib/tools
+# build patched g-ir-compiler
+./fetch-compiler.sh
+# generate patched typelib
+./generate.sh
 ```
 
-### Object
+`--includedir lib/girepository-1.0` can be passed to binding generator to use patched typelibs.
 
-Two cast functions are provided.
+## Usage of Bindings
+
+Run `zig fetch --save=gtk4 https://url/to/bindings.tar.gz` and add the following lines to your `build.zig`. For more information, refer to [Zig Build System](https://ziglang.org/learn/build-system/).
+
+```zig
+const gtk = b.dependency("gtk4", .{});
+exe.root_module.addImport("gtk", gtk.module("gtk4"));
+```
+
+### Examples
+
+- [application](examples/application) : Port of [Gtk - 4.0: Getting Started with GTK](https://docs.gtk.org/gtk4/getting_started.html), a relatively comprehensive example
+- [hello](examples/hello) : A simple example
+  ![](examples/example/screenshot.png)
+- [clock](examples/clock) : (Implicit) use of the main context
+- [custom](examples/custom) : custom widget
+
+### Object Interface
 
 ```zig
 pub fn into(*Self, T) *T; // comptime-checked upcast
 pub fn tryInto(*Self, T) ?*T; // runtime-checked downcast
 ```
 
-Users can use `__call` convinience function to call inherited functions. It will check self-owned methods, interface methods and finally ancestors' method.
+```zig
+pub fn connect(*Self, signal, handler, args, flags, signature) signal_id; // type-safe connect, used by methods like connectClicked
+pub fn connectNotify(...) signal_id; // connect notify::$property
+```
 
 ```zig
-// You may need explict cast in case desired function is shadowed
+pub fn get(*Self, T, property) value; // get property
+pub fn set(*Self, T, property, value) void; // set property
+```
+
+```zig
+pub fn __call(*Self, method, args) result; // call inherited functions, interface methods are preferred
+// Explict cast may be needed in case desired function is shadowed
 box.__call("setHalign", .{.center}); // box.into(Widget).setHalign(.center)
 ```
-
-A nice type-safe wrapper for `connect` is created so that one does not need to provide a C callback.
-
-```zig
-pub fn printHello() void {
-    std.log.info("Hello World", .{});
-}
-
-// id = object.connectSignal(handler, extra_args, comptime_flags)
-_ = button.connectClicked(printHello, .{}, .{});
-_ = button.connectClicked(Window.destroy, .{window.into(Window)}, .{ .swapped = true });
-```
-
-### Custom Widget
-
-Custom widget and its class should be `extern struct` to provide a stable ABI. The first field should be `parent`. Custom widget may have a `private` field, which can be `struct` . Except `parent` and `private`, fields may have a default value.
-
-Class may have `init` function to do initializing stuff. (You don't need to overide virtual functions manually.) For signals and properties, refer to [example/custom_button](./example/custom_button/custom_button.zig). For template, refer to [example/application](./example/application/example_app_prefs.zig).
-
-Widget should have `new` and `gType` function and may have `init` function. You should use `Extend(Self)` to enable `into`, `tryInto` and `__call`.
-
-```zig
-pub const CustomButtonClass = extern struct {
-    parent: ButtonClass,
-    // ...
-
-    pub fn clicked_override(arg_button: *Button) callconv(.C) void {
-        // ...
-    }
-
-    // ...
-};
-
-pub const CustomButtonPrivate = struct {
-    number: i32 = 10,
-};
-
-pub const CustomButton = extern struct {
-    parent: Parent,
-    private: *Private,
-
-    pub const Parent = Button;
-    pub const Private = CustomButtonPrivate;
-    pub const Class = CustomButtonClass;
-    pub usingnamespace core.Extend(CustomButton);
-
-    pub fn new() *CustomButton {
-        return core.newObject(CustomButton, .{});
-    }
-
-    pub fn gType() core.Type {
-        return core.registerType(CustomButton, "CustomButton", .{});
-    }
-
-    // ...
-};
-```
-
-### Custom Interface
-
-Refer to [example/custom_interface](./example/custom_interface).
