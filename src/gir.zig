@@ -824,7 +824,7 @@ pub const FunctionInfo = struct {
                 }
             }
             if (closure_info[idx].is_func) {
-                try writer.print("var closure_{s} = core.closure({s}, {s}_args, &[_]type{{", .{ arg_name, arg_name, arg_name });
+                try writer.print("var closure_{s} = core.zig_closure({s}, {s}_args, &.{{", .{ arg_name, arg_name, arg_name });
                 const arg_type = arg.type();
                 defer arg_type.asBase().deinit();
                 if (arg_type.interface()) |interface| {
@@ -1013,7 +1013,7 @@ pub const SignalInfo = struct {
             try writer.print("/// {s}/signal.{s}.{s}.html\n", .{ prefix, container_name, raw_name });
         }
         try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, comptime flags: GObject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
-        try writer.print("return self.connect(\"{s}\", handler, args, flags, &[_]type{{", .{raw_name});
+        try writer.print("return self.connect(\"{s}\", handler, args, flags, &.{{", .{raw_name});
         const return_type = self.asCallable().returnType();
         defer return_type.asBase().deinit();
         var interface_returned = false;

@@ -376,9 +376,9 @@ pub fn Extend(comptime Self: type) type {
 
         /// Connects a callback function to a signal for a particular object
         pub fn connect(self: *Self, signal: [*:0]const u8, handler: anytype, args: anytype, comptime flags: GObject.ConnectFlags, comptime signature: []const type) usize {
-            var closure_ = closure(handler, args, if (flags.swapped) signature[0..1] else signature);
-            const clousre_new_fn = if (flags.swapped) cclosureNewSwap else cclosureNew;
-            const cclosure = clousre_new_fn(@ptrCast(closure_.c_closure()), closure_.c_data(), @ptrCast(closure_.c_destroy()));
+            var closure = zig_closure(handler, args, if (flags.swapped) signature[0..1] else signature);
+            const closure_new_fn = if (flags.swapped) cclosureNewSwap else cclosureNew;
+            const cclosure = closure_new_fn(@ptrCast(closure.c_closure()), closure.c_data(), @ptrCast(closure.c_destroy()));
             return GObject.signalConnectClosure(self.into(GObject.Object), signal, cclosure, flags.after);
         }
 
@@ -398,7 +398,7 @@ pub fn Extend(comptime Self: type) type {
 // closure begin
 
 /// A closure represents a callback supplied by the programmer
-pub fn Closure(comptime FnPtr: type, comptime Args: type, comptime signature: []const type) type {
+pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature: []const type) type {
     comptime assert(@typeInfo(Args) == .Struct and @typeInfo(Args).Struct.is_tuple);
     comptime assert(@typeInfo(FnPtr) == .Pointer and @typeInfo(FnPtr).Pointer.size == .One);
     const n_arg = @typeInfo(Args).Struct.fields.len;
@@ -437,11 +437,11 @@ pub fn Closure(comptime FnPtr: type, comptime Args: type, comptime signature: []
         /// Creates a new closure which invokes `handler` with `args` as the last parameters
         pub fn new(handler: FnPtr, args: Args) !*Self {
             const allocator = std.heap.c_allocator;
-            var closure_ = try allocator.create(Self);
-            closure_.handler = handler;
-            closure_.args = args;
-            closure_.once = false;
-            return closure_;
+            var closure = try allocator.create(Self);
+            closure.handler = handler;
+            closure.args = args;
+            closure.once = false;
+            return closure;
         }
 
         pub usingnamespace if (signature.len == 1) struct {
@@ -596,8 +596,8 @@ pub fn Closure(comptime FnPtr: type, comptime Args: type, comptime signature: []
 }
 
 /// Creates a new closure which invokes `handler` with `args` as the last parameters
-pub fn closure(handler: anytype, args: anytype, comptime signature: []const type) *Closure(@TypeOf(&handler), @TypeOf(args), signature) {
-    return Closure(@TypeOf(&handler), @TypeOf(args), signature).new(&handler, args) catch @panic("Out of Memory");
+pub fn zig_closure(handler: anytype, args: anytype, comptime signature: []const type) *ZigClosure(@TypeOf(&handler), @TypeOf(args), signature) {
+    return ZigClosure(@TypeOf(&handler), @TypeOf(args), signature).new(&handler, args) catch @panic("Out of Memory");
 }
 
 fn cclosureNew(callback_func: GObject.Callback, user_data: ?*anyopaque, destroy_data: GObject.ClosureNotify) *GObject.Closure {
@@ -651,7 +651,7 @@ pub fn newObject(comptime T: type, properties: anytype) *T {
 }
 
 fn signalNewv(signal_name: [*:0]const u8, itype: Type, signal_flags: GObject.SignalFlags, class_closure: ?*GObject.Closure, accumulator: anytype, accu_data: anytype, c_marshaller: ?GObject.ClosureMarshal, return_type: Type, param_types: ?[]Type) u32 {
-    var accumulator_closure = closure(accumulator, accu_data, &.{ bool, *GObject.SignalInvocationHint, *GObject.Value, *GObject.Value });
+    var accumulator_closure = zig_closure(accumulator, accu_data, &.{ bool, *GObject.SignalInvocationHint, *GObject.Value, *GObject.Value });
     const g_signal_newv = @extern(*const fn ([*:0]const u8, Type, GObject.SignalFlags, ?*GObject.Closure, ?GObject.SignalAccumulator, ?*anyopaque, ?GObject.ClosureMarshal, Type, c_uint, ?[*]Type) callconv(.C) c_uint, .{ .name = "g_signal_newv" });
     return g_signal_newv(signal_name, itype, signal_flags, class_closure, @ptrCast(accumulator_closure.c_closure()), accumulator_closure.c_data(), c_marshaller, return_type, if (param_types) |some| @intCast(some.len) else 0, if (param_types) |some| some.ptr else null);
 }
