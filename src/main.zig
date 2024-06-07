@@ -210,7 +210,6 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
                     .@"enum" => try writer.print("{}", .{info.tryInto(gi.EnumInfo).?}),
                     .flags => try writer.print("{}", .{info.tryInto(gi.FlagsInfo).?}),
                     .function => {
-                        try generateDocs(.{ .function = info.tryInto(gi.FunctionInfo).? }, writer);
                         try writer.print("{}", .{info.tryInto(gi.FunctionInfo).?});
                     },
                     .interface => try writer.print("{}", .{info.tryInto(gi.InterfaceInfo).?}),

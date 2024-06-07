@@ -1286,7 +1286,6 @@ pub const FunctionInfo = extern struct {
                 else => @compileError(std.fmt.comptimePrint("Invalid format string '{c}' for type {s}", .{ ch, @typeName(@This()) })),
             }
         }
-        try root.generateDocs(.{ .function = self }, writer);
         var buffer: [4096]u8 = undefined;
         var fixed_buffer_allocator = std.heap.FixedBufferAllocator.init(buffer[0..]);
         const allocator = fixed_buffer_allocator.allocator();
@@ -1298,6 +1297,7 @@ pub const FunctionInfo = extern struct {
             try writer.writeAll(" = core.Deprecated;\n");
             try writer.writeAll("} else struct{\n");
         }
+        try root.generateDocs(.{ .function = self }, writer);
         try writer.print("pub fn {}", .{Identifier{ .str = func_name }});
         const return_type = self.into(CallableInfo).getReturnType();
         const args = self.into(CallableInfo).argsAlloc(allocator) catch @panic("Out of Memory");

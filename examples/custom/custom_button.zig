@@ -100,9 +100,10 @@ pub const CustomButton = extern struct {
         }
         self.private.number = number;
         if (number == 0) {
-            var instance = gobject.Value.default(CustomButton);
+            var instance = std.mem.zeroes(gobject.Value);
             defer instance.unset();
-            instance.set(CustomButton, self);
+            _ = instance.init(CustomButton.gType());
+            instance.setObject(self.into(gobject.Object));
             var params = [_]Value{instance};
             _ = gobject.signalEmitv(&params, _signals[@intFromEnum(Signals.ZeroReached)], 0, null);
         }

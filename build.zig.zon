@@ -1,11 +1,11 @@
 .{
     .name = "gi",
-    .version = "0.8.3",
-    .minimum_zig_version = "0.12.0",
+    .version = "0.9.0",
+    .minimum_zig_version = "0.13.0",
     .dependencies = .{
         .clap = .{
-            .url = "https://github.com/Hejsil/zig-clap/archive/1d413d9ffcbd394904fa683ca975b5adbc19e615.tar.gz",
-            .hash = "1220949d4e88864579067b6d4cdad6476c6176f27e782782c2c39b7f2c4817a10efb",
+            .url = "https://github.com/Hejsil/zig-clap/archive/60cd46aacff4960104703da9ba683077b1e3c76c.zip",
+            .hash = "122078625ee9fd21d7a89440cb9ba15d10e1a1c45431f3c9fd2e17c9be197b5e36d3",
         },
     },
     .paths = .{
