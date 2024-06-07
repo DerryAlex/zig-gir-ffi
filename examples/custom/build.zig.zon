@@ -1,5 +1,5 @@
 .{
-    .name = "custom_button",
+    .name = "hello",
     .version = "1.0.0",
     .paths = .{
         "build.zig",

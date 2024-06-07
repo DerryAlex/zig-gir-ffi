@@ -8,6 +8,11 @@
         "example_app_prefs.zig",
         "example_app_window.zig",
         "example_app.zig",
+        "gears-menu.ui",
+        "prefs.ui",
+        "window.ui",
+        "exampleapp.gresource.xml",
+        "org.gtk.exampleapp.gschema.xml",
     },
     .dependencies = .{
         .gtk = .{
