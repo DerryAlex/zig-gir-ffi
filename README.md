@@ -42,9 +42,9 @@ exe.root_module.addImport("gtk", gtk.module("gtk4"));
 
 - [application](examples/application) : Port of [Gtk - 4.0: Getting Started with GTK](https://docs.gtk.org/gtk4/getting_started.html), a relatively comprehensive example
 - [hello](examples/hello) : A simple example
-  ![](examples/example/screenshot.png)
+  ![](examples/hello/screenshot.png)
 - [clock](examples/clock) : (Implicit) use of the main context
-- [custom](examples/custom) : custom widget
+- [custom](examples/custom) : Custom widget
 
 ### Object Interface
 
