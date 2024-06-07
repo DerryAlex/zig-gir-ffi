@@ -1,7 +1,7 @@
 const std = @import("std");
 const gtk = @import("gtk");
 const core = gtk.core;
-const gobject = gtk.GObject;
+const gobject = gtk.gobject;
 const TypeInterface = gobject.TypeInterface;
 
 pub const PartialEq = extern struct {

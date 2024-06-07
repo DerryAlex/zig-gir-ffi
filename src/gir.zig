@@ -1029,7 +1029,7 @@ pub const SignalInfo = struct {
         if (helper.docPrefix(namespace)) |prefix| {
             try writer.print("/// signal [{s}]({s}/signal.{s}.{s}.html)\n", .{ raw_name, prefix, container_name, raw_name });
         }
-        try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, comptime flags: GObject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
+        try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
         try writer.print("return self.connect(\"{s}\", handler, args, flags, &.{{", .{raw_name});
         const return_type = self.asCallable().returnType();
         defer return_type.asBase().deinit();
@@ -1106,7 +1106,7 @@ pub const VFuncInfo = struct {
         try writer.print("pub fn {s}V", .{vfunc_name});
         try self.asCallable().format_helper(writer, .Enable, false, true);
         try writer.writeAll(" {\n");
-        try writer.print("const vFn = @as(*{s}, @ptrCast(GObject.typeClassPeek(_gtype))).{s}.?;", .{ class_name, raw_vfunc_name });
+        try writer.print("const vFn = @as(*{s}, @ptrCast(gobject.typeClassPeek(_gtype))).{s}.?;", .{ class_name, raw_vfunc_name });
         try writer.writeAll("const ret = vFn");
         try self.asCallable().format_helper(writer, .Disable, false, true);
         try writer.writeAll(";\n");

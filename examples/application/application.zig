@@ -1,7 +1,7 @@
 const std = @import("std");
 const gtk = @import("gtk");
 const core = gtk.core;
-const glib = gtk.GLib;
+const glib = gtk.glib;
 const ExampleApp = @import("example_app.zig").ExampleApp;
 
 pub const gi_config: core.Config = .{

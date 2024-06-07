@@ -1,6 +1,5 @@
 const std = @import("std");
 const gtk = @import("gtk");
-const core = gtk.core;
 const TypedInt = @import("int.zig").TypedInt;
 const PartialEq = @import("eq.zig").PartialEq;
 const PartialOrd = @import("ord.zig").PartialOrd;

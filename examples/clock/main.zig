@@ -1,8 +1,7 @@
 const std = @import("std");
 const gtk = @import("gtk");
-const glib = gtk.GLib;
-const gio = gtk.Gio;
-const core = gtk.core;
+const glib = gtk.glib;
+const gio = gtk.gio;
 
 pub fn main() u8 {
     var app = gtk.Application.new("org.example.clock", .{});
