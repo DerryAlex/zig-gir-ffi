@@ -320,7 +320,7 @@ pub fn generateDocs(info: Info, writer: std.io.AnyWriter) anyerror!void {
                         if (i.getFlags().is_constructor) {
                             try writer.print("/// ctor [{s}]({s}/ctor.{s}.{s}.html)\n", .{ name, prefix, container_name, name });
                         } else {
-                            try writer.print("/// type func [{s}]({s}/class_method.{s}.{s}.html)\n", .{ name, prefix, container_name, name });
+                            try writer.print("/// type func [{s}]({s}/type_func.{s}.{s}.html)\n", .{ name, prefix, container_name, name });
                         }
                     }
                 } else {
