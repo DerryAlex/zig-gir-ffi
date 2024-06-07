@@ -5,6 +5,7 @@ const helper = @import("helper.zig");
 const snakeToCamel = helper.snakeToCamel;
 const camelToSnake = helper.camelToSnake;
 const isZigKeyword = helper.isZigKeyword;
+const NamespaceString = helper.NamespaceString;
 const fieldInfoGetSize = helper.fieldInfoGetSize;
 
 pub const ArrayType = enum(c.GIArrayType) {
@@ -1867,15 +1868,15 @@ pub const ObjectInfo = struct {
                 } else {
                     try writer.writeAll(", ");
                 }
-                try writer.print("{s}.{s}", .{ interface.asRegisteredType().asBase().namespace(), interface.asRegisteredType().asBase().name().? });
+                try writer.print("{}.{s}", .{ NamespaceString{ .str = interface.asRegisteredType().asBase().namespace() }, interface.asRegisteredType().asBase().name().? });
             }
             try writer.writeAll("};\n");
         }
         if (self.parent()) |_parent| {
-            try writer.print("pub const Parent = {s}.{s};\n", .{ _parent.asRegisteredType().asBase().namespace(), _parent.asRegisteredType().asBase().name().? });
+            try writer.print("pub const Parent = {}.{s};\n", .{ NamespaceString{ .str = _parent.asRegisteredType().asBase().namespace() }, _parent.asRegisteredType().asBase().name().? });
         }
         if (self.classStruct()) |_class| {
-            try writer.print("pub const Class = {s}.{s};\n", .{ _class.asRegisteredType().asBase().namespace(), _class.asRegisteredType().asBase().name().? });
+            try writer.print("pub const Class = {}.{s};\n", .{ NamespaceString{ .str = _class.asRegisteredType().asBase().namespace() }, _class.asRegisteredType().asBase().name().? });
         }
         var c_iter = self.constantIter();
         while (c_iter.next()) |constant| {
@@ -2070,7 +2071,7 @@ pub const InterfaceInfo = struct {
                 } else {
                     try writer.writeAll(", ");
                 }
-                try writer.print("{s}.{s}", .{ prerequisite.asRegisteredType().asBase().namespace(), prerequisite.asRegisteredType().asBase().name().? });
+                try writer.print("{}.{s}", .{ NamespaceString{ .str = prerequisite.asRegisteredType().asBase().namespace() }, prerequisite.asRegisteredType().asBase().name().? });
             }
             try writer.writeAll("};\n");
         }
@@ -2730,7 +2731,7 @@ pub const TypeInfo = struct {
                         }
                         const callback_name = child_type.name().?;
                         if (std.ascii.isUpper(callback_name[0])) {
-                            try writer.print("{s}.{s}", .{ child_type.namespace(), child_type.name().? });
+                            try writer.print("{}.{s}", .{ NamespaceString{ .str = child_type.namespace() }, child_type.name().? });
                         } else {
                             try writer.print("{}", .{child_type.asCallable().asCallback()});
                         }
@@ -2742,7 +2743,7 @@ pub const TypeInfo = struct {
                             }
                             try writer.writeAll("*");
                         }
-                        try writer.print("{s}.{s}", .{ child_type.namespace(), child_type.name().? });
+                        try writer.print("{}.{s}", .{ NamespaceString{ .str = child_type.namespace() }, child_type.name().? });
                     },
                     .Object, .Interface => {
                         if (self.isPointer()) {
@@ -2751,11 +2752,11 @@ pub const TypeInfo = struct {
                             }
                             try writer.writeAll("*");
                         }
-                        try writer.print("{s}.{s}", .{ child_type.namespace(), child_type.name().? });
+                        try writer.print("{}.{s}", .{ NamespaceString{ .str = child_type.namespace() }, child_type.name().? });
                     },
                     .Invalid, .Function, .Constant, .Invalid0, .Value, .Signal, .VFunc, .Property, .Field, .Arg, .Type => unreachable,
                     .Unresolved => {
-                        try writer.print("{s}.{s}", .{ child_type.namespace(), child_type.name().? });
+                        try writer.print("{}.{s}", .{ NamespaceString{ .str = child_type.namespace() }, child_type.name().? });
                         std.log.warn("[Unresolved] {s}.{s}", .{ child_type.namespace(), child_type.name().? });
                     },
                 }

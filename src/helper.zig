@@ -116,3 +116,23 @@ pub fn docPrefix(namespace: []const u8) ?[]const u8 {
     });
     return data.get(namespace);
 }
+
+pub const NamespaceString = struct {
+    str: []const u8,
+
+    pub fn format(self: NamespaceString, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt;
+        _ = options;
+        for (self.str, 0..) |c, i| {
+            if (std.ascii.isUpper(c)) {
+                if (i != 0 and (i != 1 or self.str[0] != 'G')) {
+                    try writer.print("_{c}", .{std.ascii.toLower(c)});
+                } else {
+                    try writer.print("{c}", .{std.ascii.toLower(c)});
+                }
+            } else {
+                try writer.print("{c}", .{c});
+            }
+        }
+    }
+};
