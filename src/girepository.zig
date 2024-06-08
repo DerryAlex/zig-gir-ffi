@@ -2333,10 +2333,6 @@ pub const StructInfo = extern struct {
         while (m_iter.next()) |method| {
             try writer.print("\n{}", .{method});
         }
-        // ValueExt
-        if (std.mem.eql(u8, namespace, "GObject") and std.mem.eql(u8, name, "Value")) {
-            try writer.writeAll("pub usingnamespace core.ValueExt;\n");
-        }
         try writer.print("{}", .{self.into(RegisteredTypeInfo)});
         try writer.writeAll("};\n");
     }

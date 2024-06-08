@@ -82,7 +82,7 @@ fn Arg(comptime T: type) type {
     return if (isBasicType(T)) T else *T;
 }
 
-pub const ValueExt = struct {
+const ZigValue = struct {
     const Self = gobject.Value;
 
     const Int = @Type(@typeInfo(c_int));
@@ -373,14 +373,14 @@ pub fn Extend(comptime Self: type) type {
             var property = gobject.Value.new(T);
             defer property.unset();
             self.into(gobject.Object).getProperty(property_name, &property);
-            return property.get(T);
+            return ZigValue.get(&property, T);
         }
 
         /// Sets a property on an object
         pub fn set(self: *Self, comptime T: type, property_name: [*:0]const u8, value: if (isBasicType(T)) T else *T) void {
             var property = gobject.Value.new(T);
             defer property.unset();
-            property.set(T, value);
+            ZigValue.set(&property, T, value);
             self.into(gobject.Object).setProperty(property_name, &property);
         }
 
@@ -653,7 +653,7 @@ pub fn newObject(comptime T: type, properties: anytype) *T {
             }
             break :blk field.type;
         };
-        values[idx] = gobject.Value.new(V);
+        values[idx] = ZigValue.new(V);
         values[idx].set(V, @field(properties, field.name));
     }
     defer for (&values) |*value| value.unset();
@@ -682,7 +682,7 @@ pub fn newSignal(comptime Object: type, comptime signal_name: [:0]const u8, sign
     const class_closure = gobject.signalTypeCclosureNew(Object.gType(), @offsetOf(Class, &field_name));
     const signal_field_type = meta.FieldType(Class, meta.stringToEnum(meta.FieldEnum(Class), &field_name).?);
     const signal_info = @typeInfo(meta.Child(meta.Child(signal_field_type))); // ?*const fn(args...) return_type
-    const return_type = gobject.Value.new(signal_info.Fn.return_type.?).g_type;
+    const return_type = ZigValue.new(signal_info.Fn.return_type.?).g_type;
     var param_types: [signal_info.Fn.params.len - 1]Type = undefined;
     inline for (signal_info.Fn.params[1..], &param_types) |param, *T| {
         var is_gtyped = false;
@@ -694,7 +694,7 @@ pub fn newSignal(comptime Object: type, comptime signal_name: [:0]const u8, sign
         if (is_gtyped) {
             T.* = meta.Child(param.type.?).gType();
         } else {
-            T.* = gobject.Value.new(param.type.?).g_type;
+            T.* = ZigValue.new(param.type.?).g_type;
         }
     }
     return signalNewv(signal_name.ptr, Object.gType(), signal_flags, class_closure, accumulator, accu_data, null, return_type, param_types[0..]);
