@@ -88,8 +88,7 @@ pub inline fn upCast(comptime T: type, object: anytype) *T {
 /// Converts to derived type T
 pub inline fn downCast(comptime T: type, object: anytype) ?*T {
     comptime std.debug.assert(isA(std.meta.Child(@TypeOf(object)))(T));
-    //TODO: return dynamicCast(T, object);
-    return unsafeCast(T, object);
+    return dynamicCast(T, object);
 }
 
 /// Converts to type T safely
