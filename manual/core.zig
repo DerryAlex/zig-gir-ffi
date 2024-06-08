@@ -4,8 +4,6 @@ const gio = @import("Gio.zig");
 
 const std = @import("std");
 const root = @import("root");
-const meta = std.meta;
-const assert = std.debug.assert;
 
 pub const Config = struct {
     disable_deprecated: bool = true,
@@ -147,7 +145,7 @@ const ZigValue = struct {
         if (comptime T == f64) return self.getDouble();
         if (comptime T == Type) return self.getGtype();
         if (comptime @typeInfo(T) == .Enum) {
-            comptime assert(@typeInfo(T).Enum.is_exhaustive);
+            comptime std.debug.assert(@typeInfo(T).Enum.is_exhaustive);
             return @enumFromInt(self.getEnum());
         }
         if (comptime @typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .@"packed") {
@@ -189,7 +187,7 @@ const ZigValue = struct {
         } else if (comptime T == Type) {
             self.setGtype(arg_value);
         } else if (comptime @typeInfo(T) == .Enum) {
-            comptime assert(@typeInfo(T).Enum.is_exhaustive);
+            comptime std.debug.assert(@typeInfo(T).Enum.is_exhaustive);
             self.setEnum(@intFromEnum(arg_value));
         } else if (comptime @typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .@"packed") {
             self.setFlags(@bitCast(arg_value));
@@ -260,13 +258,13 @@ pub fn isA(comptime T: type) fn (type) bool {
 
 /// Converts to base type T
 pub inline fn upCast(comptime T: type, object: anytype) *T {
-    comptime assert(isA(T)(meta.Child(@TypeOf(object))));
+    comptime std.debug.assert(isA(T)(std.meta.Child(@TypeOf(object))));
     return unsafeCast(T, object);
 }
 
 /// Converts to derived type T
 pub inline fn downCast(comptime T: type, object: anytype) ?*T {
-    comptime assert(isA(meta.Child(@TypeOf(object)))(T));
+    comptime std.debug.assert(isA(std.meta.Child(@TypeOf(object)))(T));
     return dynamicCast(T, object);
 }
 
@@ -287,7 +285,7 @@ fn CallMethod(comptime T: type, comptime method: []const u8) union(enum) {
 } {
     if (comptime @hasDecl(T, method)) {
         const method_info = @typeInfo(@TypeOf(@field(T, method)));
-        comptime assert(meta.Child(method_info.Fn.params[0].type.?) == T);
+        comptime std.debug.assert(std.meta.Child(method_info.Fn.params[0].type.?) == T);
         return .{ .Ok = method_info.Fn.return_type.? };
     }
     if (comptime @hasDecl(T, "Prerequisites")) {
@@ -315,11 +313,11 @@ fn CallMethod(comptime T: type, comptime method: []const u8) union(enum) {
     return .{ .Err = {} };
 }
 
-fn callMethod(self: anytype, comptime method: []const u8, args: anytype) switch (CallMethod(meta.Child(@TypeOf(self)), method)) {
+fn callMethod(self: anytype, comptime method: []const u8, args: anytype) switch (CallMethod(std.meta.Child(@TypeOf(self)), method)) {
     .Ok => |T| T,
-    .Err => @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(meta.Child(@TypeOf(self))), method })),
+    .Err => @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(std.meta.Child(@TypeOf(self))), method })),
 } {
-    const Self = meta.Child(@TypeOf(self));
+    const Self = std.meta.Child(@TypeOf(self));
     if (comptime @hasDecl(Self, method)) {
         return @call(.auto, @field(Self, method), .{self} ++ args);
     }
@@ -409,11 +407,11 @@ pub fn Extend(comptime Self: type) type {
 
 /// A closure represents a callback supplied by the programmer
 pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature: []const type) type {
-    comptime assert(@typeInfo(Args) == .Struct and @typeInfo(Args).Struct.is_tuple);
-    comptime assert(@typeInfo(FnPtr) == .Pointer and @typeInfo(FnPtr).Pointer.size == .One);
+    comptime std.debug.assert(@typeInfo(Args) == .Struct and @typeInfo(Args).Struct.is_tuple);
+    comptime std.debug.assert(@typeInfo(FnPtr) == .Pointer and @typeInfo(FnPtr).Pointer.size == .One);
     const n_arg = @typeInfo(Args).Struct.fields.len;
-    if (comptime meta.Child(FnPtr) == void) {
-        comptime assert(n_arg == 0);
+    if (comptime std.meta.Child(FnPtr) == void) {
+        comptime std.debug.assert(n_arg == 0);
         return struct {
             const Self = @This();
             pub fn new(_: FnPtr, _: Args) !*Self {
@@ -434,9 +432,9 @@ pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature:
         };
     }
 
-    comptime assert(@typeInfo(meta.Child(FnPtr)) == .Fn);
-    comptime assert(1 <= signature.len and signature.len <= 7);
-    const n_param = @typeInfo(meta.Child(FnPtr)).Fn.params.len;
+    comptime std.debug.assert(@typeInfo(std.meta.Child(FnPtr)) == .Fn);
+    comptime std.debug.assert(1 <= signature.len and signature.len <= 7);
+    const n_param = @typeInfo(std.meta.Child(FnPtr)).Fn.params.len;
     return struct {
         handler: FnPtr,
         args: Args,
@@ -628,9 +626,9 @@ fn cclosureNewSwap(callback_func: gobject.Callback, user_data: ?*anyopaque, dest
 
 fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?[]gobject.Value) *gobject.Object {
     if (names) |_| {
-        assert(names.?.len == values.?.len);
+        std.debug.assert(names.?.len == values.?.len);
     } else {
-        assert(values == null);
+        std.debug.assert(values == null);
     }
     const g_object_new_with_properties = @extern(*const fn (Type, c_uint, ?[*][*:0]const u8, ?[*]gobject.Value) callconv(.C) *gobject.Object, .{ .name = "g_object_new_with_properties" });
     return g_object_new_with_properties(object_type, if (names) |some| @intCast(some.len) else 0, if (names) |some| some.ptr else null, if (values) |some| some.ptr else null);
@@ -639,7 +637,7 @@ fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?
 /// Creates a new instance of an Object subtype and sets its properties using the provided arrays
 pub fn newObject(comptime T: type, properties: anytype) *T {
     const info = @typeInfo(@TypeOf(properties));
-    comptime assert(info == .Struct);
+    comptime std.debug.assert(info == .Struct);
     const n_props = info.Struct.fields.len;
     var names: [n_props][*:0]const u8 = undefined;
     var values: [n_props]gobject.Value = undefined;
@@ -669,7 +667,7 @@ fn signalNewv(signal_name: [*:0]const u8, itype: Type, signal_flags: gobject.Sig
 /// Creates a new signal
 pub fn newSignal(comptime Object: type, comptime signal_name: [:0]const u8, signal_flags: gobject.SignalFlags, accumulator: anytype, accu_data: anytype) u32 {
     const Class = Object.Class;
-    assert(signal_flags.run_first or signal_flags.run_last or signal_flags.run_cleanup);
+    std.debug.assert(signal_flags.run_first or signal_flags.run_last or signal_flags.run_cleanup);
     comptime var field_name: [signal_name.len:0]u8 = undefined;
     comptime {
         @memcpy(field_name[0..], signal_name[0..]);
@@ -680,19 +678,19 @@ pub fn newSignal(comptime Object: type, comptime signal_name: [:0]const u8, sign
         }
     }
     const class_closure = gobject.signalTypeCclosureNew(Object.gType(), @offsetOf(Class, &field_name));
-    const signal_field_type = meta.FieldType(Class, meta.stringToEnum(meta.FieldEnum(Class), &field_name).?);
-    const signal_info = @typeInfo(meta.Child(meta.Child(signal_field_type))); // ?*const fn(args...) return_type
+    const signal_field_type = std.meta.FieldType(Class, std.meta.stringToEnum(std.meta.FieldEnum(Class), &field_name).?);
+    const signal_info = @typeInfo(std.meta.Child(std.meta.Child(signal_field_type))); // ?*const fn(args...) return_type
     const return_type = ZigValue.new(signal_info.Fn.return_type.?).g_type;
     var param_types: [signal_info.Fn.params.len - 1]Type = undefined;
     inline for (signal_info.Fn.params[1..], &param_types) |param, *T| {
         var is_gtyped = false;
         if (@typeInfo(param.type.?) == .Pointer and @typeInfo(param.type.?).Pointer.size == .One) {
-            if (@hasDecl(meta.Child(param.type.?), "type")) {
+            if (@hasDecl(std.meta.Child(param.type.?), "type")) {
                 is_gtyped = true;
             }
         }
         if (is_gtyped) {
-            T.* = meta.Child(param.type.?).gType();
+            T.* = std.meta.Child(param.type.?).gType();
         } else {
             T.* = ZigValue.new(param.type.?).g_type;
         }

@@ -1,4 +1,4 @@
-const gi = @import("girepository.zig");
+const gi = @import("girepository-1.0.zig");
 const BaseInfo = gi.BaseInfo;
 const UnresolvedInfo = gi.UnresolvedInfo;
 const ArgInfo = gi.ArgInfo;
@@ -41,7 +41,6 @@ fn Iterator(comptime Context: type, comptime Item: type) type {
 
 // helper functions
 const std = @import("std");
-const assert = std.debug.assert;
 const root = @import("root");
 const Namespace = root.Namespace;
 const Identifier = root.Identifier;
@@ -744,7 +743,7 @@ pub const FunctionInfoExt = struct {
                         } else {
                             std.log.warn("[Generic Callback] {s}", .{self.getSymbol()});
                         }
-                        assert(!interface.tryInto(CallableInfo).?.canThrowGerror());
+                        std.debug.assert(!interface.tryInto(CallableInfo).?.canThrowGerror());
                     } else {
                         try writer.writeAll("void");
                         std.log.warn("[Generic Callback] {s}", .{self.getSymbol()});
@@ -1186,7 +1185,7 @@ pub const StructInfoExt = struct {
         }
         var m_iter = self.methodIter();
         while (m_iter.next()) |method| {
-            try writer.print("\n{}", .{method});
+            try writer.print("{}", .{method});
         }
         try writer.print("{}", .{self.into(RegisteredTypeInfo)});
         try writer.writeAll("};\n");
@@ -1257,7 +1256,7 @@ pub const TypeInfoExt = struct {
                 });
             },
             .utf8, .filename => {
-                assert(self.isPointer());
+                std.debug.assert(self.isPointer());
                 if (option_nullable) {
                     try writer.writeAll("?");
                 }
@@ -1282,7 +1281,7 @@ pub const TypeInfoExt = struct {
                             }
                             try writer.print("[{}]{n}", .{ size, child_type });
                         } else if (self.isZeroTerminated()) {
-                            assert(self.isPointer());
+                            std.debug.assert(self.isPointer());
                             if (option_nullable) {
                                 try writer.writeAll("?");
                             }
@@ -1299,7 +1298,7 @@ pub const TypeInfoExt = struct {
                                 }
                             }
                         } else {
-                            assert(self.isPointer());
+                            std.debug.assert(self.isPointer());
                             if (option_nullable) {
                                 try writer.writeAll("?");
                             }
@@ -1487,13 +1486,13 @@ const BitField = struct {
     }
 
     pub fn begin(bits: isize, offset: isize, writer: anytype) !void {
-        assert(BitField.remaining == null);
+        std.debug.assert(BitField.remaining == null);
         BitField.remaining = bits;
         try writer.print("_{d} : packed struct(u{d}) {{\n", .{ offset, bits });
     }
 
     pub fn end(writer: anytype) !void {
-        assert(BitField.remaining != null);
+        std.debug.assert(BitField.remaining != null);
         if (BitField.remaining.? != 0) {
             try writer.print("_: u{d},\n", .{BitField.remaining.?});
         }
@@ -1502,7 +1501,7 @@ const BitField = struct {
     }
 
     pub fn ensure(bits: isize, alloc: isize, offset: isize, writer: anytype) !void {
-        assert(BitField.remaining != null);
+        std.debug.assert(BitField.remaining != null);
         if (BitField.remaining.? < bits) {
             try BitField.end(writer);
             try BitField.begin(alloc, offset, writer);
@@ -1510,7 +1509,7 @@ const BitField = struct {
     }
 
     pub fn emit(bits: isize) void {
-        assert(BitField.remaining != null);
+        std.debug.assert(BitField.remaining != null);
         BitField.remaining.? -= bits;
     }
 };

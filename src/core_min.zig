@@ -1,6 +1,4 @@
 const std = @import("std");
-const meta = std.meta;
-const assert = std.debug.assert;
 
 // ----------
 // type begin
@@ -83,13 +81,13 @@ pub fn isA(comptime T: type) fn (type) bool {
 
 /// Converts to base type T
 pub inline fn upCast(comptime T: type, object: anytype) *T {
-    comptime assert(isA(T)(meta.Child(@TypeOf(object))));
+    comptime std.debug.assert(isA(T)(std.meta.Child(@TypeOf(object))));
     return unsafeCast(T, object);
 }
 
 /// Converts to derived type T
 pub inline fn downCast(comptime T: type, object: anytype) ?*T {
-    comptime assert(isA(meta.Child(@TypeOf(object)))(T));
+    comptime std.debug.assert(isA(std.meta.Child(@TypeOf(object)))(T));
     //TODO: return dynamicCast(T, object);
     return unsafeCast(T, object);
 }
@@ -124,6 +122,8 @@ pub fn Extend(comptime Self: type) type {
 
 // ----------
 // GLib begin
+
+pub const Bytes = opaque {};
 
 pub const Data = opaque {};
 
@@ -172,6 +172,24 @@ pub const Object = extern struct {
     g_type_instance: TypeInstance,
     ref_count: u32,
     qdata: ?*Data,
+};
+
+pub const ObjectClass = extern struct {
+    g_type_class: TypeClass,
+    construct_properties: ?*SList,
+    constructor: ?*anyopaque,
+    set_property: ?*anyopaque,
+    get_property: ?*anyopaque,
+    dispose: ?*anyopaque,
+    finalize: ?*anyopaque,
+    dispatch_properties_changed: ?*anyopaque,
+    notify: ?*anyopaque,
+    constructed: ?*anyopaque,
+    flags: u64,
+    n_construct_properties: u64,
+    pspecs: ?*anyopaque,
+    n_pspecs: u64,
+    pdummy: [3]?*anyopaque,
 };
 
 pub const ParamFlags = packed struct(u32) {

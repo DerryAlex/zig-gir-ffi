@@ -1,7 +1,7 @@
 const std = @import("std");
 const config = @import("config");
 const clap = @import("clap");
-const gi = @import("girepository.zig");
+const gi = @import("girepository-1.0.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -291,7 +291,7 @@ pub fn generateDocs(info: Info, writer: std.io.AnyWriter) anyerror!void {
         .{ "GLib", "https://docs.gtk.org/glib" },
         .{ "GObject", "https://docs.gtk.org/gobject" },
         .{ "Gio", "https://docs.gtk.org/gio" },
-        .{ "GIRepository", "https://docs.gtk.org/girepository/" },
+        .{ "GIRepository", "https://docs.gtk.org/girepository" },
     });
     const namespace = info.getNamespace().?;
     if (data.get(namespace)) |prefix| {
