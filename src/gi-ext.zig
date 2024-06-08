@@ -19,7 +19,6 @@ const TypeInfo = gi.TypeInfo;
 const UnionInfo = gi.UnionInfo;
 const ValueInfo = gi.ValueInfo;
 const VFuncInfo = gi.VFuncInfo;
-const Type = gi.core.Type;
 
 fn Iterator(comptime Context: type, comptime Item: type) type {
     const UInt = @Type(@typeInfo(c_uint));
@@ -82,11 +81,6 @@ fn camelToSnake(src: []const u8, buf: []u8) []u8 {
 
 // extensions
 pub const BaseInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_base_info_get_type" });
-        return cFn();
-    }
-
     const InfoType = enum(u32) {
         invalid = 0,
         function = 1,
@@ -133,11 +127,6 @@ pub const BaseInfoExt = struct {
 };
 
 pub const ArgInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_arg_info_get_type" });
-        return cFn();
-    }
-
     pub fn format(self_immut: *const ArgInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *ArgInfo = @constCast(self_immut);
@@ -191,11 +180,6 @@ pub const ArgInfoExt = struct {
 };
 
 pub const CallableInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_callable_info_get_type" });
-        return cFn();
-    }
-
     pub fn argsAlloc(self: *CallableInfo, allocator: std.mem.Allocator) ![]*ArgInfo {
         const args = try allocator.alloc(*ArgInfo, @intCast(self.getNArgs()));
         for (args, 0..) |*arg, index| {
@@ -314,11 +298,6 @@ pub const CallableInfoExt = struct {
 };
 
 pub const CallbackInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_callback_info_get_type" });
-        return cFn();
-    }
-
     pub fn format(self_immut: *CallbackInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *CallbackInfo = @constCast(self_immut);
@@ -333,11 +312,6 @@ pub const CallbackInfoExt = struct {
 };
 
 pub const ConstantInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_constant_info_get_type" });
-        return cFn();
-    }
-
     pub fn freeValue(self: *ConstantInfo, value: *gi.Argument) void {
         const cFn = @extern(*const fn (*BaseInfo, *gi.Argument) callconv(.C) void, .{ .name = "gi_constant_info_free_value" });
         _ = cFn(self.into(BaseInfo), value);
@@ -393,11 +367,6 @@ pub const ConstantInfoExt = struct {
 };
 
 pub const EnumInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_enum_info_get_type" });
-        return cFn();
-    }
-
     const ValueIter = Iterator(*EnumInfo, *ValueInfo);
     pub fn valueIter(self: *EnumInfo) ValueIter {
         return .{ .context = self, .capacity = self.getNValues(), .next_fn = EnumInfo.getValue };
@@ -469,11 +438,6 @@ pub const EnumInfoExt = struct {
 };
 
 pub const FlagsInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_flags_info_get_type" });
-        return cFn();
-    }
-
     pub fn format(self_immut: *const FlagsInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *FlagsInfo = @constCast(self_immut);
@@ -557,11 +521,6 @@ pub const FlagsInfoExt = struct {
 };
 
 pub const FieldInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_field_info_get_type" });
-        return cFn();
-    }
-
     pub fn format(self_immut: *const FieldInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *FieldInfo = @constCast(self_immut);
@@ -604,11 +563,6 @@ pub const FieldInfoExt = struct {
 };
 
 pub const FunctionInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_function_info_get_type" });
-        return cFn();
-    }
-
     pub fn format(self_immut: *const FunctionInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *FunctionInfo = @constCast(self_immut);
@@ -949,11 +903,6 @@ pub const FunctionInfoExt = struct {
 };
 
 pub const InterfaceInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_interface_info_get_type" });
-        return cFn();
-    }
-
     const PrerequisiteIter = Iterator(*InterfaceInfo, *BaseInfo);
     pub fn prerequisiteIter(self: *InterfaceInfo) PrerequisiteIter {
         return .{ .context = self, .capacity = self.getNPrerequisites(), .next_fn = InterfaceInfo.getPrerequisite };
@@ -1041,11 +990,6 @@ pub const InterfaceInfoExt = struct {
 };
 
 pub const ObjectInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_object_info_get_type" });
-        return cFn();
-    }
-
     const ConstantIter = Iterator(*ObjectInfo, *ConstantInfo);
     pub fn constantIter(self: *ObjectInfo) ConstantIter {
         return .{ .context = self, .capacity = self.getNConstants(), .next_fn = ObjectInfo.getConstant };
@@ -1152,11 +1096,6 @@ pub const ObjectInfoExt = struct {
 };
 
 pub const PropertyInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_property_info_get_type" });
-        return cFn();
-    }
-
     pub fn format(self_immut: *const PropertyInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *PropertyInfo = @constCast(self_immut);
@@ -1171,11 +1110,6 @@ pub const PropertyInfoExt = struct {
 };
 
 pub const RegisteredTypeInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_registered_type_info_get_type" });
-        return cFn();
-    }
-
     pub fn format(self_immut: *const RegisteredTypeInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *RegisteredTypeInfo = @constCast(self_immut);
@@ -1185,14 +1119,45 @@ pub const RegisteredTypeInfoExt = struct {
             }
         }
 
-        if (self.getGType() != .none) {
+        if (self.getTypeInitFunctionName()) |init_fn| {
             try writer.writeAll("pub fn gType() core.Type {\n");
-            const init_fn = std.mem.span(self.getTypeInitFunctionName().?);
-            if (std.mem.eql(u8, "intern", init_fn)) {
+            if (std.mem.eql(u8, "intern", std.mem.span(init_fn))) {
                 if (@intFromEnum(self.getGType()) < 256 * 4) {
                     try writer.print("return @enumFromInt({});", .{@intFromEnum(self.getGType())});
                 } else {
-                    try writer.writeAll("@panic(\"Internal type\");");
+                    const g_param_spec_types = std.StaticStringMap(usize).initComptime(.{
+                        .{ "GParamChar", 0 },
+                        .{ "GParamUChar", 1 },
+                        .{ "GParamBoolean", 2 },
+                        .{ "GParamInt", 3 },
+                        .{ "GParamUInt", 4 },
+                        .{ "GParamLong", 5 },
+                        .{ "GParamULong", 6 },
+                        .{ "GParamInt64", 7 },
+                        .{ "GParamUInt64", 8 },
+                        .{ "GParamUnichar", 9 },
+                        .{ "GParamEnum", 10 },
+                        .{ "GParamFlags", 11 },
+                        .{ "GParamFloat", 12 },
+                        .{ "GParamDouble", 13 },
+                        .{ "GParamString", 14 },
+                        .{ "GParamParam", 15 },
+                        .{ "GParamBoxed", 16 },
+                        .{ "GParamPointer", 17 },
+                        .{ "GParamValueArray", 18 },
+                        .{ "GParamObject", 19 },
+                        .{ "GParamOverride", 20 },
+                        .{ "GParamGType", 21 },
+                        .{ "GParamVariant", 22 },
+                    });
+                    const typename = self.getTypeName().?;
+                    if (g_param_spec_types.get(std.mem.span(typename))) |idx| {
+                        try writer.writeAll("const g_param_spec_types = @extern([*]core.Type, .{.name = \"g_param_spec_types\"});\n");
+                        try writer.print("return g_param_spec_types[{}];\n", .{idx});
+                    } else {
+                        std.log.info("{s}: {}", .{ self.getTypeName().?, self.getGType() });
+                        try writer.writeAll("@panic(\"intern\");");
+                    }
                 }
             } else {
                 try writer.print("const cFn = @extern(*const fn () callconv(.C) core.Type, .{{ .name = \"{s}\" }});\n", .{init_fn});
@@ -1204,11 +1169,6 @@ pub const RegisteredTypeInfoExt = struct {
 };
 
 pub const SignalInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_signal_info_get_type" });
-        return cFn();
-    }
-
     pub fn format(self_immut: *const SignalInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *SignalInfo = @constCast(self_immut);
@@ -1257,11 +1217,6 @@ pub const SignalInfoExt = struct {
 };
 
 pub const StructInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_struct_info_get_type" });
-        return cFn();
-    }
-
     const FieldIter = Iterator(*StructInfo, *FieldInfo);
     pub fn fieldIter(self: *StructInfo) FieldIter {
         return .{ .context = self, .capacity = self.getNFields(), .next_fn = StructInfo.getField };
@@ -1312,11 +1267,6 @@ pub const StructInfoExt = struct {
 };
 
 pub const TypeInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_type_info_get_type" });
-        return cFn();
-    }
-
     pub fn format(self_immut: *const TypeInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *TypeInfo = @constCast(self_immut);
@@ -1488,11 +1438,6 @@ pub const TypeInfoExt = struct {
 };
 
 pub const UnionInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_union_info_get_type" });
-        return cFn();
-    }
-
     const FieldIter = Iterator(*UnionInfo, *FieldInfo);
     pub fn fieldIter(self: *UnionInfo) FieldIter {
         return .{ .context = self, .capacity = self.getNFields(), .next_fn = UnionInfo.getField };
@@ -1532,11 +1477,6 @@ pub const UnionInfoExt = struct {
 };
 
 pub const ValueInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_value_info_get_type" });
-        return cFn();
-    }
-
     pub fn format(self_immut: *const ValueInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *ValueInfo = @constCast(self_immut);
@@ -1566,11 +1506,6 @@ pub const ValueInfoExt = struct {
 };
 
 pub const VFuncInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_vfunc_info_get_type" });
-        return cFn();
-    }
-
     pub fn format(self_immut: *const VFuncInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *VFuncInfo = @constCast(self_immut);
@@ -1616,12 +1551,7 @@ pub const VFuncInfoExt = struct {
     }
 };
 
-pub const UnresolvedInfoExt = struct {
-    pub fn gType() Type {
-        const cFn = @extern(*const fn () callconv(.C) Type, .{ .name = "gi_unresolved_info_get_type" });
-        return cFn();
-    }
-};
+pub const UnresolvedInfoExt = struct {};
 
 const BitField = struct {
     var remaining: ?usize = null;
