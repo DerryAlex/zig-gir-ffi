@@ -620,25 +620,25 @@ pub const FunctionInfoExt = struct {
                     slice_info[pos].is_slice_len = true;
                     slice_info[pos].slice_ptr = idx;
                 }
-            } else |_| {}
+            }
             const arg_name = std.mem.span(arg.into(BaseInfo).getName().?);
-            if (arg.getScope() != .invalid and arg.getClosureIndex() catch null != null and !std.mem.eql(u8, "data", arg_name[arg_name.len - 4 .. arg_name.len])) {
+            if (arg.getScope() != .invalid and arg.getClosureIndex() != null and !std.mem.eql(u8, "data", arg_name[arg_name.len - 4 .. arg_name.len])) {
                 closure_info[idx].scope = arg.getScope();
                 closure_info[idx].is_func = true;
                 if (arg.getClosureIndex()) |pos| {
                     closure_info[idx].closure_data = pos;
                     closure_info[pos].is_data = true;
                     closure_info[pos].closure_func = idx;
-                } else |_| {}
+                }
                 if (arg.getDestroyIndex()) |pos| {
                     closure_info[idx].closure_destroy = pos;
                     closure_info[pos].is_destroy = true;
                     closure_info[pos].closure_func = idx;
-                } else |_| {}
+                }
             }
         }
         const return_bool = return_type.getTag() == .boolean;
-        const throw_bool = return_bool and (n_out_param > 0) and (func_name.len >= 3 and std.mem.eql(u8, "get", func_name[0..3]));
+        const throw_bool = return_bool and (n_out_param > 0) and (self.into(CallableInfo).isMethod() and func_name.len >= 3 and std.mem.eql(u8, "get", func_name[0..3]));
         const throw_error = self.into(CallableInfo).canThrowGerror();
         const skip_return = self.into(CallableInfo).skipReturn();
         const real_skip_return = skip_return or throw_bool;
@@ -681,7 +681,7 @@ pub const FunctionInfoExt = struct {
             if (throw_error) {
                 try writer.writeAll("error{GError}!");
             } else if (throw_bool) {
-                try writer.writeAll("error{BooleanError}!");
+                try writer.writeAll("?");
             }
             if (n_out > 1) {
                 try writer.writeAll("struct {\n");
@@ -849,7 +849,7 @@ pub const FunctionInfoExt = struct {
             try writer.writeAll("    return error.GError;\n");
             try writer.writeAll("}\n");
         } else if (throw_bool) {
-            try writer.writeAll("if (!ret) return error.BooleanError;\n");
+            try writer.writeAll("if (!ret) return null;\n");
         }
         try writer.writeAll("return ");
         var first = true;
@@ -1353,7 +1353,7 @@ pub const TypeInfoExt = struct {
                                 try writer.writeAll("*");
                             }
                             try writer.print("[{}]{n}", .{ size, child_type });
-                        } else |_| if (self.isZeroTerminated()) {
+                        } else if (self.isZeroTerminated()) {
                             std.debug.assert(self.isPointer());
                             if (option_nullable) {
                                 try writer.writeAll("?");

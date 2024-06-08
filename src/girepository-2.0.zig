@@ -8,21 +8,21 @@ pub const ArgInfo = extern struct {
     padding: [6]?*anyopaque,
     pub const Parent = gi_repository.BaseInfo;
     /// method [get_closure_index](https://docs.gtk.org/girepository/method.ArgInfo.get_closure_index.html)
-    pub fn getClosureIndex(self: *ArgInfo) error{BooleanError}!u32 {
+    pub fn getClosureIndex(self: *ArgInfo) ?u32 {
         var out_closure_index_out: u32 = undefined;
         const _out_closure_index = &out_closure_index_out;
         const cFn = @extern(*const fn (*ArgInfo, ?*u32) callconv(.C) bool, .{ .name = "gi_arg_info_get_closure_index" });
         const ret = cFn(self, _out_closure_index);
-        if (!ret) return error.BooleanError;
+        if (!ret) return null;
         return out_closure_index_out;
     }
     /// method [get_destroy_index](https://docs.gtk.org/girepository/method.ArgInfo.get_destroy_index.html)
-    pub fn getDestroyIndex(self: *ArgInfo) error{BooleanError}!u32 {
+    pub fn getDestroyIndex(self: *ArgInfo) ?u32 {
         var out_destroy_index_out: u32 = undefined;
         const _out_destroy_index = &out_destroy_index_out;
         const cFn = @extern(*const fn (*ArgInfo, ?*u32) callconv(.C) bool, .{ .name = "gi_arg_info_get_destroy_index" });
         const ret = cFn(self, _out_destroy_index);
-        if (!ret) return error.BooleanError;
+        if (!ret) return null;
         return out_destroy_index_out;
     }
     /// method [get_direction](https://docs.gtk.org/girepository/method.ArgInfo.get_direction.html)
@@ -1279,21 +1279,21 @@ pub const TypeInfo = extern struct {
         return ret;
     }
     /// method [get_array_fixed_size](https://docs.gtk.org/girepository/method.TypeInfo.get_array_fixed_size.html)
-    pub fn getArrayFixedSize(self: *TypeInfo) error{BooleanError}!u64 {
+    pub fn getArrayFixedSize(self: *TypeInfo) ?u64 {
         var out_size_out: u64 = undefined;
         const _out_size = &out_size_out;
         const cFn = @extern(*const fn (*TypeInfo, ?*u64) callconv(.C) bool, .{ .name = "gi_type_info_get_array_fixed_size" });
         const ret = cFn(self, _out_size);
-        if (!ret) return error.BooleanError;
+        if (!ret) return null;
         return out_size_out;
     }
     /// method [get_array_length_index](https://docs.gtk.org/girepository/method.TypeInfo.get_array_length_index.html)
-    pub fn getArrayLengthIndex(self: *TypeInfo) error{BooleanError}!u32 {
+    pub fn getArrayLengthIndex(self: *TypeInfo) ?u32 {
         var out_length_index_out: u32 = undefined;
         const _out_length_index = &out_length_index_out;
         const cFn = @extern(*const fn (*TypeInfo, ?*u32) callconv(.C) bool, .{ .name = "gi_type_info_get_array_length_index" });
         const ret = cFn(self, _out_length_index);
-        if (!ret) return error.BooleanError;
+        if (!ret) return null;
         return out_length_index_out;
     }
     /// method [get_array_type](https://docs.gtk.org/girepository/method.TypeInfo.get_array_type.html)
@@ -1451,12 +1451,12 @@ pub const UnionInfo = opaque {
         return ret;
     }
     /// method [get_discriminator_offset](https://docs.gtk.org/girepository/method.UnionInfo.get_discriminator_offset.html)
-    pub fn getDiscriminatorOffset(self: *UnionInfo) error{BooleanError}!u64 {
+    pub fn getDiscriminatorOffset(self: *UnionInfo) ?u64 {
         var out_offset_out: u64 = undefined;
         const _out_offset = &out_offset_out;
         const cFn = @extern(*const fn (*UnionInfo, ?*u64) callconv(.C) bool, .{ .name = "gi_union_info_get_discriminator_offset" });
         const ret = cFn(self, _out_offset);
-        if (!ret) return error.BooleanError;
+        if (!ret) return null;
         return out_offset_out;
     }
     /// method [get_discriminator_type](https://docs.gtk.org/girepository/method.UnionInfo.get_discriminator_type.html)
