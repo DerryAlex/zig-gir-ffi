@@ -46,23 +46,24 @@ pub const BitField = struct {
 };
 
 // @manual
-const SliceInfo = struct {
-    is_slice_ptr: bool = false,
-    slice_len: usize = undefined,
-    is_slice_len: bool = false,
-    slice_ptr: usize = undefined,
-};
+pub fn Iterator(comptime Context: type, comptime Item: type) type {
+    const Int = @Type(@typeInfo(c_int));
 
-// @manual
-const ClosureInfo = struct {
-    scope: ScopeType = .invalid,
-    is_func: bool = false,
-    closure_data: usize = undefined,
-    is_data: bool = false,
-    closure_func: usize = undefined,
-    is_destroy: bool = false,
-    closure_destroy: usize = undefined,
-};
+    return struct {
+        context: Context,
+        index: Int = 0,
+        capacity: Int,
+        next_fn: *const fn (Context, Int) Item,
+
+        const Self = @This();
+
+        pub fn next(self: *Self) ?Item {
+            if (self.index >= self.capacity) return null;
+            defer self.index += 1;
+            return self.next_fn(self.context, self.index);
+        }
+    };
+}
 
 pub const Argument = extern union {
     v_boolean: bool,
@@ -729,33 +730,17 @@ pub const CallableInfo = extern struct {
     pub usingnamespace core.Extend(@This());
 
     // @manual
-    const ArgsIter = struct {
-        callable_info: *CallableInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*ArgInfo = null,
-
-        pub fn next(self: *ArgsIter) ?*ArgInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.callable_info.getArg(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
-    pub fn argsIter(self: *CallableInfo) ArgsIter {
-        return .{ .callable_info = self, .capacity = self.getNArgs() };
-    }
-
-    // @manual
     pub fn argsAlloc(self: *CallableInfo, allocator: std.mem.Allocator) ![]*ArgInfo {
         const args = try allocator.alloc(*ArgInfo, @intCast(self.getNArgs()));
         for (args, 0..) |*arg, index| {
             arg.* = self.getArg(@intCast(index));
         }
         return args;
+    }
+
+    const ArgsIter = Iterator(*CallableInfo, *ArgInfo);
+    pub fn argsIter(self: *CallableInfo) ArgsIter {
+        return .{ .context = self, .capacity = self.getNArgs(), .next_fn = getArg };
     }
 
     // @manual
@@ -984,46 +969,14 @@ pub const EnumInfo = extern struct {
     }
     pub usingnamespace core.Extend(@This());
 
-    // @manual
-    const ValueIter = struct {
-        enum_info: *EnumInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*ValueInfo = null,
-
-        pub fn next(self: *ValueIter) ?*ValueInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.enum_info.getValue(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const ValueIter = Iterator(*EnumInfo, *ValueInfo);
     pub fn valueIter(self: *EnumInfo) ValueIter {
-        return .{ .enum_info = self, .capacity = self.getNValues() };
+        return .{ .context = self, .capacity = self.getNValues(), .next_fn = getValue };
     }
 
-    // @manual
-    const MethodIter = struct {
-        enum_info: *EnumInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*FunctionInfo = null,
-
-        pub fn next(self: *MethodIter) ?*FunctionInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.enum_info.getMethod(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const MethodIter = Iterator(*EnumInfo, *FunctionInfo);
     pub fn methodIter(self: *EnumInfo) MethodIter {
-        return .{ .enum_info = self, .capacity = self.getNMethods() };
+        return .{ .context = self, .capacity = self.getNMethods(), .next_fn = getMethod };
     }
 
     // @manual
@@ -1286,6 +1239,23 @@ pub const FunctionInfo = extern struct {
                 else => @compileError(std.fmt.comptimePrint("Invalid format string '{c}' for type {s}", .{ ch, @typeName(@This()) })),
             }
         }
+
+        const SliceInfo = struct {
+            is_slice_ptr: bool = false,
+            slice_len: usize = undefined,
+            is_slice_len: bool = false,
+            slice_ptr: usize = undefined,
+        };
+        const ClosureInfo = struct {
+            scope: ScopeType = .invalid,
+            is_func: bool = false,
+            closure_data: usize = undefined,
+            is_data: bool = false,
+            closure_func: usize = undefined,
+            is_destroy: bool = false,
+            closure_destroy: usize = undefined,
+        };
+
         var buffer: [4096]u8 = undefined;
         var fixed_buffer_allocator = std.heap.FixedBufferAllocator.init(buffer[0..]);
         const allocator = fixed_buffer_allocator.allocator();
@@ -1702,130 +1672,34 @@ pub const InterfaceInfo = extern struct {
     }
     pub usingnamespace core.Extend(@This());
 
-    // @manual
-    const PrerequisiteIter = struct {
-        interface_info: *InterfaceInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*BaseInfo = null,
-
-        pub fn next(self: *PrerequisiteIter) ?*BaseInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.interface_info.getPrerequisite(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const PrerequisiteIter = Iterator(*InterfaceInfo, *BaseInfo);
     pub fn prerequisiteIter(self: *InterfaceInfo) PrerequisiteIter {
-        return .{ .interface_info = self, .capacity = self.getNPrerequisites() };
+        return .{ .context = self, .capacity = self.getNPrerequisites(), .next_fn = getPrerequisite };
     }
 
-    // @manual
-    const PropertyIter = struct {
-        interface_info: *InterfaceInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*PropertyInfo = null,
-
-        pub fn next(self: *PropertyIter) ?*PropertyInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.interface_info.getProperty(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const PropertyIter = Iterator(*InterfaceInfo, *PropertyInfo);
     pub fn propertyIter(self: *InterfaceInfo) PropertyIter {
-        return .{ .interface_info = self, .capacity = self.getNProperties() };
+        return .{ .context = self, .capacity = self.getNProperties(), .next_fn = getProperty };
     }
 
-    // @manual
-    const MethodIter = struct {
-        interface_info: *InterfaceInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*FunctionInfo = null,
-
-        pub fn next(self: *MethodIter) ?*FunctionInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.interface_info.getMethod(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const MethodIter = Iterator(*InterfaceInfo, *FunctionInfo);
     pub fn methodIter(self: *InterfaceInfo) MethodIter {
-        return .{ .interface_info = self, .capacity = self.getNMethods() };
+        return .{ .context = self, .capacity = self.getNMethods(), .next_fn = getMethod };
     }
 
-    // @manual
-    const SignalIter = struct {
-        interface_info: *InterfaceInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*SignalInfo = null,
-
-        pub fn next(self: *SignalIter) ?*SignalInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.interface_info.getSignal(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const SignalIter = Iterator(*InterfaceInfo, *SignalInfo);
     pub fn signalIter(self: *InterfaceInfo) SignalIter {
-        return .{ .interface_info = self, .capacity = self.getNSignals() };
+        return .{ .context = self, .capacity = self.getNSignals(), .next_fn = getSignal };
     }
 
-    // @manual
-    const VFuncIter = struct {
-        interface_info: *InterfaceInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*VFuncInfo = null,
-
-        pub fn next(self: *VFuncIter) ?*VFuncInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.interface_info.getVfunc(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const VFuncIter = Iterator(*InterfaceInfo, *VFuncInfo);
     pub fn vfuncIter(self: *InterfaceInfo) VFuncIter {
-        return .{ .interface_info = self, .capacity = self.getNVfuncs() };
+        return .{ .context = self, .capacity = self.getNVfuncs(), .next_fn = getVfunc };
     }
 
-    // @manual
-    const ConstantIter = struct {
-        interface_info: *InterfaceInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*ConstantInfo = null,
-
-        pub fn next(self: *ConstantIter) ?*ConstantInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.interface_info.getConstant(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const ConstantIter = Iterator(*InterfaceInfo, *ConstantInfo);
     pub fn constantIter(self: *InterfaceInfo) ConstantIter {
-        return .{ .interface_info = self, .capacity = self.getNConstants() };
+        return .{ .context = self, .capacity = self.getNConstants(), .next_fn = getConstant };
     }
 
     // @manual
@@ -2087,150 +1961,39 @@ pub const ObjectInfo = extern struct {
     }
     pub usingnamespace core.Extend(@This());
 
-    // @manual
-    const ConstantIter = struct {
-        object_info: *ObjectInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*ConstantInfo = null,
-
-        pub fn next(self: *ConstantIter) ?*ConstantInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.object_info.getConstant(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const ConstantIter = Iterator(*ObjectInfo, *ConstantInfo);
     pub fn constantIter(self: *ObjectInfo) ConstantIter {
-        return .{ .object_info = self, .capacity = self.getNConstants() };
+        return .{ .context = self, .capacity = self.getNConstants(), .next_fn = getConstant };
     }
 
-    // @manual
-    const FieldIter = struct {
-        object_info: *ObjectInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*FieldInfo = null,
-
-        pub fn next(self: *FieldIter) ?*FieldInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.object_info.getField(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const FieldIter = Iterator(*ObjectInfo, *FieldInfo);
     pub fn fieldIter(self: *ObjectInfo) FieldIter {
-        return .{ .object_info = self, .capacity = self.getNFields() };
+        return .{ .context = self, .capacity = self.getNFields(), .next_fn = getField };
     }
 
-    // @manual
-    const InterfaceIter = struct {
-        object_info: *ObjectInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*InterfaceInfo = null,
-
-        pub fn next(self: *InterfaceIter) ?*InterfaceInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.object_info.getInterface(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const InterfaceIter = Iterator(*ObjectInfo, *InterfaceInfo);
     pub fn interfaceIter(self: *ObjectInfo) InterfaceIter {
-        return .{ .object_info = self, .capacity = self.getNInterfaces() };
+        return .{ .context = self, .capacity = self.getNInterfaces(), .next_fn = getInterface };
     }
 
-    // @manual
-    const MethodIter = struct {
-        object_info: *ObjectInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*FunctionInfo = null,
-
-        pub fn next(self: *MethodIter) ?*FunctionInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.object_info.getMethod(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const MethodIter = Iterator(*ObjectInfo, *FunctionInfo);
     pub fn methodIter(self: *ObjectInfo) MethodIter {
-        return .{ .object_info = self, .capacity = self.getNMethods() };
+        return .{ .context = self, .capacity = self.getNMethods(), .next_fn = getMethod };
     }
 
-    // @manual
-    const PropertyIter = struct {
-        object_info: *ObjectInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*PropertyInfo = null,
-
-        pub fn next(self: *PropertyIter) ?*PropertyInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.object_info.getProperty(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const PropertyIter = Iterator(*ObjectInfo, *PropertyInfo);
     pub fn propertyIter(self: *ObjectInfo) PropertyIter {
-        return .{ .object_info = self, .capacity = self.getNProperties() };
+        return .{ .context = self, .capacity = self.getNProperties(), .next_fn = getProperty };
     }
 
-    // @manual
-    const SignalIter = struct {
-        object_info: *ObjectInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*SignalInfo = null,
-
-        pub fn next(self: *SignalIter) ?*SignalInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.object_info.getSignal(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const SignalIter = Iterator(*ObjectInfo, *SignalInfo);
     pub fn signalIter(self: *ObjectInfo) SignalIter {
-        return .{ .object_info = self, .capacity = self.getNSignals() };
+        return .{ .context = self, .capacity = self.getNSignals(), .next_fn = getSignal };
     }
 
-    // @manual
-    const VFuncIter = struct {
-        object_info: *ObjectInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*VFuncInfo = null,
-
-        pub fn next(self: *VFuncIter) ?*VFuncInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.object_info.getVfunc(self.index);
-            return self.ret;
-        }
-    };
-
+    const VFuncIter = Iterator(*ObjectInfo, *VFuncInfo);
     pub fn vfuncIter(self: *ObjectInfo) VFuncIter {
-        return .{ .object_info = self, .capacity = self.getNVfuncs() };
+        return .{ .context = self, .capacity = self.getNVfuncs(), .next_fn = getVfunc };
     }
 
     // @manual
@@ -2526,46 +2289,14 @@ pub const StructInfo = extern struct {
     }
     pub usingnamespace core.Extend(@This());
 
-    // @manual
-    const FieldIter = struct {
-        struct_info: *StructInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*FieldInfo = null,
-
-        pub fn next(self: *FieldIter) ?*FieldInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.struct_info.getField(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const FieldIter = Iterator(*StructInfo, *FieldInfo);
     pub fn fieldIter(self: *StructInfo) FieldIter {
-        return .{ .struct_info = self, .capacity = self.getNFields() };
+        return .{ .context = self, .capacity = self.getNFields(), .next_fn = getField };
     }
 
-    // @manual
-    const MethodIter = struct {
-        struct_info: *StructInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*FunctionInfo = null,
-
-        pub fn next(self: *MethodIter) ?*FunctionInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.struct_info.getMethod(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const MethodIter = Iterator(*StructInfo, *FunctionInfo);
     pub fn methodIter(self: *StructInfo) MethodIter {
-        return .{ .struct_info = self, .capacity = self.getNMethods() };
+        return .{ .context = self, .capacity = self.getNMethods(), .next_fn = getMethod };
     }
 
     // @manual
@@ -2921,46 +2652,14 @@ pub const UnionInfo = extern struct {
     }
     pub usingnamespace core.Extend(@This());
 
-    // @manual
-    const FieldIter = struct {
-        union_info: *UnionInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*FieldInfo = null,
-
-        pub fn next(self: *FieldIter) ?*FieldInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.union_info.getField(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const FieldIter = Iterator(*UnionInfo, *FieldInfo);
     pub fn fieldIter(self: *UnionInfo) FieldIter {
-        return .{ .union_info = self, .capacity = self.getNFields() };
+        return .{ .context = self, .capacity = self.getNFields(), .next_fn = getField };
     }
 
-    // @manual
-    const MethodIter = struct {
-        union_info: *UnionInfo,
-        index: i32 = 0,
-        capacity: i32,
-        ret: ?*FunctionInfo = null,
-
-        pub fn next(self: *MethodIter) ?*FunctionInfo {
-            self.ret = null;
-            if (self.index >= self.capacity) return null;
-            defer self.index += 1;
-            self.ret = self.union_info.getMethod(self.index);
-            return self.ret;
-        }
-    };
-
-    // @manual
+    const MethodIter = Iterator(*UnionInfo, *FunctionInfo);
     pub fn methodIter(self: *UnionInfo) MethodIter {
-        return .{ .union_info = self, .capacity = self.getNMethods() };
+        return .{ .context = self, .capacity = self.getNMethods(), .next_fn = getMethod };
     }
 
     // @manual
