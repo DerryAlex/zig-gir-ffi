@@ -1,11 +1,36 @@
 const std = @import("std");
 
+pub fn getVersion(allocator: std.mem.Allocator) ![]const u8 {
+    const cwd = std.fs.cwd();
+    const zon = try cwd.openFile("build.zig.zon", .{});
+    defer zon.close();
+    const reader = zon.reader();
+    var line = std.ArrayList(u8).init(allocator);
+    defer line.deinit();
+    while (reader.streamUntilDelimiter(line.writer(), '\n', null)) {
+        defer line.clearRetainingCapacity();
+        var is_version_line = false;
+        var iter = std.mem.splitScalar(u8, line.items, '\"');
+        while (iter.next()) |seq| {
+            if (is_version_line) {
+                return try allocator.dupe(u8, seq);
+            }
+            if (std.mem.indexOf(u8, seq, ".version")) |_| {
+                is_version_line = true;
+            }
+        }
+    } else |err| {
+        return err;
+    }
+}
+
 pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
 
+    const version_in_zon = try getVersion(b.allocator);
     const options = b.addOptions();
-    const version = b.option([]const u8, "version", "Version string") orelse "0.8.3";
+    const version = b.option([]const u8, "version", "Version string") orelse version_in_zon;
     options.addOption([]const u8, "version", version);
     const namespace = b.option([]const u8, "gi-namespace", "GI namespace to use, e.g. \"Gtk\"") orelse "Gtk";
     options.addOption([]const u8, "gi_namespace", namespace);
