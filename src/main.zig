@@ -284,14 +284,14 @@ pub const Info = union(enum) {
 pub fn generateDocs(info: Info, writer: std.io.AnyWriter) anyerror!void {
     const data = std.StaticStringMap([]const u8).initComptime(.{
         .{ "Gtk", "https://docs.gtk.org/gtk4" },
-        .{ "Gdk", "https://docs.gtk.org/gdk4" },
-        .{ "GdkPixbuf", "https://docs.gtk.org/gdk-pixbuf" },
         .{ "Gsk", "https://docs.gtk.org/gsk4" },
+        .{ "Gdk", "https://docs.gtk.org/gdk4" },
+        .{ "Pango", "https://docs.gtk.org/Pango" },
+        .{ "GdkPixbuf", "https://docs.gtk.org/gdk-pixbuf" },
+        .{ "GLib", "https://docs.gtk.org/glib" },
         .{ "GObject", "https://docs.gtk.org/gobject" },
         .{ "Gio", "https://docs.gtk.org/gio" },
-        .{ "GLib", "https://docs.gtk.org/glib" },
-        .{ "Pango", "https://docs.gtk.org/Pango" },
-        .{ "PangoCario", "https://docs.gtk.org/PangoCairo" },
+        .{ "GIRepository", "https://docs.gtk.org/girepository/" },
     });
     const namespace = info.getNamespace().?;
     if (data.get(namespace)) |prefix| {
@@ -399,37 +399,3 @@ pub const Identifier = struct {
         }
     }
 };
-
-pub fn snakeToCamel(src: []const u8, buf: []u8) []u8 {
-    var len: usize = 0;
-    var upper = false;
-    for (src) |ch| {
-        if (ch == '_' or ch == '-') {
-            upper = true;
-        } else {
-            if (upper) {
-                buf[len] = std.ascii.toUpper(ch);
-            } else {
-                buf[len] = ch;
-            }
-            len += 1;
-            upper = false;
-        }
-    }
-    return buf[0..len];
-}
-
-pub fn camelToSnake(src: []const u8, buf: []u8) []u8 {
-    var len: usize = 0;
-    var idx: usize = 0;
-    for (src) |ch| {
-        if (idx != 0 and std.ascii.isUpper(ch)) {
-            buf[len] = '_';
-            len += 1;
-        }
-        buf[len] = ch;
-        len += 1;
-        idx += 1;
-    }
-    return buf[0..len];
-}
