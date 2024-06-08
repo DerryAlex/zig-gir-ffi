@@ -50,7 +50,7 @@ pub fn build(b: *std.Build) !void {
     exe.root_module.addOptions("config", options);
     exe.root_module.addImport("clap", clap);
     exe.linkLibC();
-    exe.linkSystemLibrary("gobject-introspection-1.0");
+    exe.linkSystemLibrary("girepository-2.0");
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);

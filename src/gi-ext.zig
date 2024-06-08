@@ -1,4 +1,4 @@
-const gi = @import("girepository-1.0.zig");
+const gi = @import("girepository-2.0.zig");
 const BaseInfo = gi.BaseInfo;
 const UnresolvedInfo = gi.UnresolvedInfo;
 const ArgInfo = gi.ArgInfo;
@@ -21,13 +21,13 @@ const ValueInfo = gi.ValueInfo;
 const VFuncInfo = gi.VFuncInfo;
 
 fn Iterator(comptime Context: type, comptime Item: type) type {
-    const Int = @Type(@typeInfo(c_int));
+    const UInt = @Type(@typeInfo(c_uint));
 
     return struct {
         context: Context,
-        index: Int = 0,
-        capacity: Int,
-        next_fn: *const fn (Context, Int) Item,
+        index: UInt = 0,
+        capacity: UInt,
+        next_fn: *const fn (Context, UInt) Item,
 
         const Self = @This();
 
@@ -80,6 +80,52 @@ fn camelToSnake(src: []const u8, buf: []u8) []u8 {
 }
 
 // extensions
+pub const BaseInfoExt = struct {
+    const InfoType = enum(u32) {
+        invalid = 0,
+        function = 1,
+        callback = 2,
+        @"struct" = 3,
+        boxed = 4,
+        @"enum" = 5,
+        flags = 6,
+        object = 7,
+        interface = 8,
+        constant = 9,
+        invalid_0 = 10,
+        @"union" = 11,
+        value = 12,
+        signal = 13,
+        vfunc = 14,
+        property = 15,
+        field = 16,
+        arg = 17,
+        type = 18,
+        unresolved = 19,
+    };
+
+    pub fn getType(self: *BaseInfo) InfoType {
+        if (self.tryInto(ArgInfo)) |_| return .arg;
+        if (self.tryInto(CallbackInfo)) |_| return .callback;
+        if (self.tryInto(FunctionInfo)) |_| return .function;
+        if (self.tryInto(SignalInfo)) |_| return .signal;
+        if (self.tryInto(VFuncInfo)) |_| return .vfunc;
+        if (self.tryInto(ConstantInfo)) |_| return .constant;
+        if (self.tryInto(FlagsInfo)) |_| return .flags;
+        if (self.tryInto(EnumInfo)) |_| return .@"enum";
+        if (self.tryInto(InterfaceInfo)) |_| return .interface;
+        if (self.tryInto(ObjectInfo)) |_| return .object;
+        if (self.tryInto(StructInfo)) |_| return .@"struct";
+        if (self.tryInto(UnionInfo)) |_| return .@"union";
+        if (self.tryInto(FieldInfo)) |_| return .field;
+        if (self.tryInto(PropertyInfo)) |_| return .property;
+        if (self.tryInto(TypeInfo)) |_| return .type;
+        if (self.tryInto(UnresolvedInfo)) |_| return .unresolved;
+        if (self.tryInto(ValueInfo)) |_| return .value;
+        return .invalid;
+    }
+};
+
 pub const ArgInfoExt = struct {
     pub fn format(self_immut: *const ArgInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
@@ -98,7 +144,7 @@ pub const ArgInfoExt = struct {
             const name = self.into(BaseInfo).getName().?;
             try writer.print("_{s}: ", .{name});
         }
-        const arg_type = self.getType();
+        const arg_type = self.getTypeInfo();
         if (option_signal_param) {
             if (arg_type.getInterface()) |child_type| {
                 switch (child_type.getType()) {
@@ -267,12 +313,12 @@ pub const CallbackInfoExt = struct {
 
 pub const ConstantInfoExt = struct {
     pub fn freeValue(self: *ConstantInfo, value: *gi.Argument) void {
-        const cFn = @extern(*const fn (*BaseInfo, *gi.Argument) callconv(.C) void, .{ .name = "g_constant_info_free_value" });
+        const cFn = @extern(*const fn (*BaseInfo, *gi.Argument) callconv(.C) void, .{ .name = "gi_constant_info_free_value" });
         _ = cFn(self.into(BaseInfo), value);
     }
 
     pub fn getValue(self: *ConstantInfo, value: *gi.Argument) c_int {
-        const cFn = @extern(*const fn (*BaseInfo, *gi.Argument) callconv(.C) c_int, .{ .name = "g_constant_info_get_value" });
+        const cFn = @extern(*const fn (*BaseInfo, *gi.Argument) callconv(.C) c_int, .{ .name = "gi_constant_info_get_value" });
         const ret = cFn(self.into(BaseInfo), value);
         return ret;
     }
@@ -294,7 +340,7 @@ pub const ConstantInfoExt = struct {
         var value: gi.Argument = undefined;
         _ = self.getValue(&value);
         defer self.freeValue(&value);
-        const value_type = self.getType();
+        const value_type = self.getTypeInfo();
         switch (value_type.getTag()) {
             .boolean => try writer.print("{}", .{value.v_boolean}),
             .int8 => try writer.print("{}", .{value.v_int8}),
@@ -485,7 +531,7 @@ pub const FieldInfoExt = struct {
         }
 
         const field_name = self.into(BaseInfo).getName().?;
-        const field_type = self.getType();
+        const field_type = self.getTypeInfo();
         const field_size = self.getSize();
         if (field_size != 0) {
             const field_container_bits: usize = switch (field_type.getTag()) {
@@ -566,36 +612,33 @@ pub const FunctionInfoExt = struct {
             if (arg.getDirection() == .out and !arg.isCallerAllocates()) {
                 n_out_param += 1;
             }
-            const arg_type = arg.getType();
-            if (arg_type.getArrayLength() != -1) {
-                const pos: usize = @intCast(arg_type.getArrayLength());
+            const arg_type = arg.getTypeInfo();
+            if (arg_type.getArrayLengthIndex()) |pos| {
                 slice_info[idx].is_slice_ptr = true;
                 slice_info[idx].slice_len = pos;
                 if (!slice_info[pos].is_slice_len) {
                     slice_info[pos].is_slice_len = true;
                     slice_info[pos].slice_ptr = idx;
                 }
-            }
+            } else |_| {}
             const arg_name = std.mem.span(arg.into(BaseInfo).getName().?);
-            if (arg.getScope() != .invalid and arg.getClosure() != -1 and !std.mem.eql(u8, "data", arg_name[arg_name.len - 4 .. arg_name.len])) {
+            if (arg.getScope() != .invalid and arg.getClosureIndex() catch null != null and !std.mem.eql(u8, "data", arg_name[arg_name.len - 4 .. arg_name.len])) {
                 closure_info[idx].scope = arg.getScope();
                 closure_info[idx].is_func = true;
-                if (arg.getClosure() != -1) {
-                    const pos: usize = @intCast(arg.getClosure());
+                if (arg.getClosureIndex()) |pos| {
                     closure_info[idx].closure_data = pos;
                     closure_info[pos].is_data = true;
                     closure_info[pos].closure_func = idx;
-                }
-                if (arg.getDestroy() != -1) {
-                    const pos: usize = @intCast(arg.getDestroy());
+                } else |_| {}
+                if (arg.getDestroyIndex()) |pos| {
                     closure_info[idx].closure_destroy = pos;
                     closure_info[pos].is_destroy = true;
                     closure_info[pos].closure_func = idx;
-                }
+                } else |_| {}
             }
         }
         const return_bool = return_type.getTag() == .boolean;
-        const throw_bool = return_bool and (n_out_param > 0);
+        const throw_bool = return_bool and (n_out_param > 0) and (func_name.len >= 3 and std.mem.eql(u8, "get", func_name[0..3]));
         const throw_error = self.into(CallableInfo).canThrowGerror();
         const skip_return = self.into(CallableInfo).skipReturn();
         const real_skip_return = skip_return or throw_bool;
@@ -627,7 +670,7 @@ pub const FunctionInfoExt = struct {
                     if (arg.isOptional()) {
                         try writer.writeAll("?");
                     }
-                    try writer.print("[]{}", .{arg.getType().getParamType(0)});
+                    try writer.print("[]{}", .{arg.getTypeInfo().getParamType(0).?});
                 } else if (closure_info[idx].is_func) {
                     try writer.print("{s}: anytype, {s}_args: anytype", .{ arg.into(BaseInfo).getName().?, arg.into(BaseInfo).getName().? });
                 } else {
@@ -681,12 +724,12 @@ pub const FunctionInfoExt = struct {
                         if (arg.isOptional()) {
                             try writer.writeAll("?");
                         }
-                        try writer.print("[]{}", .{arg.getType().getParamType(0)});
+                        try writer.print("[]{}", .{arg.getTypeInfo().getParamType(0).?});
                     } else {
                         if (arg.mayBeNull()) {
-                            try writer.print("{mn}", .{arg.getType()});
+                            try writer.print("{mn}", .{arg.getTypeInfo()});
                         } else {
-                            try writer.print("{m}", .{arg.getType()});
+                            try writer.print("{m}", .{arg.getTypeInfo()});
                         }
                     }
                     if (n_out > 1) {
@@ -708,7 +751,7 @@ pub const FunctionInfoExt = struct {
             if (arg.getDirection() == .out and !arg.isCallerAllocates()) continue;
             const arg_name = arg.into(BaseInfo).getName().?;
             if (slice_info[idx].is_slice_len) {
-                const arg_type = arg.getType();
+                const arg_type = arg.getTypeInfo();
                 const ptr_arg = args[slice_info[idx].slice_ptr];
                 if (ptr_arg.isOptional()) {
                     try writer.print("const _{s}: {} = if (_{s}s) |some| @intCast(some.len) else 0;\n", .{ arg_name, arg_type, ptr_arg.into(BaseInfo).getName().? });
@@ -725,7 +768,7 @@ pub const FunctionInfoExt = struct {
             }
             if (closure_info[idx].is_func) {
                 try writer.print("var closure_{s} = core.zig_closure({s}, {s}_args, &.{{", .{ arg_name, arg_name, arg_name });
-                const arg_type = arg.getType();
+                const arg_type = arg.getTypeInfo();
                 if (arg_type.getInterface()) |interface| {
                     if (interface.getType() == .callback) {
                         const cb_return_type = interface.tryInto(CallableInfo).?.getReturnType();
@@ -780,7 +823,7 @@ pub const FunctionInfoExt = struct {
         for (args) |arg| {
             if (arg.getDirection() != .out or arg.isCallerAllocates()) continue;
             const arg_name = arg.into(BaseInfo).getName().?;
-            const arg_type = arg.getType();
+            const arg_type = arg.getTypeInfo();
             if (arg.mayBeNull()) {
                 try writer.print("var {s}_out: {mn} = undefined;\n", .{ arg_name, arg_type });
             } else {
@@ -806,7 +849,7 @@ pub const FunctionInfoExt = struct {
             try writer.writeAll("    return error.GError;\n");
             try writer.writeAll("}\n");
         } else if (throw_bool) {
-            try writer.writeAll("if (ret) return error.BooleanError;\n");
+            try writer.writeAll("if (!ret) return error.BooleanError;\n");
         }
         try writer.writeAll("return ");
         var first = true;
@@ -1076,14 +1119,45 @@ pub const RegisteredTypeInfoExt = struct {
             }
         }
 
-        if (self.getGType() != .none) {
+        if (self.getTypeInitFunctionName()) |init_fn| {
             try writer.writeAll("pub fn gType() core.Type {\n");
-            const init_fn = std.mem.span(self.getTypeInit());
-            if (std.mem.eql(u8, "intern", init_fn)) {
+            if (std.mem.eql(u8, "intern", std.mem.span(init_fn))) {
                 if (@intFromEnum(self.getGType()) < 256 * 4) {
                     try writer.print("return @enumFromInt({});", .{@intFromEnum(self.getGType())});
                 } else {
-                    try writer.writeAll("@panic(\"Internal type\");");
+                    const g_param_spec_types = std.StaticStringMap(usize).initComptime(.{
+                        .{ "GParamChar", 0 },
+                        .{ "GParamUChar", 1 },
+                        .{ "GParamBoolean", 2 },
+                        .{ "GParamInt", 3 },
+                        .{ "GParamUInt", 4 },
+                        .{ "GParamLong", 5 },
+                        .{ "GParamULong", 6 },
+                        .{ "GParamInt64", 7 },
+                        .{ "GParamUInt64", 8 },
+                        .{ "GParamUnichar", 9 },
+                        .{ "GParamEnum", 10 },
+                        .{ "GParamFlags", 11 },
+                        .{ "GParamFloat", 12 },
+                        .{ "GParamDouble", 13 },
+                        .{ "GParamString", 14 },
+                        .{ "GParamParam", 15 },
+                        .{ "GParamBoxed", 16 },
+                        .{ "GParamPointer", 17 },
+                        .{ "GParamValueArray", 18 },
+                        .{ "GParamObject", 19 },
+                        .{ "GParamOverride", 20 },
+                        .{ "GParamGType", 21 },
+                        .{ "GParamVariant", 22 },
+                    });
+                    const typename = self.getTypeName().?;
+                    if (g_param_spec_types.get(std.mem.span(typename))) |idx| {
+                        try writer.writeAll("const g_param_spec_types = @extern([*]core.Type, .{.name = \"g_param_spec_types\"});\n");
+                        try writer.print("return g_param_spec_types[{}];\n", .{idx});
+                    } else {
+                        std.log.info("{s}: {}", .{ self.getTypeName().?, self.getGType() });
+                        try writer.writeAll("@panic(\"intern\");");
+                    }
                 }
             } else {
                 try writer.print("const cFn = @extern(*const fn () callconv(.C) core.Type, .{{ .name = \"{s}\" }});\n", .{init_fn});
@@ -1270,9 +1344,8 @@ pub const TypeInfoExt = struct {
             .array => {
                 switch (self.getArrayType()) {
                     .c => {
-                        const child_type = self.getParamType(0);
-                        const size = self.getArrayFixedSize();
-                        if (size != -1) {
+                        const child_type = self.getParamType(0).?;
+                        if (self.getArrayFixedSize()) |size| {
                             if (self.isPointer()) {
                                 if (option_nullable) {
                                     try writer.writeAll("?");
@@ -1280,7 +1353,7 @@ pub const TypeInfoExt = struct {
                                 try writer.writeAll("*");
                             }
                             try writer.print("[{}]{n}", .{ size, child_type });
-                        } else if (self.isZeroTerminated()) {
+                        } else |_| if (self.isZeroTerminated()) {
                             std.debug.assert(self.isPointer());
                             if (option_nullable) {
                                 try writer.writeAll("?");
@@ -1448,7 +1521,7 @@ pub const VFuncInfoExt = struct {
         const container = self.into(BaseInfo).getContainer().?;
         const class = switch (container.getType()) {
             .object => container.tryInto(ObjectInfo).?.getClassStruct().?,
-            .interface => container.tryInto(InterfaceInfo).?.getIfaceStruct(),
+            .interface => container.tryInto(InterfaceInfo).?.getIfaceStruct().?,
             else => unreachable,
         };
         const class_name = class.into(BaseInfo).getName().?;
@@ -1478,14 +1551,16 @@ pub const VFuncInfoExt = struct {
     }
 };
 
+pub const UnresolvedInfoExt = struct {};
+
 const BitField = struct {
-    var remaining: ?isize = null;
+    var remaining: ?usize = null;
 
     pub fn reset() void {
         BitField.remaining = null;
     }
 
-    pub fn begin(bits: isize, offset: isize, writer: anytype) !void {
+    pub fn begin(bits: usize, offset: usize, writer: anytype) !void {
         std.debug.assert(BitField.remaining == null);
         BitField.remaining = bits;
         try writer.print("_{d} : packed struct(u{d}) {{\n", .{ offset, bits });
@@ -1500,7 +1575,7 @@ const BitField = struct {
         try writer.writeAll("},\n");
     }
 
-    pub fn ensure(bits: isize, alloc: isize, offset: isize, writer: anytype) !void {
+    pub fn ensure(bits: usize, alloc: usize, offset: usize, writer: anytype) !void {
         std.debug.assert(BitField.remaining != null);
         if (BitField.remaining.? < bits) {
             try BitField.end(writer);
@@ -1508,7 +1583,7 @@ const BitField = struct {
         }
     }
 
-    pub fn emit(bits: isize) void {
+    pub fn emit(bits: usize) void {
         std.debug.assert(BitField.remaining != null);
         BitField.remaining.? -= bits;
     }
