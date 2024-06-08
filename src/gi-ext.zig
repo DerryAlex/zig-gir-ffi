@@ -638,7 +638,7 @@ pub const FunctionInfoExt = struct {
             }
         }
         const return_bool = return_type.getTag() == .boolean;
-        const throw_bool = return_bool and (n_out_param > 0);
+        const throw_bool = return_bool and (n_out_param > 0) and (func_name.len >= 3 and std.mem.eql(u8, "get", func_name[0..3]));
         const throw_error = self.into(CallableInfo).canThrowGerror();
         const skip_return = self.into(CallableInfo).skipReturn();
         const real_skip_return = skip_return or throw_bool;
@@ -849,7 +849,7 @@ pub const FunctionInfoExt = struct {
             try writer.writeAll("    return error.GError;\n");
             try writer.writeAll("}\n");
         } else if (throw_bool) {
-            try writer.writeAll("if (ret) return error.BooleanError;\n");
+            try writer.writeAll("if (!ret) return error.BooleanError;\n");
         }
         try writer.writeAll("return ");
         var first = true;
