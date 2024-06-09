@@ -80,7 +80,7 @@ box.__call("setHalign", .{.center}); // equivalent to box.into(Widget).setHalign
 doSomething() catch {
   var err = core.getError();
   defer err.free();
-  std.log.err("{}", .{err.message.?});
+  std.log.err("{s}", .{err.message.?});
   // ...
 }
 ```
