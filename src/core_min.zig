@@ -151,22 +151,6 @@ pub const OptionGroup = opaque {};
 // -------------
 // GObject begin
 
-pub const Closure = extern struct {
-    ref_count: u32,
-    meta_marshal_nouse: u32,
-    n_guards: u32,
-    n_fnotifiers: u32,
-    n_inotifiers: u32,
-    in_inotify: u32,
-    floating: u32,
-    derivative_flag: u32,
-    in_marshal: u32,
-    is_invalid: u32,
-    marshal: ?*anyopaque,
-    data: ?*anyopaque,
-    notifiers: ?*anyopaque,
-};
-
 pub const Object = extern struct {
     g_type_instance: TypeInstance,
     ref_count: u32,
@@ -226,23 +210,6 @@ pub const TypeClass = extern struct {
 
 pub const TypeInstance = extern struct {
     g_class: ?*TypeClass,
-};
-
-pub const _Value__data__union = extern union {
-    v_int: i32,
-    v_uint: u32,
-    v_long: i64,
-    v_ulong: u64,
-    v_int64: i64,
-    v_uint64: u64,
-    v_float: f32,
-    v_double: f64,
-    v_pointer: ?*anyopaque,
-};
-
-pub const Value = extern struct {
-    g_type: Type,
-    data: [2]_Value__data__union,
 };
 
 pub fn typeCheckInstanceIsA(_instance: *TypeInstance, _iface_type: Type) bool {

@@ -1,3 +1,0 @@
-[submodule "lib/tools/gir-files"]
-	path = lib/tools/gir-files
-	url = https://github.com/gtk-rs/gir-files.git

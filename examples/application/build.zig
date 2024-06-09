@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) !void {
         std.debug.assert(std.posix.waitpid(pid, 0).status == 0);
     }
     exe.addCSourceFile(.{
-        .file = .{ .path = "resources.c" },
+        .file = b.path("resources.c"),
         .flags = &[_][]const u8{},
     });
     exe.linkLibC();
