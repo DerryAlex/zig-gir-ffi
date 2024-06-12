@@ -20,6 +20,12 @@ const GApplicationClass = gio.ApplicationClass;
 pub const ExampleAppClass = extern struct {
     parent: ApplicationClass,
 
+    var parent_class: ?*ApplicationClass = null;
+
+    pub fn init(class: *ExampleAppClass) void {
+        parent_class = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
+    }
+
     pub fn activate_override(arg_app: *GApplication) callconv(.C) void {
         const self = arg_app.tryInto(ExampleApp).?;
         var win = ExampleAppWindow.new(self);
@@ -59,7 +65,8 @@ pub const ExampleAppClass = extern struct {
         self.__call("addAction", .{action_quit.into(Action)});
         var quit_accels = [_:null]?[*:0]const u8{"<Ctrl>Q"};
         self.__call("setAccelsForAction", .{ "app.quit", &quit_accels });
-        self.__call("startupV", .{ExampleApp.Parent.gType()});
+        const p_class: *GApplicationClass = @ptrCast(parent_class);
+        p_class.startup.?(arg_app);
     }
 };
 

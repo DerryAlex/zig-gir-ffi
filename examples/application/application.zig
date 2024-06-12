@@ -4,7 +4,7 @@ const core = gtk.core;
 const glib = gtk.glib;
 const ExampleApp = @import("example_app.zig").ExampleApp;
 
-pub const gi_config: core.Config = .{
+pub const gi_configs: core.Configs = .{
     .disable_deprecated = false,
 };
 
