@@ -51,6 +51,7 @@ exe.root_module.addImport("gtk", gtk.module("gtk"));
   ![](examples/hello/screenshot.png)
 - [clock](examples/clock) : (Implicit) use of the main context
 - [custom](examples/custom) : Custom widget
+- [interface](examples/interface) : Define interface
 
 ### Object Interface
 
