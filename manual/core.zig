@@ -3,13 +3,10 @@ const gobject = @import("GObject.zig");
 const gio = @import("Gio.zig");
 
 const std = @import("std");
-const root = @import("root");
 
-pub const Config = struct {
+pub const Configs = struct {
     disable_deprecated: bool = true,
 };
-
-pub const config: Config = if (@hasDecl(root, "gi_config")) root.gi_config else .{};
 
 /// deprecated
 pub const Deprecated = opaque {};
@@ -652,7 +649,7 @@ pub fn newObject(comptime T: type, properties: anytype) *T {
             break :blk field.type;
         };
         values[idx] = ZigValue.new(V);
-        values[idx].set(V, @field(properties, field.name));
+        ZigValue.set(&values[idx], V, @field(properties, field.name));
     }
     defer for (&values) |*value| value.unset();
     return unsafeCast(T, objectNewWithProperties(T.gType(), if (n_props != 0) names[0..] else null, if (n_props != 0) values[0..] else null));

@@ -335,7 +335,7 @@ pub const ConstantInfoExt = struct {
         try root.generateDocs(.{ .constant = self }, writer);
         try writer.print("pub const {s} = ", .{self.into(BaseInfo).getName().?});
         if (self.into(BaseInfo).isDeprecated()) {
-            try writer.writeAll("if (core.config.disable_deprecated) core.Deprecated else ");
+            try writer.writeAll("if (config.disable_deprecated) core.Deprecated else ");
         }
         var value: gi.Argument = undefined;
         _ = self.getValue(&value);
@@ -390,7 +390,7 @@ pub const EnumInfoExt = struct {
         const name = self.into(BaseInfo).getName().?;
         try writer.print("pub const {s} = ", .{name});
         if (self.into(BaseInfo).isDeprecated()) {
-            try writer.writeAll("if (core.config.disable_deprecated) core.Deprecated else ");
+            try writer.writeAll("if (config.disable_deprecated) core.Deprecated else ");
         }
         try writer.writeAll("enum");
         switch (self.getStorageType()) {
@@ -451,7 +451,7 @@ pub const FlagsInfoExt = struct {
         const name = self.into(BaseInfo).getName().?;
         try writer.print("pub const {s} = ", .{name});
         if (self.into(BaseInfo).isDeprecated()) {
-            try writer.writeAll("if (core.config.disable_deprecated) core.Deprecated else ");
+            try writer.writeAll("if (config.disable_deprecated) core.Deprecated else ");
         }
         try writer.writeAll("packed struct");
         switch (self.into(EnumInfo).getStorageType()) {
@@ -593,13 +593,10 @@ pub const FunctionInfoExt = struct {
         const allocator = fixed_buffer_allocator.allocator();
         var buf: [256]u8 = undefined;
         const func_name = snakeToCamel(std.mem.span(self.into(BaseInfo).getName().?), buf[0..]);
-        if (self.into(BaseInfo).isDeprecated()) {
-            try writer.writeAll("pub usingnamespace if (core.config.disable_deprecated) struct{\n");
-            try writer.print("pub const {}", .{Identifier{ .str = func_name }});
-            try writer.writeAll(" = core.Deprecated;\n");
-            try writer.writeAll("} else struct{\n");
-        }
         try root.generateDocs(.{ .function = self }, writer);
+        if (self.into(BaseInfo).isDeprecated()) {
+            try writer.print("pub const {} = if (config.disable_deprecated) core.Deprecated else struct {{", .{Identifier{ .str = func_name }});
+        }
         try writer.print("pub fn {}", .{Identifier{ .str = func_name }});
         const return_type = self.into(CallableInfo).getReturnType();
         const args = self.into(CallableInfo).argsAlloc(allocator) catch @panic("Out of Memory");
@@ -897,7 +894,7 @@ pub const FunctionInfoExt = struct {
         try writer.writeAll(";\n");
         try writer.writeAll("}\n");
         if (self.into(BaseInfo).isDeprecated()) {
-            try writer.writeAll("};\n");
+            try writer.print("}}.{s};\n", .{Identifier{ .str = func_name }});
         }
     }
 };
@@ -949,7 +946,7 @@ pub const InterfaceInfoExt = struct {
         }
         const name = self.into(BaseInfo).getName().?;
         if (self.into(BaseInfo).isDeprecated()) {
-            try writer.print("pub const {s} = if (core.config.disable_deprecated) core.Deprecated else opaque {{\n", .{name});
+            try writer.print("pub const {s} = if (config.disable_deprecated) core.Deprecated else opaque {{\n", .{name});
         } else {
             try writer.print("pub const {s} = opaque {{\n", .{name});
         }
@@ -1043,7 +1040,7 @@ pub const ObjectInfoExt = struct {
         var iter = self.fieldIter();
         try writer.print("pub const {s} = ", .{name});
         if (self.into(BaseInfo).isDeprecated()) {
-            try writer.writeAll("if (core.config.disable_deprecated) core.Deprecated else ");
+            try writer.writeAll("if (config.disable_deprecated) core.Deprecated else ");
         }
         try writer.print("{s} {{\n", .{if (iter.capacity == 0) "opaque" else "extern struct"});
         BitField.reset();
@@ -1182,12 +1179,10 @@ pub const SignalInfoExt = struct {
         var buf: [256]u8 = undefined;
         const raw_name = std.mem.span(self.into(BaseInfo).getName().?);
         const name = snakeToCamel(raw_name, buf[0..]);
-        if (self.into(BaseInfo).isDeprecated()) {
-            try writer.writeAll("pub usingnamespace if (core.config.disable_deprecated) struct {\n");
-            try writer.print("pub const connect{c}{s} = core.Deprecated;\n", .{ std.ascii.toUpper(name[0]), name[1..] });
-            try writer.writeAll("} else struct {\n");
-        }
         try root.generateDocs(.{ .signal = self }, writer);
+        if (self.into(BaseInfo).isDeprecated()) {
+            try writer.print("pub const connect{c}{s} = if (config.disable_deprecated) core.Deprecated else struct {{\n", .{ std.ascii.toUpper(name[0]), name[1..] });
+        }
         try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
         try writer.print("return self.connect(\"{s}\", handler, args, flags, &.{{", .{raw_name});
         const return_type = self.into(CallableInfo).getReturnType();
@@ -1211,7 +1206,7 @@ pub const SignalInfoExt = struct {
         try writer.writeAll("});\n");
         try writer.writeAll("}\n");
         if (self.into(BaseInfo).isDeprecated()) {
-            try writer.writeAll("};\n");
+            try writer.print("}}.{c}{s};\n", .{ std.ascii.toUpper(name[0]), name[1..] });
         }
     }
 };
@@ -1241,7 +1236,7 @@ pub const StructInfoExt = struct {
         const namespace = std.mem.span(self.into(BaseInfo).getNamespace().?);
         try writer.print("pub const {s} = ", .{name});
         if (self.into(BaseInfo).isDeprecated()) {
-            try writer.writeAll("if (core.config.disable_deprecated) core.Deprecated else ");
+            try writer.writeAll("if (config.disable_deprecated) core.Deprecated else ");
         }
         try writer.print("{s}{{\n", .{if (self.getSize() == 0) "opaque" else "extern struct"});
         BitField.reset();
@@ -1460,7 +1455,7 @@ pub const UnionInfoExt = struct {
         try root.generateDocs(.{ .@"union" = self }, writer);
         try writer.print("pub const {s} = ", .{self.into(BaseInfo).getName().?});
         if (self.into(BaseInfo).isDeprecated()) {
-            try writer.writeAll("if (core.config.disable_deprecated) core.Deprecated else ");
+            try writer.writeAll("if (config.disable_deprecated) core.Deprecated else ");
         }
         try writer.writeAll("extern union{\n");
         var iter = self.fieldIter();
@@ -1525,10 +1520,10 @@ pub const VFuncInfoExt = struct {
             else => unreachable,
         };
         const class_name = class.into(BaseInfo).getName().?;
-        if (self.into(BaseInfo).isDeprecated()) {
-            try writer.writeAll("pub usingnamespace struct {} else struct {\n");
-        }
         try root.generateDocs(.{ .vfunc = self }, writer);
+        if (self.into(BaseInfo).isDeprecated()) {
+            try writer.print("pub const {s}V = if (config.disable_deprecated) core.Deprecated else struct {{\n", .{vfunc_name});
+        }
         try writer.print("pub fn {s}V", .{vfunc_name});
         try writer.print("{ev}", .{self.into(CallableInfo)});
         try writer.writeAll(" {\n");
@@ -1546,7 +1541,7 @@ pub const VFuncInfoExt = struct {
         }
         try writer.writeAll("}\n");
         if (self.into(BaseInfo).isDeprecated()) {
-            try writer.writeAll("};\n");
+            try writer.print("}}.{s}V;\n", .{vfunc_name});
         }
     }
 };

@@ -194,6 +194,11 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
                 try writer.writeAll("pub const template = @import(\"template.zig\");\n");
             }
             try writer.writeAll("const std = @import(\"std\");\n");
+            try writer.writeAll(
+                \\const root = @import("root");
+                \\const config = if (@hasDecl(root, "gi_configs")) root.gi_configs else core.Configs{};
+                \\
+            );
 
             const n = repository.getNInfos(namespace);
             for (0..@intCast(n)) |i| {
@@ -204,7 +209,7 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
                         try generateDocs(.{ .callback = info.tryInto(gi.CallbackInfo).? }, writer);
                         try writer.print("pub const {s} = ", .{info.getName().?});
                         if (info.isDeprecated()) {
-                            try writer.writeAll("if (core.config.disable_deprecated) core.Deprecated else ");
+                            try writer.writeAll("if (config.disable_deprecated) core.Deprecated else ");
                         }
                         try writer.print("{};\n", .{info.tryInto(gi.CallbackInfo).?});
                     },
