@@ -3,10 +3,12 @@ const gobject = @import("GObject.zig");
 const gio = @import("Gio.zig");
 
 const std = @import("std");
+const root = @import("root");
 
 pub const Configs = struct {
     disable_deprecated: bool = true,
 };
+pub const config: Configs = if (@hasDecl(root, "gi_configs")) root.gi_configs else .{};
 
 /// deprecated
 pub const Deprecated = opaque {};

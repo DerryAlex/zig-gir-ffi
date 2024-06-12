@@ -195,8 +195,7 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
             }
             try writer.writeAll("const std = @import(\"std\");\n");
             try writer.writeAll(
-                \\const root = @import("root");
-                \\const config = if (@hasDecl(root, "gi_configs")) root.gi_configs else core.Configs{};
+                \\const config = core.config;
                 \\
             );
 
