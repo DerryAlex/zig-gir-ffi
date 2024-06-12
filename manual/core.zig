@@ -317,7 +317,7 @@ fn callMethod(self: anytype, comptime Self: type, comptime method: []const u8, a
     if (comptime @hasDecl(Self, method)) {
         const method_fn = @field(Self, method);
         const method_info = @typeInfo(@TypeOf(method_fn));
-        if (method_info.Fn.params[0].is_generic) {
+        if (comptime method_info.Fn.params[0].is_generic) {
             return @call(.auto, method_fn, .{self} ++ args);
         } else {
             return @call(.auto, method_fn, .{self.into(Self)} ++ args);
@@ -345,7 +345,7 @@ fn callMethod(self: anytype, comptime Self: type, comptime method: []const u8, a
             .Err => {},
         }
     }
-    unreachable;
+    @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ Self, method }));
 }
 
 pub fn Extend(comptime Self: type) type {
