@@ -726,18 +726,18 @@ fn init(comptime T: type, value: *T) void {
     }
 }
 
-fn overrideMethods(comptime Class: type, comptime C: type, class: *C) void {
-    const info = @typeInfo(C).Struct;
+fn overrideMethods(comptime Override: type, comptime Class: type, class: *Class) void {
+    const info = @typeInfo(Class).Struct;
     inline for (info.fields) |field| {
-        if (@hasDecl(Class, field.name ++ "_override")) {
-            const field_info = @typeInfo(field.type);
+        if (comptime @hasDecl(Override, field.name)) {
+            comptime var field_info = @typeInfo(field.type);
             if (field_info == .Optional) {
-                const optional_child_info = @typeInfo(field_info.Optional.child);
-                if (optional_child_info == .Pointer) {
-                    const pointer_child_info = @typeInfo(optional_child_info.Pointer.child);
-                    if (pointer_child_info == .Fn) {
-                        @field(class, field.name) = &@field(Class, field.name ++ "_override");
-                    }
+                field_info = @typeInfo(field_info.Optional.child);
+            }
+            if (field_info == .Pointer) {
+                const pointer_child_info = @typeInfo(field_info.Pointer.child);
+                if (pointer_child_info == .Fn) {
+                    @field(class, field.name) = &@field(Override, field.name);
                 }
             }
         }
@@ -749,7 +749,12 @@ fn doClassOverride(comptime Class: type, comptime T: type, class: *anyopaque) vo
         doClassOverride(Class, T.Parent, class);
     }
     if (comptime @hasDecl(T, "Class")) {
-        overrideMethods(Class, T.Class, @ptrCast(@alignCast(class)));
+        const ParentClass = T.Class;
+        const parent_class_name = @typeName(ParentClass)[(if (comptime std.mem.lastIndexOfScalar(u8, @typeName(ParentClass), '.')) |some| some + 1 else 0)..];
+        if (comptime @hasDecl(Class, parent_class_name ++ "Override")) {
+            const Override = @field(Class, parent_class_name ++ "Override");
+            overrideMethods(Override, ParentClass, @ptrCast(@alignCast(class)));
+        }
     }
 }
 
@@ -808,10 +813,14 @@ pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: gobject.T
         if (@hasDecl(Object, "Interfaces")) {
             inline for (Object.Interfaces) |Interface| {
                 const interface_init = struct {
-                    const init_func = "init" ++ @typeName(Interface)[(if (std.mem.lastIndexOfScalar(u8, @typeName(Interface), '.')) |some| some + 1 else 0)..];
+                    const interface_name = @typeName(Interface)[(if (std.mem.lastIndexOfScalar(u8, @typeName(Interface), '.')) |some| some + 1 else 0)..];
                     fn trampoline(self: *Interface) callconv(.C) void {
-                        if (comptime @hasDecl(Object, init_func)) {
-                            @call(.auto, @field(Object, init_func), .{self});
+                        if (comptime @hasDecl(Object, interface_name ++ "Override")) {
+                            const Override = @field(Object, interface_name ++ "Override");
+                            if (@hasDecl(Override, "init")) {
+                                Override.init(self);
+                            }
+                            overrideMethods(Interface, Override, self);
                         }
                     }
                 }.trampoline;

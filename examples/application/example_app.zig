@@ -26,22 +26,40 @@ pub const ExampleAppClass = extern struct {
         parent_class = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
     }
 
-    pub fn activate_override(arg_app: *GApplication) callconv(.C) void {
-        const self = arg_app.tryInto(ExampleApp).?;
-        var win = ExampleAppWindow.new(self);
-        win.__call("present", .{});
-    }
-
-    pub fn open_override(arg_app: *GApplication, arg_files: [*]*File, arg_n_files: i32, arg_hint: [*:0]const u8) callconv(.C) void {
-        var self = arg_app.tryInto(ExampleApp).?;
-        _ = arg_hint;
-        const windows = self.__call("getWindows", .{});
-        const win = if (windows) |some| core.dynamicCast(ExampleAppWindow, some.data.?).? else ExampleAppWindow.new(self);
-        for (arg_files[0..@intCast(arg_n_files)]) |file| {
-            win.__call("open", .{file});
+    pub const ApplicationClassOverride = struct {
+        pub fn activate(arg_app: *GApplication) callconv(.C) void {
+            const self = arg_app.tryInto(ExampleApp).?;
+            var win = ExampleAppWindow.new(self);
+            win.__call("present", .{});
         }
-        win.__call("present", .{});
-    }
+
+        pub fn open(arg_app: *GApplication, arg_files: [*]*File, arg_n_files: i32, arg_hint: [*:0]const u8) callconv(.C) void {
+            var self = arg_app.tryInto(ExampleApp).?;
+            _ = arg_hint;
+            const windows = self.__call("getWindows", .{});
+            const win = if (windows) |some| core.dynamicCast(ExampleAppWindow, some.data.?).? else ExampleAppWindow.new(self);
+            for (arg_files[0..@intCast(arg_n_files)]) |file| {
+                win.__call("open", .{file});
+            }
+            win.__call("present", .{});
+        }
+
+        pub fn startup(arg_app: *GApplication) callconv(.C) void {
+            var self = arg_app.tryInto(ExampleApp).?;
+            var action_preferences = SimpleAction.new("preferences", null);
+            defer action_preferences.__call("unref", .{});
+            _ = action_preferences.connectActivate(preferencesActivate, .{self}, .{ .swapped = true });
+            self.__call("addAction", .{action_preferences.into(Action)});
+            var action_quit = SimpleAction.new("quit", null);
+            defer action_quit.__call("unref", .{});
+            _ = action_quit.connectActivate(quitActivate, .{self}, .{ .swapped = true });
+            self.__call("addAction", .{action_quit.into(Action)});
+            var quit_accels = [_:null]?[*:0]const u8{"<Ctrl>Q"};
+            self.__call("setAccelsForAction", .{ "app.quit", &quit_accels });
+            const p_class: *GApplicationClass = @ptrCast(parent_class);
+            p_class.startup.?(arg_app);
+        }
+    };
 
     fn preferencesActivate(self: *ExampleApp) void {
         const win = self.__call("getActiveWindow", .{}).?.tryInto(ExampleAppWindow).?;
@@ -51,22 +69,6 @@ pub const ExampleAppClass = extern struct {
 
     fn quitActivate(self: *ExampleApp) void {
         self.__call("quit", .{});
-    }
-
-    pub fn startup_override(arg_app: *GApplication) callconv(.C) void {
-        var self = arg_app.tryInto(ExampleApp).?;
-        var action_preferences = SimpleAction.new("preferences", null);
-        defer action_preferences.__call("unref", .{});
-        _ = action_preferences.connectActivate(preferencesActivate, .{self}, .{ .swapped = true });
-        self.__call("addAction", .{action_preferences.into(Action)});
-        var action_quit = SimpleAction.new("quit", null);
-        defer action_quit.__call("unref", .{});
-        _ = action_quit.connectActivate(quitActivate, .{self}, .{ .swapped = true });
-        self.__call("addAction", .{action_quit.into(Action)});
-        var quit_accels = [_:null]?[*:0]const u8{"<Ctrl>Q"};
-        self.__call("setAccelsForAction", .{ "app.quit", &quit_accels });
-        const p_class: *GApplicationClass = @ptrCast(parent_class);
-        p_class.startup.?(arg_app);
     }
 };
 

@@ -79,13 +79,15 @@ pub const ExampleAppWindowClass = extern struct {
         });
     }
 
-    pub fn dispose_override(arg_object: *Object) callconv(.C) void {
-        var self = arg_object.tryInto(ExampleAppWindow).?;
-        self.settings.__call("unref", .{});
-        self.__call("disposeTemplate", .{ExampleAppWindow.gType()});
-        const p_class: *ObjectClass = @ptrCast(parent_class);
-        p_class.dispose.?(arg_object);
-    }
+    pub const ObjectClassOverride = struct {
+        pub fn dispose(arg_object: *Object) callconv(.C) void {
+            var self = arg_object.tryInto(ExampleAppWindow).?;
+            self.settings.__call("unref", .{});
+            self.__call("disposeTemplate", .{ExampleAppWindow.gType()});
+            const p_class: *ObjectClass = @ptrCast(parent_class);
+            p_class.dispose.?(arg_object);
+        }
+    };
 
     pub fn searchTextChanged(entry: *Entry, self: *ExampleAppWindow) callconv(.C) void {
         const text = entry.__call("getText", .{});
