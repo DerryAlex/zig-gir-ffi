@@ -282,7 +282,7 @@ fn CallMethod(comptime T: type, comptime method: []const u8) union(enum) {
 } {
     if (comptime @hasDecl(T, method)) {
         const method_info = @typeInfo(@TypeOf(@field(T, method)));
-        comptime std.debug.assert(std.meta.Child(method_info.Fn.params[0].type.?) == T);
+        comptime std.debug.assert(method_info.Fn.params[0].is_generic or std.meta.Child(method_info.Fn.params[0].type.?) == T);
         return .{ .Ok = method_info.Fn.return_type.? };
     }
     if (comptime @hasDecl(T, "Prerequisites")) {
@@ -310,18 +310,23 @@ fn CallMethod(comptime T: type, comptime method: []const u8) union(enum) {
     return .{ .Err = {} };
 }
 
-fn callMethod(self: anytype, comptime method: []const u8, args: anytype) switch (CallMethod(std.meta.Child(@TypeOf(self)), method)) {
+fn callMethod(self: anytype, comptime Self: type, comptime method: []const u8, args: anytype) switch (CallMethod(std.meta.Child(@TypeOf(self)), method)) {
     .Ok => |T| T,
     .Err => @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(std.meta.Child(@TypeOf(self))), method })),
 } {
-    const Self = std.meta.Child(@TypeOf(self));
     if (comptime @hasDecl(Self, method)) {
-        return @call(.auto, @field(Self, method), .{self} ++ args);
+        const method_fn = @field(Self, method);
+        const method_info = @typeInfo(@TypeOf(method_fn));
+        if (method_info.Fn.params[0].is_generic) {
+            return @call(.auto, method_fn, .{self} ++ args);
+        } else {
+            return @call(.auto, method_fn, .{self.into(Self)} ++ args);
+        }
     }
     if (comptime @hasDecl(Self, "Prerequisites")) {
         inline for (Self.Prerequisites) |Prerequisite| {
             switch (comptime CallMethod(Prerequisite, method)) {
-                .Ok => |_| return callMethod(upCast(Prerequisite, self), method, args),
+                .Ok => |_| return callMethod(self, Prerequisite, method, args),
                 .Err => {},
             }
         }
@@ -329,14 +334,14 @@ fn callMethod(self: anytype, comptime method: []const u8, args: anytype) switch 
     if (comptime @hasDecl(Self, "Interfaces")) {
         inline for (Self.Interfaces) |Interface| {
             switch (comptime CallMethod(Interface, method)) {
-                .Ok => |_| return callMethod(upCast(Interface, self), method, args),
+                .Ok => |_| return callMethod(self, Interface, method, args),
                 .Err => {},
             }
         }
     }
     if (comptime @hasDecl(Self, "Parent")) {
         switch (comptime CallMethod(Self.Parent, method)) {
-            .Ok => |_| return callMethod(upCast(Self.Parent, self), method, args),
+            .Ok => |_| return callMethod(self, Self.Parent, method, args),
             .Err => {},
         }
     }
@@ -350,7 +355,7 @@ pub fn Extend(comptime Self: type) type {
             .Ok => |T| T,
             .Err => @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(Self), method })),
         } {
-            return callMethod(self, method, args);
+            return callMethod(self, Self, method, args);
         }
 
         /// Converts to base type T
