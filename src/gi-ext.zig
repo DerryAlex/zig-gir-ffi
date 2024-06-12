@@ -224,16 +224,7 @@ pub const CallableInfoExt = struct {
                 .only => try writer.print("*{s}", .{container.getName().?}),
             }
         }
-        if (vfunc) {
-            if (type_annotation == .enable) {
-                if (first) {
-                    first = false;
-                } else {
-                    try writer.writeAll(", ");
-                }
-                try writer.writeAll("_gtype: core.Type");
-            }
-        }
+
         var iter = self.argsIter();
         while (iter.next()) |arg| {
             if (first) {
@@ -1527,7 +1518,8 @@ pub const VFuncInfoExt = struct {
         try writer.print("pub fn {s}V", .{vfunc_name});
         try writer.print("{ev}", .{self.into(CallableInfo)});
         try writer.writeAll(" {\n");
-        try writer.print("const vFn = @as(*{s}, @ptrCast(gobject.typeClassPeek(_gtype))).{s}.?;", .{ class_name, raw_vfunc_name });
+        try writer.print("const class: *{s} = @ptrCast(core.unsafeCast(gobject.TypeInstance, self).g_class.?);\n", .{class_name});
+        try writer.print("const vFn = class.{s}.?;", .{raw_vfunc_name});
         try writer.writeAll("const ret = vFn");
         try writer.print("{v}", .{self.into(CallableInfo)});
         try writer.writeAll(";\n");
