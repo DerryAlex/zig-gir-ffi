@@ -820,7 +820,7 @@ pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: gobject.T
                             if (@hasDecl(Override, "init")) {
                                 Override.init(self);
                             }
-                            overrideMethods(Interface, Override, self);
+                            overrideMethods(Override, Interface, self);
                         }
                     }
                 }.trampoline;

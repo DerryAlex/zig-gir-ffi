@@ -6,20 +6,20 @@ const TypeInterface = gobject.TypeInterface;
 
 pub const PartialEq = extern struct {
     parent: TypeInterface,
-    _eq: ?*const fn (self: *PartialEq, rhs: *PartialEq) bool = null,
-    _ne: ?*const fn (self: *PartialEq, rhs: *PartialEq) bool = &defaultNe,
+    eq_fn: ?*const fn (self: *PartialEq, rhs: *PartialEq) bool = null,
+    ne_fn: ?*const fn (self: *PartialEq, rhs: *PartialEq) bool = &defaultNe,
 
     pub usingnamespace core.Extend(PartialEq);
 
     pub fn eq(self: *PartialEq, rhs: *PartialEq) bool {
         const interface = core.typeInstanceGetInterface(PartialEq, self);
-        const eq_fn = interface._eq.?;
+        const eq_fn = interface.eq_fn.?;
         return eq_fn(self, rhs);
     }
 
     pub fn ne(self: *PartialEq, rhs: *PartialEq) bool {
         const interface = core.typeInstanceGetInterface(PartialEq, self);
-        const ne_fn = interface._ne.?;
+        const ne_fn = interface.ne_fn.?;
         return ne_fn(self, rhs);
     }
 

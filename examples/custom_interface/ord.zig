@@ -7,11 +7,11 @@ const PartialEq = @import("eq.zig").PartialEq;
 
 pub const PartialOrd = extern struct {
     parent: TypeInterface,
-    _cmp: ?*const fn (self: *PartialOrd, rhs: *PartialOrd) Order = null,
-    _lt: ?*const fn (self: *PartialOrd, rhs: *PartialOrd) bool = &defaultLt,
-    _le: ?*const fn (self: *PartialOrd, rhs: *PartialOrd) bool = &defaultLe,
-    _gt: ?*const fn (self: *PartialOrd, rhs: *PartialOrd) bool = &defaultGt,
-    _ge: ?*const fn (self: *PartialOrd, rhs: *PartialOrd) bool = &defaultGe,
+    cmp_fn: ?*const fn (self: *PartialOrd, rhs: *PartialOrd) Order = null,
+    lt_fn: ?*const fn (self: *PartialOrd, rhs: *PartialOrd) bool = &defaultLt,
+    le_fn: ?*const fn (self: *PartialOrd, rhs: *PartialOrd) bool = &defaultLe,
+    gt_fn: ?*const fn (self: *PartialOrd, rhs: *PartialOrd) bool = &defaultGt,
+    ge_fn: ?*const fn (self: *PartialOrd, rhs: *PartialOrd) bool = &defaultGe,
 
     pub const Prerequisites = [_]type{PartialEq};
     pub usingnamespace core.Extend(PartialOrd);
@@ -20,31 +20,31 @@ pub const PartialOrd = extern struct {
 
     pub fn cmp(self: *PartialOrd, rhs: *PartialOrd) Order {
         const interface = core.typeInstanceGetInterface(PartialOrd, self);
-        const cmp_fn = interface._cmp.?;
+        const cmp_fn = interface.cmp_fn.?;
         return cmp_fn(self, rhs);
     }
 
     pub fn lt(self: *PartialOrd, rhs: *PartialOrd) bool {
         const interface = core.typeInstanceGetInterface(PartialOrd, self);
-        const lt_fn = interface._lt.?;
+        const lt_fn = interface.lt_fn.?;
         return lt_fn(self, rhs);
     }
 
     pub fn le(self: *PartialOrd, rhs: *PartialOrd) bool {
         const interface = core.typeInstanceGetInterface(PartialOrd, self);
-        const le_fn = interface._le.?;
+        const le_fn = interface.le_fn.?;
         return le_fn(self, rhs);
     }
 
     pub fn gt(self: *PartialOrd, rhs: *PartialOrd) bool {
         const interface = core.typeInstanceGetInterface(PartialOrd, self);
-        const gt_fn = interface._gt.?;
+        const gt_fn = interface.gt_fn.?;
         return gt_fn(self, rhs);
     }
 
     pub fn ge(self: *PartialOrd, rhs: *PartialOrd) bool {
         const interface = core.typeInstanceGetInterface(PartialOrd, self);
-        const ge_fn = interface._ge.?;
+        const ge_fn = interface.ge_fn.?;
         return ge_fn(self, rhs);
     }
 

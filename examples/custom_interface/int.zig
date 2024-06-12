@@ -31,26 +31,22 @@ pub const TypedInt = extern struct {
         return object;
     }
 
-    fn eq(self: *PartialEq, rhs: *PartialEq) bool {
-        const lhs_value = self.tryInto(TypedInt).?.private.value;
-        const rhs_value = rhs.tryInto(TypedInt).?.private.value;
-        return lhs_value == rhs_value;
-    }
+    pub const PartialEqOverride = struct {
+        pub fn eq_fn(self: *PartialEq, rhs: *PartialEq) bool {
+            const lhs_value = self.tryInto(TypedInt).?.private.value;
+            const rhs_value = rhs.tryInto(TypedInt).?.private.value;
+            return lhs_value == rhs_value;
+        }
+    };
 
-    pub fn initPartialEq(interface: *PartialEq) void {
-        interface._eq = &eq;
-    }
-
-    fn cmp(self: *PartialOrd, rhs: *PartialOrd) PartialOrd.Order {
-        const lhs_value = self.tryInto(TypedInt).?.private.value;
-        const rhs_value = rhs.tryInto(TypedInt).?.private.value;
-        if (lhs_value == rhs_value) return .Eq;
-        return if (lhs_value < rhs_value) .Lt else .Gt;
-    }
-
-    pub fn initPartialOrd(interface: *PartialOrd) void {
-        interface._cmp = &cmp;
-    }
+    pub const PartialOrdOverride = struct {
+        pub fn cmp_fn(self: *PartialOrd, rhs: *PartialOrd) PartialOrd.Order {
+            const lhs_value = self.tryInto(TypedInt).?.private.value;
+            const rhs_value = rhs.tryInto(TypedInt).?.private.value;
+            if (lhs_value == rhs_value) return .Eq;
+            return if (lhs_value < rhs_value) .Lt else .Gt;
+        }
+    };
 
     pub fn gType() core.Type {
         return core.registerType(TypedInt, "TypedInt", .{});
