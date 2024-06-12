@@ -10,8 +10,8 @@ pub const Configs = struct {
 };
 pub const config: Configs = if (@hasDecl(root, "gi_configs")) root.gi_configs else .{};
 
-/// deprecated
-pub const Deprecated = opaque {};
+/// Deprecated
+pub const Deprecated = @compileError("Deprecated");
 
 // ----------
 // type begin
