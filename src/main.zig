@@ -285,6 +285,12 @@ pub const Info = union(enum) {
             inline else => |info| info.into(gi.BaseInfo).getContainer(),
         };
     }
+
+    pub fn isDeprecated(self: Info) bool {
+        return switch (self) {
+            inline else => |info| info.into(gi.BaseInfo).isDeprecated(),
+        };
+    }
 };
 
 pub fn generateDocs(info: Info, writer: std.io.AnyWriter) anyerror!void {
@@ -301,6 +307,9 @@ pub fn generateDocs(info: Info, writer: std.io.AnyWriter) anyerror!void {
     });
     const namespace = info.getNamespace().?;
     if (data.get(namespace)) |prefix| {
+        if (info.isDeprecated()) {
+            try writer.writeAll("/// Deprecated:\n");
+        }
         const name = info.getName().?;
         switch (info) {
             .callback => try writer.print("/// callback [{s}]({s}/callback.{s}.html)\n", .{ name, prefix, name }),
