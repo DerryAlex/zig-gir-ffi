@@ -164,9 +164,9 @@ pub const ArgInfoExt = struct {
                 }
             } else {
                 if (self.mayBeNull()) {
-                    try writer.print("{mnp}", .{arg_type});
+                    try writer.print("{mno}", .{arg_type});
                 } else {
-                    try writer.print("{mn}", .{arg_type});
+                    try writer.print("{mo}", .{arg_type});
                 }
             }
         } else {
