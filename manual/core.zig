@@ -761,9 +761,6 @@ pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: gobject.T
             if (typeTag(Object).private_offset != 0) {
                 _ = gobject.typeClassAdjustPrivateOffset(class, &typeTag(Object).private_offset);
             }
-            if (comptime @hasDecl(Object, "Parent")) {
-                doClassOverride(Class, Object.Parent, class);
-            }
             if (comptime @hasDecl(Class, "properties")) {
                 @as(*gobject.ObjectClass, @ptrCast(class)).installProperties(Class.properties());
             }
@@ -773,6 +770,9 @@ pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: gobject.T
             init(Class, class);
             if (comptime @hasDecl(Class, "init")) {
                 class.init();
+            }
+            if (comptime @hasDecl(Object, "Parent")) {
+                doClassOverride(Class, Object.Parent, class);
             }
         }
     }.trampoline;
