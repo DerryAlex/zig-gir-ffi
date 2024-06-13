@@ -422,14 +422,14 @@ pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature:
             pub fn invoke() callconv(.C) void {}
             pub fn setOnce(_: *Self) void {}
             pub fn deinit(_: *Self) callconv(.C) void {}
-            pub inline fn c_closure(_: *Self) gobject.Callback {
-                return &invoke;
+            pub inline fn c_closure(_: *Self) ?*anyopaque {
+                return null;
             }
             pub inline fn c_data(_: *Self) ?*anyopaque {
                 return null;
             }
-            pub inline fn c_destroy(_: *Self) gobject.ClosureNotify {
-                return @ptrCast(&deinit);
+            pub inline fn c_destroy(_: *Self) ?*anyopaque {
+                return null;
             }
         };
     }
@@ -670,18 +670,18 @@ pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: gobject.T
             if (typeTag(Object).private_offset != 0) {
                 _ = gobject.typeClassAdjustPrivateOffset(class, &typeTag(Object).private_offset);
             }
+            init(Class, class);
+            if (comptime @hasDecl(Object, "Parent")) {
+                doClassOverride(Class, Object.Parent, class);
+            }
             if (comptime @hasDecl(Class, "properties")) {
                 @as(*gobject.ObjectClass, @ptrCast(class)).installProperties(Class.properties());
             }
             if (comptime @hasDecl(Class, "signals")) {
                 _ = Class.signals();
             }
-            init(Class, class);
             if (comptime @hasDecl(Class, "init")) {
                 class.init();
-            }
-            if (comptime @hasDecl(Object, "Parent")) {
-                doClassOverride(Class, Object.Parent, class);
             }
         }
     }.trampoline;

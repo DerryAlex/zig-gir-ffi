@@ -23,29 +23,17 @@ pub const CustomButtonClass = extern struct {
     parent: ButtonClass,
     zero_reached: ?*const fn (self: *CustomButton) callconv(.C) void,
 
+    var parent_class: ?*ButtonClass = null;
+
+    pub fn init(class: *CustomButtonClass) void {
+        parent_class = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
+    }
+
     pub fn properties() []*ParamSpec {
         @memcpy(_properties[1..], &[_]*ParamSpec{
             gobject.paramSpecInt("number", null, null, 0, 10, 10, .{ .readable = true, .writable = true }),
         });
         return _properties[0..];
-    }
-
-    pub fn set_property_override(arg_object: *Object, arg_property_id: u32, arg_value: *Value, _: *ParamSpec) callconv(.C) void {
-        var self = arg_object.tryInto(CustomButton).?;
-        switch (@as(Properties, @enumFromInt(arg_property_id))) {
-            .Number => {
-                self.setNumber(arg_value.getInt());
-            },
-        }
-    }
-
-    pub fn get_property_override(arg_object: *Object, arg_property_id: u32, arg_value: *Value, _: *ParamSpec) callconv(.C) void {
-        var self = arg_object.tryInto(CustomButton).?;
-        switch (@as(Properties, @enumFromInt(arg_property_id))) {
-            .Number => {
-                arg_value.setInt(self.getNumber());
-            },
-        }
     }
 
     pub fn signals() []u32 {
@@ -59,17 +47,40 @@ pub const CustomButtonClass = extern struct {
         return _signals[0..];
     }
 
-    pub fn constructed_override(arg_object: *Object) callconv(.C) void {
-        var self = arg_object.tryInto(CustomButton).?;
-        self.__call("constructedV", .{CustomButton.Parent.gType()});
-        _ = self.__call("bindProperty", .{ "number", self.into(Object), "label", .{ .sync_create = true } });
-    }
+    pub const ObjectClassOverride = struct {
+        pub fn set_property(arg_object: *Object, arg_property_id: u32, arg_value: *Value, _: *ParamSpec) callconv(.C) void {
+            var self = arg_object.tryInto(CustomButton).?;
+            switch (@as(Properties, @enumFromInt(arg_property_id))) {
+                .Number => {
+                    self.setNumber(arg_value.getInt());
+                },
+            }
+        }
 
-    pub fn clicked_override(arg_button: *Button) callconv(.C) void {
-        var self = arg_button.tryInto(CustomButton).?;
-        const decremented_number = self.private.number - 1;
-        self.setNumber(decremented_number);
-    }
+        pub fn get_property(arg_object: *Object, arg_property_id: u32, arg_value: *Value, _: *ParamSpec) callconv(.C) void {
+            var self = arg_object.tryInto(CustomButton).?;
+            switch (@as(Properties, @enumFromInt(arg_property_id))) {
+                .Number => {
+                    arg_value.setInt(self.getNumber());
+                },
+            }
+        }
+
+        pub fn constructed(arg_object: *Object) callconv(.C) void {
+            var self = arg_object.tryInto(CustomButton).?;
+            const p_class: *gobject.ObjectClass = @ptrCast(parent_class);
+            p_class.constructed.?(arg_object);
+            _ = self.__call("bindProperty", .{ "number", self.into(Object), "label", .{ .sync_create = true } });
+        }
+    };
+
+    pub const ButtonClassOverride = struct {
+        pub fn clicked(arg_button: *Button) callconv(.C) void {
+            var self = arg_button.tryInto(CustomButton).?;
+            const decremented_number = self.private.number - 1;
+            self.setNumber(decremented_number);
+        }
+    };
 };
 
 pub const CustomButtonPrivate = struct {
