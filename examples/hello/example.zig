@@ -13,25 +13,25 @@ pub fn printHello() void {
     std.log.info("Hello World", .{});
 }
 
-pub fn activate(arg_app: *GApplication) void {
-    const app = arg_app.tryInto(Application).?;
-    var window = ApplicationWindow.new(app);
-    window.__call("setTitle", .{"Window"});
-    window.__call("setDefaultSize", .{ 200, 200 });
+pub fn activate(app: *GApplication) void {
+    var window = ApplicationWindow.new(app.tryInto(Application).?).into(Window);
+    window.setTitle("Window");
+    window.setDefaultSize(200, 200);
     var box = Box.new(.vertical, 0);
-    box.__call("setHalign", .{.center});
-    box.__call("setValign", .{.center});
-    window.__call("setChild", .{box.into(Widget)});
+    var box_as_widget = box.into(Widget);
+    box_as_widget.setHalign(.center);
+    box_as_widget.setValign(.center);
+    window.setChild(box_as_widget);
     var button = Button.newWithLabel("Hello, World");
     _ = button.connectClicked(printHello, .{}, .{});
-    _ = button.connectClicked(Window.destroy, .{window.into(Window)}, .{ .swapped = true });
+    _ = button.connectClicked(Window.destroy, .{window}, .{ .swapped = true });
     box.append(button.into(Widget));
-    window.__call("setVisible", .{true});
+    window.present();
 }
 
 pub fn main() u8 {
-    var app = Application.new("org.gtk.example", .{});
+    var app = Application.new("org.gtk.example", .{}).into(GApplication);
     defer app.__call("unref", .{});
-    _ = app.__call("connectActivate", .{ activate, .{}, .{} });
-    return @intCast(app.__call("run", .{std.os.argv}));
+    app.connectActivate(activate, .{}, .{});
+    return @intCast(app.run(std.os.argv));
 }
