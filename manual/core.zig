@@ -413,6 +413,26 @@ pub fn Extend(comptime Self: type) type {
 pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature: []const type) type {
     comptime std.debug.assert(@typeInfo(Args) == .Struct and @typeInfo(Args).Struct.is_tuple);
     comptime std.debug.assert(@typeInfo(FnPtr) == .Pointer and @typeInfo(FnPtr).Pointer.size == .One);
+    if (std.meta.Child(FnPtr) == void) {
+        return struct {
+            const Self = @This();
+            pub fn new(_: FnPtr, _: Args) !*Self {
+                return undefined;
+            }
+            pub fn invoke() callconv(.C) void {}
+            pub fn setOnce(_: *Self) void {}
+            pub fn deinit(_: *Self) callconv(.C) void {}
+            pub inline fn c_closure(_: *Self) gobject.Callback {
+                return &invoke;
+            }
+            pub inline fn c_data(_: *Self) ?*anyopaque {
+                return null;
+            }
+            pub inline fn c_destroy(_: *Self) gobject.ClosureNotify {
+                return @ptrCast(&deinit);
+            }
+        };
+    }
     comptime std.debug.assert(@typeInfo(std.meta.Child(FnPtr)) == .Fn);
     comptime std.debug.assert(signature.len >= 1);
 
