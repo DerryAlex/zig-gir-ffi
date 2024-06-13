@@ -413,32 +413,12 @@ pub fn Extend(comptime Self: type) type {
 pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature: []const type) type {
     comptime std.debug.assert(@typeInfo(Args) == .Struct and @typeInfo(Args).Struct.is_tuple);
     comptime std.debug.assert(@typeInfo(FnPtr) == .Pointer and @typeInfo(FnPtr).Pointer.size == .One);
-    const n_arg = @typeInfo(Args).Struct.fields.len;
-    if (comptime std.meta.Child(FnPtr) == void) {
-        comptime std.debug.assert(n_arg == 0);
-        return struct {
-            const Self = @This();
-            pub fn new(_: FnPtr, _: Args) !*Self {
-                return undefined;
-            }
-            pub fn invoke() callconv(.C) void {}
-            pub fn setOnce(_: *Self) void {}
-            pub fn deinit(_: *Self) callconv(.C) void {}
-            pub inline fn c_closure(_: *Self) ?*anyopaque {
-                return null;
-            }
-            pub inline fn c_data(_: *Self) ?*anyopaque {
-                return null;
-            }
-            pub inline fn c_destroy(_: *Self) ?*anyopaque {
-                return null;
-            }
-        };
-    }
-
     comptime std.debug.assert(@typeInfo(std.meta.Child(FnPtr)) == .Fn);
-    comptime std.debug.assert(1 <= signature.len and signature.len <= 7);
+    comptime std.debug.assert(signature.len >= 1);
+
+    const n_arg = @typeInfo(Args).Struct.fields.len;
     const n_param = @typeInfo(std.meta.Child(FnPtr)).Fn.params.len;
+
     return struct {
         handler: FnPtr,
         args: Args,
@@ -456,129 +436,31 @@ pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature:
             return closure;
         }
 
-        pub usingnamespace if (signature.len == 1) struct {
-            /// Invokes the closure, i.e. executes the callback represented by the closure
-            pub fn invoke(self: *Self) callconv(.C) signature[0] {
-                defer if (self.once) {
-                    self.deinit();
-                };
-                return @call(.auto, self.handler, self.args);
+        /// Invokes the closure, i.e. executes the callback represented by the closure
+        pub fn invoke(...) callconv(.C) signature[0] {
+            var va_list = @cVaStart();
+            var args: std.meta.Tuple(signature[1..]) = undefined;
+            inline for (1..signature.len) |i| {
+                const idx = std.fmt.comptimePrint("{}", .{i - 1});
+                @field(args, idx) = @cVaArg(&va_list, signature[i]);
             }
-        } else struct {};
+            const self: *Self = @cVaArg(&va_list, *Self);
+            @cVaEnd(&va_list);
 
-        pub usingnamespace if (signature.len == 2) struct {
-            /// Invokes the closure, i.e. executes the callback represented by the closure
-            pub fn invoke(arg1: signature[1], self: *Self) callconv(.C) signature[0] {
-                defer if (self.once) {
-                    self.deinit();
-                };
-                if (n_arg == 0 and n_param == 0) {
-                    return @call(.auto, self.handler, .{});
-                } else {
-                    return @call(.auto, self.handler, .{arg1} ++ self.args);
+            defer if (self.once) {
+                self.deinit();
+            };
+            if (comptime n_arg == 0) {
+                var args_real: std.meta.Tuple(signature[1 .. n_param + 1]) = undefined;
+                inline for (0..n_param) |i| {
+                    const idx = std.fmt.comptimePrint("{}", .{i});
+                    @field(args_real, idx) = @field(args, idx);
                 }
+                return @call(.auto, self.handler, args_real);
+            } else {
+                return @call(.auto, self.handler, args ++ self.args);
             }
-        } else struct {};
-
-        pub usingnamespace if (signature.len == 3) struct {
-            /// Invokes the closure, i.e. executes the callback represented by the closure
-            pub fn invoke(arg1: signature[1], arg2: signature[2], self: *Self) callconv(.C) signature[0] {
-                defer if (self.once) {
-                    self.deinit();
-                };
-                if (n_arg == 0 and n_param == 0) {
-                    @call(.auto, self.handler, .{});
-                } else if (n_arg == 0 and n_param == 1) {
-                    @call(.auto, self.handler, .{arg1});
-                } else {
-                    return @call(.auto, self.handler, .{ arg1, arg2 } ++ self.args);
-                }
-            }
-        } else struct {};
-
-        pub usingnamespace if (signature.len == 4) struct {
-            /// Invokes the closure, i.e. executes the callback represented by the closure
-            pub fn invoke(arg1: signature[1], arg2: signature[2], arg3: signature[3], self: *Self) callconv(.C) signature[0] {
-                defer if (self.once) {
-                    self.deinit();
-                };
-                if (n_arg == 0 and n_param == 0) {
-                    @call(.auto, self.handler, .{});
-                } else if (n_arg == 0 and n_param == 1) {
-                    @call(.auto, self.handler, .{arg1});
-                } else if (n_arg == 0 and n_param == 2) {
-                    return @call(.auto, self.handler, .{ arg1, arg2 });
-                } else {
-                    return @call(.auto, self.handler, .{ arg1, arg2, arg3 } ++ self.args);
-                }
-            }
-        } else struct {};
-
-        pub usingnamespace if (signature.len == 5) struct {
-            /// Invokes the closure, i.e. executes the callback represented by the closure
-            pub fn invoke(arg1: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], self: *Self) callconv(.C) signature[0] {
-                defer if (self.once) {
-                    self.deinit();
-                };
-                if (n_arg == 0 and n_param == 0) {
-                    @call(.auto, self.handler, .{});
-                } else if (n_arg == 0 and n_param == 1) {
-                    @call(.auto, self.handler, .{arg1});
-                } else if (n_arg == 0 and n_param == 2) {
-                    return @call(.auto, self.handler, .{ arg1, arg2 });
-                } else if (n_arg == 0 and n_param == 3) {
-                    return @call(.auto, self.handler, .{ arg1, arg2, arg3 });
-                } else {
-                    return @call(.auto, self.handler, .{ arg1, arg2, arg3, arg4 } ++ self.args);
-                }
-            }
-        } else struct {};
-
-        pub usingnamespace if (signature.len == 6) struct {
-            /// Invokes the closure, i.e. executes the callback represented by the closure
-            pub fn invoke(arg1: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], arg5: signature[5], self: *Self) callconv(.C) signature[0] {
-                defer if (self.once) {
-                    self.deinit();
-                };
-                if (n_arg == 0 and n_param == 0) {
-                    @call(.auto, self.handler, .{});
-                } else if (n_arg == 0 and n_param == 1) {
-                    @call(.auto, self.handler, .{arg1});
-                } else if (n_arg == 0 and n_param == 2) {
-                    return @call(.auto, self.handler, .{ arg1, arg2 });
-                } else if (n_arg == 0 and n_param == 3) {
-                    return @call(.auto, self.handler, .{ arg1, arg2, arg3 });
-                } else if (n_arg == 0 and n_param == 4) {
-                    return @call(.auto, self.handler, .{ arg1, arg2, arg3, arg4 });
-                } else {
-                    return @call(.auto, self.handler, .{ arg1, arg2, arg3, arg4, arg5 } ++ self.args);
-                }
-            }
-        } else struct {};
-
-        pub usingnamespace if (signature.len == 7) struct {
-            /// Invokes the closure, i.e. executes the callback represented by the closure
-            pub fn invoke(arg1: signature[1], arg2: signature[2], arg3: signature[3], arg4: signature[4], arg5: signature[5], arg6: signature[6], self: *Self) callconv(.C) signature[0] {
-                defer if (self.once) {
-                    self.deinit();
-                };
-                if (n_arg == 0 and n_param == 0) {
-                    @call(.auto, self.handler, .{});
-                } else if (n_arg == 0 and n_param == 1) {
-                    @call(.auto, self.handler, .{arg1});
-                } else if (n_arg == 0 and n_param == 2) {
-                    return @call(.auto, self.handler, .{ arg1, arg2 });
-                } else if (n_arg == 0 and n_param == 3) {
-                    return @call(.auto, self.handler, .{ arg1, arg2, arg3 });
-                } else if (n_arg == 0 and n_param == 4) {
-                    return @call(.auto, self.handler, .{ arg1, arg2, arg3, arg4 });
-                } else if (n_arg == 0 and n_param == 5) {
-                    return @call(.auto, self.handler, .{ arg1, arg2, arg3, arg4, arg5 });
-                } else {
-                    return @call(.auto, self.handler, .{ arg1, arg2, arg3, arg4, arg5, arg6 } ++ self.args);
-                }
-            }
-        } else struct {};
+        }
 
         /// The closure is only valid for the duration of the first callback invocation
         pub fn setOnce(self: *Self) void {
@@ -591,8 +473,8 @@ pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature:
         }
 
         /// The C callback function to invoke
-        pub inline fn c_closure(_: *Self) @TypeOf(&Self.invoke) {
-            return &Self.invoke;
+        pub inline fn c_closure(_: *Self) *const fn (...) callconv(.C) signature[0] {
+            return &invoke;
         }
 
         /// The data to pass to callback
@@ -601,8 +483,8 @@ pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature:
         }
 
         /// The destroy function to be called when data is no longer used
-        pub inline fn c_destroy(_: *Self) @TypeOf(&Self.deinit) {
-            return &Self.deinit;
+        pub inline fn c_destroy(_: *Self) *const fn (*Self) callconv(.C) void {
+            return &deinit;
         }
     };
 }
