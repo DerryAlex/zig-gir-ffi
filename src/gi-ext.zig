@@ -155,7 +155,7 @@ pub const ArgInfoExt = struct {
                 option_signal_param = false;
             }
         }
-        if (self.getDirection() == .out or option_signal_param) {
+        if (self.getDirection() != .in or option_signal_param) {
             if (self.isOptional()) {
                 if (self.mayBeNull()) {
                     try writer.print("{mnop}", .{arg_type});
@@ -1279,10 +1279,14 @@ pub const TypeInfoExt = struct {
         switch (self.getTag()) {
             .void => {
                 if (self.isPointer()) {
-                    if (option_nullable) {
-                        try writer.writeAll("?");
+                    if (!option_out) {
+                        if (option_nullable) {
+                            try writer.writeAll("?");
+                        }
+                        try writer.writeAll("*anyopaque");
+                    } else {
+                        try writer.writeAll("anyopaque");
                     }
-                    try writer.writeAll("*anyopaque");
                 } else {
                     try writer.writeAll("void");
                 }
