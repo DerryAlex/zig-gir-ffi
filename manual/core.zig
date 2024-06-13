@@ -47,13 +47,213 @@ pub const Type = enum(usize) {
 pub const Unichar = u32;
 
 // re-exports
+/// Contains the public fields of a GArray
 pub const Array = glib.Array;
+/// Contains the public fields of a GByteArray
 pub const ByteArray = glib.ByteArray;
+/// The GError structure contains information about an error that has occurred
 pub const Error = glib.Error;
+/// The GHashTable struct is an opaque data structure to represent a Hash Table
 pub const HashTable = glib.HashTable;
+/// The GList struct is used for each element in a doubly-linked list
 pub const List = glib.List;
+/// Contains the public fields of a pointer array
 pub const PtrArray = glib.PtrArray;
+/// The GSList struct is used for each element in the singly-linked list
 pub const SList = glib.SList;
+
+// type end
+// --------
+
+// -----------
+// error begin
+
+var err: ?*glib.Error = null;
+
+/// Sets information about an error.GError that has occurred
+pub fn setError(_err: *glib.Error) void {
+    if (err != null) unreachable;
+    err = _err;
+}
+
+/// Gets information about an error.GError that has occurred
+pub fn getError() *glib.Error {
+    defer err = null;
+    return err.?;
+}
+
+// error end
+// ---------
+
+// ---------------------
+// OOP inheritance begin
+
+/// Returns a function to check whether a type can be cast to T
+pub fn isA(comptime T: type) fn (type) bool {
+    return struct {
+        pub fn trait(comptime S: type) bool {
+            if (S == T) return true;
+            if (@hasDecl(S, "Prerequisites")) {
+                for (S.Prerequisites) |Prerequisite| {
+                    if (trait(Prerequisite)) return true;
+                }
+            }
+            if (@hasDecl(S, "Interfaces")) {
+                for (S.Interfaces) |Interface| {
+                    if (trait(Interface)) return true;
+                }
+            }
+            if (@hasDecl(S, "Parent")) {
+                if (trait(S.Parent)) return true;
+            }
+            return false;
+        }
+    }.trait;
+}
+
+/// Converts to base type T
+pub inline fn upCast(comptime T: type, object: anytype) *T {
+    const S = std.meta.Child(@TypeOf(object));
+    if (comptime !isA(T)(S)) {
+        @compileError(std.fmt.comptimePrint("{s} cannot be upcast to {s}", .{ @typeName(S), @typeName(T) }));
+    }
+    return unsafeCast(T, object);
+}
+
+/// Converts to derived type T
+pub inline fn downCast(comptime T: type, object: anytype) ?*T {
+    const S = std.meta.Child(@TypeOf(object));
+    if (comptime !isA(S)(T)) {
+        @compileError(std.fmt.comptimePrint("{s} cannot be downcast to {s}", .{ @typeName(S), @typeName(T) }));
+    }
+    return dynamicCast(T, object);
+}
+
+/// Converts to type T safely
+pub inline fn dynamicCast(comptime T: type, object: anytype) ?*T {
+    return if (gobject.typeCheckInstanceIsA(unsafeCast(gobject.TypeInstance, object), T.gType())) unsafeCast(T, object) else null;
+}
+
+/// Converts to type T.
+/// It is the caller's responsibility to ensure that the cast is legal.
+pub inline fn unsafeCast(comptime T: type, object: anytype) *T {
+    return @ptrCast(@alignCast(object));
+}
+
+/// Inherits from Self.Parent
+pub fn Extend(comptime Self: type) type {
+    return struct {
+        /// Calls inherited method
+        pub fn __call(self: *Self, comptime method: []const u8, args: anytype) if (CallMethod(Self, method)) |R| R else @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(Self), method })) {
+            return callMethod(self, Self, method, args);
+        }
+
+        /// Converts to base type T
+        pub fn into(self: *Self, comptime T: type) *T {
+            return upCast(T, self);
+        }
+
+        /// Converts to derived type T
+        pub fn tryInto(self: *Self, comptime T: type) ?*T {
+            return downCast(T, self);
+        }
+
+        /// Gets a property of an object
+        pub fn get(self: *Self, comptime T: type, property_name: [*:0]const u8) Arg(T) {
+            var property = ZigValue.new(T);
+            defer property.unset();
+            self.into(gobject.Object).getProperty(property_name, &property);
+            return ZigValue.get(&property, T);
+        }
+
+        /// Sets a property on an object
+        pub fn set(self: *Self, comptime T: type, property_name: [*:0]const u8, value: if (isBasicType(T)) T else *T) void {
+            var property = ZigValue.new(T);
+            defer property.unset();
+            ZigValue.set(&property, T, value);
+            self.into(gobject.Object).setProperty(property_name, &property);
+        }
+
+        /// Connects a callback function to a signal for a particular object
+        pub fn connect(self: *Self, signal: [*:0]const u8, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags, comptime signature: []const type) usize {
+            var closure = zig_closure(handler, args, if (flags.swapped) signature[0..1] else signature);
+            const closure_new_fn = if (flags.swapped) cclosureNewSwap else cclosureNew;
+            const cclosure = closure_new_fn(closure.c_closure(), closure.c_data(), closure.c_destroy());
+            return gobject.signalConnectClosure(self.into(gobject.Object), signal, cclosure, flags.after);
+        }
+
+        /// Connects a notify signal for a property
+        pub fn connectNotify(self: *Self, property_name: [*:0]const u8, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags) usize {
+            var buf: [32]u8 = undefined;
+            const signal = std.fmt.bufPrintZ(buf[0..], "notify::{s}", .{property_name}) catch @panic("No Space Left");
+            return self.connect(signal, handler, args, flags, &.{ void, *Self, *gobject.ParamSpec });
+        }
+    };
+}
+
+/// Gets return type of `method`
+fn CallMethod(comptime T: type, comptime method: []const u8) ?type {
+    if (comptime std.meta.hasFn(T, method)) {
+        const method_info = @typeInfo(@TypeOf(@field(T, method))).Fn;
+        comptime std.debug.assert(method_info.params[0].is_generic or std.meta.Child(method_info.params[0].type.?) == T);
+        return method_info.return_type.?;
+    }
+    if (comptime @hasDecl(T, "Prerequisites")) {
+        inline for (T.Prerequisites) |Prerequisite| {
+            if (comptime CallMethod(Prerequisite, method)) |R| {
+                return R;
+            }
+        }
+    }
+    if (comptime @hasDecl(T, "Interfaces")) {
+        inline for (T.Interfaces) |Interface| {
+            if (comptime CallMethod(Interface, method)) |R| {
+                return R;
+            }
+        }
+    }
+    if (comptime @hasDecl(T, "Parent")) {
+        if (comptime CallMethod(T.Parent, method)) |R| {
+            return R;
+        }
+    }
+    return null;
+}
+
+/// Invokes `method` with `args`
+fn callMethod(self: anytype, comptime Self: type, comptime method: []const u8, args: anytype) if (CallMethod(Self, method)) |R| R else @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(Self), method })) {
+    if (std.meta.hasFn(Self, method)) {
+        const method_fn = @field(Self, method);
+        const method_info = @typeInfo(@TypeOf(method_fn)).Fn;
+        return @call(.auto, method_fn, .{if (comptime method_info.params[0].is_generic) self else self.into(Self)} ++ args);
+    }
+    if (comptime @hasDecl(Self, "Prerequisites")) {
+        inline for (Self.Prerequisites) |Prerequisite| {
+            if (comptime CallMethod(Prerequisite, method)) |_| {
+                return callMethod(self, Prerequisite, method, args);
+            }
+        }
+    }
+    if (comptime @hasDecl(Self, "Interfaces")) {
+        inline for (Self.Interfaces) |Interface| {
+            if (comptime CallMethod(Interface, method)) |_| {
+                return callMethod(self, Interface, method, args);
+            }
+        }
+    }
+    if (comptime @hasDecl(Self, "Parent")) {
+        if (comptime CallMethod(Self.Parent, method)) |_| {
+            return callMethod(self, Self.Parent, method, args);
+        }
+    }
+    @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(Self), method }));
+}
+
+// OOP inheritance end
+// -------------------
+
+// -----------
+// value begin
 
 fn isBasicType(comptime T: type) bool {
     if (T == void) return true;
@@ -69,7 +269,7 @@ fn isBasicType(comptime T: type) bool {
     if (T == f32) return true;
     if (T == f64) return true;
     if (@typeInfo(T) == .Enum) return true; // Enum or Type
-    if (@typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .@"packed") return true; // Flag
+    if (@typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .@"packed") return true; // Flags
     if (T == [*:0]const u8) return true; // String
     if (@typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) return true; // Pointer
     return false;
@@ -79,6 +279,7 @@ fn Arg(comptime T: type) type {
     return if (isBasicType(T)) T else *T;
 }
 
+/// An opaque structure used to hold different types of values
 const ZigValue = struct {
     const Self = gobject.Value;
 
@@ -87,6 +288,7 @@ const ZigValue = struct {
     const Long = @Type(@typeInfo(c_long));
     const Ulong = @Type(@typeInfo(c_ulong));
 
+    /// Initializes value with the default value
     pub fn new(comptime T: type) Self {
         var value = std.mem.zeroes(Self);
         if (comptime T == void) {
@@ -129,6 +331,7 @@ const ZigValue = struct {
         return value;
     }
 
+    /// Get the contents of a Value
     pub fn get(self: Self, comptime T: type) Arg(T) {
         if (comptime T == void) @compileError("Cannot initialize Value with type void");
         if (comptime T == bool) return self.getBoolean();
@@ -158,6 +361,7 @@ const ZigValue = struct {
         return @ptrCast(self.getBoxed().?);
     }
 
+    /// Set the contents of a Value
     pub fn set(self: *Self, comptime T: type, arg_value: Arg(T)) void {
         if (comptime T == void) {
             @compileError("Cannot initialize Value with type void");
@@ -206,232 +410,38 @@ const ZigValue = struct {
     }
 };
 
-// type end
-// --------
-
-// -----------
-// error begin
-
-var err: ?*glib.Error = null;
-
-/// Set information about an error.GError that has occurred
-pub fn setError(_err: *glib.Error) void {
-    if (err != null) unreachable;
-    err = _err;
-}
-
-/// Get information about an error.GError that has occurred
-pub fn getError() *glib.Error {
-    defer err = null;
-    return err.?;
-}
-
-// error end
+// value end
 // ---------
-
-// ---------------------
-// OOP inheritance begin
-
-/// Returns a function to check whether a type can be cast to T
-pub fn isA(comptime T: type) fn (type) bool {
-    return struct {
-        pub fn trait(comptime U: type) bool {
-            if (U == T) return true;
-            if (@hasDecl(U, "Prerequisites")) {
-                for (U.Prerequisites) |Prerequisite| {
-                    if (trait(Prerequisite)) return true;
-                }
-            }
-            if (@hasDecl(U, "Interfaces")) {
-                for (U.Interfaces) |Interface| {
-                    if (trait(Interface)) return true;
-                }
-            }
-            if (@hasDecl(U, "Parent")) {
-                if (trait(U.Parent)) return true;
-            }
-            return false;
-        }
-    }.trait;
-}
-
-/// Converts to base type T
-pub inline fn upCast(comptime T: type, object: anytype) *T {
-    comptime std.debug.assert(isA(T)(std.meta.Child(@TypeOf(object))));
-    return unsafeCast(T, object);
-}
-
-/// Converts to derived type T
-pub inline fn downCast(comptime T: type, object: anytype) ?*T {
-    comptime std.debug.assert(isA(std.meta.Child(@TypeOf(object)))(T));
-    return dynamicCast(T, object);
-}
-
-/// Converts to type T safely
-pub inline fn dynamicCast(comptime T: type, object: anytype) ?*T {
-    return if (gobject.typeCheckInstanceIsA(unsafeCast(gobject.TypeInstance, object), T.gType())) unsafeCast(T, object) else null;
-}
-
-/// Converts to type T.
-/// It is the caller's responsibility to ensure that the cast is legal.
-pub inline fn unsafeCast(comptime T: type, object: anytype) *T {
-    return @ptrCast(@alignCast(object));
-}
-
-fn CallMethod(comptime T: type, comptime method: []const u8) union(enum) {
-    Ok: type,
-    Err: void,
-} {
-    if (comptime @hasDecl(T, method)) {
-        const method_info = @typeInfo(@TypeOf(@field(T, method)));
-        comptime std.debug.assert(method_info.Fn.params[0].is_generic or std.meta.Child(method_info.Fn.params[0].type.?) == T);
-        return .{ .Ok = method_info.Fn.return_type.? };
-    }
-    if (comptime @hasDecl(T, "Prerequisites")) {
-        inline for (T.Prerequisites) |Prerequisite| {
-            switch (comptime CallMethod(Prerequisite, method)) {
-                .Ok => |U| return .{ .Ok = U },
-                .Err => {},
-            }
-        }
-    }
-    if (comptime @hasDecl(T, "Interfaces")) {
-        inline for (T.Interfaces) |Interface| {
-            switch (comptime CallMethod(Interface, method)) {
-                .Ok => |U| return .{ .Ok = U },
-                .Err => {},
-            }
-        }
-    }
-    if (comptime @hasDecl(T, "Parent")) {
-        switch (comptime CallMethod(T.Parent, method)) {
-            .Ok => |U| return .{ .Ok = U },
-            .Err => {},
-        }
-    }
-    return .{ .Err = {} };
-}
-
-fn callMethod(self: anytype, comptime Self: type, comptime method: []const u8, args: anytype) switch (CallMethod(std.meta.Child(@TypeOf(self)), method)) {
-    .Ok => |T| T,
-    .Err => @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(std.meta.Child(@TypeOf(self))), method })),
-} {
-    if (comptime @hasDecl(Self, method)) {
-        const method_fn = @field(Self, method);
-        const method_info = @typeInfo(@TypeOf(method_fn));
-        if (comptime method_info.Fn.params[0].is_generic) {
-            return @call(.auto, method_fn, .{self} ++ args);
-        } else {
-            return @call(.auto, method_fn, .{self.into(Self)} ++ args);
-        }
-    }
-    if (comptime @hasDecl(Self, "Prerequisites")) {
-        inline for (Self.Prerequisites) |Prerequisite| {
-            switch (comptime CallMethod(Prerequisite, method)) {
-                .Ok => |_| return callMethod(self, Prerequisite, method, args),
-                .Err => {},
-            }
-        }
-    }
-    if (comptime @hasDecl(Self, "Interfaces")) {
-        inline for (Self.Interfaces) |Interface| {
-            switch (comptime CallMethod(Interface, method)) {
-                .Ok => |_| return callMethod(self, Interface, method, args),
-                .Err => {},
-            }
-        }
-    }
-    if (comptime @hasDecl(Self, "Parent")) {
-        switch (comptime CallMethod(Self.Parent, method)) {
-            .Ok => |_| return callMethod(self, Self.Parent, method, args),
-            .Err => {},
-        }
-    }
-    @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ Self, method }));
-}
-
-pub fn Extend(comptime Self: type) type {
-    return struct {
-        /// Calls inherited method
-        pub fn __call(self: *Self, comptime method: []const u8, args: anytype) switch (CallMethod(Self, method)) {
-            .Ok => |T| T,
-            .Err => @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(Self), method })),
-        } {
-            return callMethod(self, Self, method, args);
-        }
-
-        /// Converts to base type T
-        pub fn into(self: *Self, comptime T: type) *T {
-            return upCast(T, self);
-        }
-
-        /// Converts to derived type T
-        pub fn tryInto(self: *Self, comptime T: type) ?*T {
-            return downCast(T, self);
-        }
-
-        /// Gets a property of an object
-        pub fn get(self: *Self, comptime T: type, property_name: [*:0]const u8) Arg(T) {
-            var property = gobject.Value.new(T);
-            defer property.unset();
-            self.into(gobject.Object).getProperty(property_name, &property);
-            return ZigValue.get(&property, T);
-        }
-
-        /// Sets a property on an object
-        pub fn set(self: *Self, comptime T: type, property_name: [*:0]const u8, value: if (isBasicType(T)) T else *T) void {
-            var property = gobject.Value.new(T);
-            defer property.unset();
-            ZigValue.set(&property, T, value);
-            self.into(gobject.Object).setProperty(property_name, &property);
-        }
-
-        /// Connects a callback function to a signal for a particular object
-        pub fn connect(self: *Self, signal: [*:0]const u8, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags, comptime signature: []const type) usize {
-            var closure = zig_closure(handler, args, if (flags.swapped) signature[0..1] else signature);
-            const closure_new_fn = if (flags.swapped) cclosureNewSwap else cclosureNew;
-            const cclosure = closure_new_fn(closure.c_closure(), closure.c_data(), closure.c_destroy());
-            return gobject.signalConnectClosure(self.into(gobject.Object), signal, cclosure, flags.after);
-        }
-
-        /// Connects a notify signal for a property
-        pub fn connectNotify(self: *Self, property_name: [*:0]const u8, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags) usize {
-            var buf: [32]u8 = undefined;
-            const signal = std.fmt.bufPrintZ(buf[0..], "notify::{s}", .{property_name}) catch @panic("No Space Left");
-            return self.connect(signal, handler, args, flags, &.{ void, *Self, *gobject.ParamSpec });
-        }
-    };
-}
-
-// OOP inheritance end
-// -------------------
 
 // -------------
 // closure begin
+
+/// A no-op closure
+const NopClosure = struct {
+    const Self = @This();
+    pub fn new(_: anytype, _: anytype) !*Self {
+        return undefined;
+    }
+    pub fn invoke() callconv(.C) void {}
+    pub fn setOnce(_: *Self) void {}
+    pub fn deinit(_: *Self) callconv(.C) void {}
+    pub inline fn c_closure(_: *Self) ?*anyopaque {
+        return null;
+    }
+    pub inline fn c_data(_: *Self) ?*anyopaque {
+        return null;
+    }
+    pub inline fn c_destroy(_: *Self) ?*anyopaque {
+        return null;
+    }
+};
 
 /// A closure represents a callback supplied by the programmer
 pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature: []const type) type {
     comptime std.debug.assert(@typeInfo(Args) == .Struct and @typeInfo(Args).Struct.is_tuple);
     comptime std.debug.assert(@typeInfo(FnPtr) == .Pointer and @typeInfo(FnPtr).Pointer.size == .One);
     if (std.meta.Child(FnPtr) == void) {
-        return struct {
-            const Self = @This();
-            pub fn new(_: FnPtr, _: Args) !*Self {
-                return undefined;
-            }
-            pub fn invoke() callconv(.C) void {}
-            pub fn setOnce(_: *Self) void {}
-            pub fn deinit(_: *Self) callconv(.C) void {}
-            pub inline fn c_closure(_: *Self) ?*anyopaque {
-                return null;
-            }
-            pub inline fn c_data(_: *Self) ?*anyopaque {
-                return null;
-            }
-            pub inline fn c_destroy(_: *Self) ?*anyopaque {
-                return null;
-            }
-        };
+        return NopClosure;
     }
     comptime std.debug.assert(@typeInfo(std.meta.Child(FnPtr)) == .Fn);
     comptime std.debug.assert(signature.len >= 1);
@@ -514,11 +524,15 @@ pub fn zig_closure(handler: anytype, args: anytype, comptime signature: []const 
     return ZigClosure(@TypeOf(&handler), @TypeOf(args), signature).new(&handler, args) catch @panic("Out of Memory");
 }
 
+/// Creates a new closure which invokes `callback_func` with `user_data` as the last parameter.
+/// `destroy_data` will be called as a finalize notifier on the GClosure.
 fn cclosureNew(callback_func: gobject.Callback, user_data: ?*anyopaque, destroy_data: gobject.ClosureNotify) *gobject.Closure {
     const g_cclosure_new = @extern(*const fn (gobject.Callback, ?*anyopaque, gobject.ClosureNotify) callconv(.C) *gobject.Closure, .{ .name = "g_cclosure_new" });
     return g_cclosure_new(callback_func, user_data, destroy_data);
 }
 
+/// Creates a new closure which invokes `callback_func` with `user_data` as the first parameter.
+/// `destroy_data` will be called as a finalize notifier on the GClosure.
 fn cclosureNewSwap(callback_func: gobject.Callback, user_data: ?*anyopaque, destroy_data: gobject.ClosureNotify) *gobject.Closure {
     const g_cclosure_new_swap = @extern(*const fn (gobject.Callback, ?*anyopaque, gobject.ClosureNotify) callconv(.C) *gobject.Closure, .{ .name = "g_cclosure_new_swap" });
     return g_cclosure_new_swap(callback_func, user_data, destroy_data);
@@ -530,6 +544,8 @@ fn cclosureNewSwap(callback_func: gobject.Callback, user_data: ?*anyopaque, dest
 // --------------
 // subclass begin
 
+/// Creates a new instance of a GObject subtype and sets its properties using the provided arrays.
+/// Both arrays must have exactly `n_properties elements`, and the names and values correspond by index.
 fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?[]gobject.Value) *gobject.Object {
     if (names) |_| {
         std.debug.assert(names.?.len == values.?.len);
@@ -540,7 +556,7 @@ fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?
     return g_object_new_with_properties(object_type, if (names) |some| @intCast(some.len) else 0, if (names) |some| some.ptr else null, if (values) |some| some.ptr else null);
 }
 
-/// Creates a new instance of an Object subtype and sets its properties using the provided arrays
+/// Creates a new instance of an Object subtype and sets its properties using the provided map
 pub fn newObject(comptime T: type, properties: anytype) *T {
     const info = @typeInfo(@TypeOf(properties));
     comptime std.debug.assert(info == .Struct);
@@ -564,6 +580,7 @@ pub fn newObject(comptime T: type, properties: anytype) *T {
     return unsafeCast(T, objectNewWithProperties(T.gType(), if (n_props != 0) names[0..] else null, if (n_props != 0) values[0..] else null));
 }
 
+/// Creates a new signal. (This is usually done in the class initializer.)
 fn signalNewv(signal_name: [*:0]const u8, itype: Type, signal_flags: gobject.SignalFlags, class_closure: ?*gobject.Closure, accumulator: anytype, accu_data: anytype, c_marshaller: ?gobject.ClosureMarshal, return_type: Type, param_types: ?[]Type) u32 {
     var accumulator_closure = zig_closure(accumulator, accu_data, &.{ bool, *gobject.SignalInvocationHint, *gobject.Value, *gobject.Value });
     const g_signal_newv = @extern(*const fn ([*:0]const u8, Type, gobject.SignalFlags, ?*gobject.Closure, ?gobject.SignalAccumulator, ?*anyopaque, ?gobject.ClosureMarshal, Type, c_uint, ?[*]Type) callconv(.C) c_uint, .{ .name = "g_signal_newv" });
@@ -585,30 +602,32 @@ pub fn newSignal(comptime Object: type, comptime signal_name: [:0]const u8, sign
     }
     const class_closure = gobject.signalTypeCclosureNew(Object.gType(), @offsetOf(Class, &field_name));
     const signal_field_type = std.meta.FieldType(Class, std.meta.stringToEnum(std.meta.FieldEnum(Class), &field_name).?);
-    const signal_info = @typeInfo(std.meta.Child(std.meta.Child(signal_field_type))); // ?*const fn(args...) return_type
-    const return_type = ZigValue.new(signal_info.Fn.return_type.?).g_type;
-    var param_types: [signal_info.Fn.params.len - 1]Type = undefined;
-    inline for (signal_info.Fn.params[1..], &param_types) |param, *T| {
+    const signal_info = @typeInfo(std.meta.Child(std.meta.Child(signal_field_type))).Fn; // ?*const fn(args...) return_type
+    const return_type = ZigValue.new(signal_info.return_type.?).g_type;
+    var param_types: [signal_info.params.len - 1]Type = undefined;
+    inline for (signal_info.params[1..], &param_types) |param, *ty| {
         var is_gtyped = false;
         if (@typeInfo(param.type.?) == .Pointer and @typeInfo(param.type.?).Pointer.size == .One) {
-            if (@hasDecl(std.meta.Child(param.type.?), "type")) {
+            if (std.meta.hasFn(std.meta.Child(param.type.?), "gType")) {
                 is_gtyped = true;
             }
         }
         if (is_gtyped) {
-            T.* = std.meta.Child(param.type.?).gType();
+            ty.* = std.meta.Child(param.type.?).gType();
         } else {
-            T.* = ZigValue.new(param.type.?).g_type;
+            ty.* = ZigValue.new(param.type.?).g_type;
         }
     }
     return signalNewv(signal_name.ptr, Object.gType(), signal_flags, class_closure, accumulator, accu_data, null, return_type, param_types[0..]);
 }
 
+/// Type-specific data
 const TypeTag = struct {
     type_id: Type = .invalid,
     private_offset: c_int = 0,
 };
 
+/// Storage for the type-specific data
 pub fn typeTag(comptime Object: type) *TypeTag {
     const Static = struct {
         comptime {
@@ -620,16 +639,18 @@ pub fn typeTag(comptime Object: type) *TypeTag {
     return &Static.tag;
 }
 
+/// Initializes all fields of the struct with their default value.
 fn init(comptime T: type, value: *T) void {
     const info = @typeInfo(T).Struct;
     inline for (info.fields) |field| {
-        if (field.default_value) |some| {
-            const field_const_ptr_type = @Type(.{ .Pointer = .{ .size = .One, .is_const = true, .is_volatile = false, .alignment = @alignOf(field.type), .address_space = .generic, .child = field.type, .is_allowzero = false, .sentinel = null } });
-            @field(value, field.name) = @as(field_const_ptr_type, @ptrCast(@alignCast(some))).*;
+        if (field.default_value) |default_value_ptr| {
+            const default_value = @as(*align(1) const field.type, @ptrCast(default_value_ptr)).*;
+            @field(value, field.name) = default_value;
         }
     }
 }
 
+/// Initializes fields using provided values
 fn overrideMethods(comptime Override: type, comptime Class: type, class: *Class) void {
     const info = @typeInfo(Class).Struct;
     inline for (info.fields) |field| {
@@ -641,13 +662,14 @@ fn overrideMethods(comptime Override: type, comptime Class: type, class: *Class)
             if (field_info == .Pointer) {
                 const pointer_child_info = @typeInfo(field_info.Pointer.child);
                 if (pointer_child_info == .Fn) {
-                    @field(class, field.name) = &@field(Override, field.name);
+                    @field(class, field.name) = @field(Override, field.name);
                 }
             }
         }
     }
 }
 
+/// Overrides class virtual function
 fn doClassOverride(comptime Class: type, comptime T: type, class: *anyopaque) void {
     if (comptime @hasDecl(T, "Parent")) {
         doClassOverride(Class, T.Parent, class);
