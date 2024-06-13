@@ -390,7 +390,7 @@ pub fn Extend(comptime Self: type) type {
         pub fn connect(self: *Self, signal: [*:0]const u8, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags, comptime signature: []const type) usize {
             var closure = zig_closure(handler, args, if (flags.swapped) signature[0..1] else signature);
             const closure_new_fn = if (flags.swapped) cclosureNewSwap else cclosureNew;
-            const cclosure = closure_new_fn(@ptrCast(closure.c_closure()), closure.c_data(), @ptrCast(closure.c_destroy()));
+            const cclosure = closure_new_fn(closure.c_closure(), closure.c_data(), closure.c_destroy());
             return gobject.signalConnectClosure(self.into(gobject.Object), signal, cclosure, flags.after);
         }
 
@@ -473,18 +473,18 @@ pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature:
         }
 
         /// The C callback function to invoke
-        pub inline fn c_closure(_: *Self) *const fn (...) callconv(.C) signature[0] {
-            return &invoke;
+        pub inline fn c_closure(_: *Self) gobject.Callback {
+            return @ptrCast(&invoke);
         }
 
         /// The data to pass to callback
-        pub inline fn c_data(self: *Self) *Self {
+        pub inline fn c_data(self: *Self) ?*anyopaque {
             return self;
         }
 
         /// The destroy function to be called when data is no longer used
-        pub inline fn c_destroy(_: *Self) *const fn (*Self) callconv(.C) void {
-            return &deinit;
+        pub inline fn c_destroy(_: *Self) gobject.ClosureNotify {
+            return @ptrCast(&deinit);
         }
     };
 }
