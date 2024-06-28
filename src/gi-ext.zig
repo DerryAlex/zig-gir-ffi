@@ -494,6 +494,10 @@ pub const FlagsInfoExt = struct {
         }
         iter = self.into(EnumInfo).valueIter();
         while (iter.next()) |value| {
+            const _value = value.getValue();
+            if (_value == 0 or (_value > 0 and std.math.isPowerOfTwo(_value))) {
+                continue;
+            }
             try writer.writeAll("pub const ");
             switch (self.into(EnumInfo).getStorageType()) {
                 .int32 => try writer.print("{b}", .{value}),
