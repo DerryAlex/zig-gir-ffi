@@ -174,9 +174,9 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
 
     const loaded_namespaces = repository.getLoadedNamespaces();
     for (loaded_namespaces.ret[0..loaded_namespaces.n_namespaces_out]) |namespaceZ| {
-        const namespace: [:0]const u8 = std.mem.span(namespaceZ);
-        const filename = try std.mem.concat(allocator, u8, &.{ namespace, ".zig" });
-        defer allocator.free(filename);
+        const namespace = std.mem.span(namespaceZ);
+        var buf: [256]u8 = undefined;
+        const filename = try std.fmt.bufPrintZ(buf[0..], "{}.zig", .{Namespace{ .str = namespace }});
         {
             const file = try output_dir.createFile(filename, .{});
             defer file.close();
@@ -187,7 +187,7 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
             const dependencies = repository.getDependencies(namespace);
             for (dependencies.ret[0..dependencies.n_dependencies_out]) |dependencyZ| {
                 const dependency: []const u8 = std.mem.sliceTo(dependencyZ, '-');
-                try writer.print("pub const {} = @import(\"{s}.zig\");\n", .{ Namespace{ .str = dependency }, dependency });
+                try writer.print("pub const {} = @import(\"{s}.zig\");\n", .{ Namespace{ .str = dependency }, Namespace{ .str = dependency } });
             }
             try writer.writeAll("pub const core = @import(\"core.zig\");\n");
             if (std.mem.eql(u8, namespace, "Gtk")) {
@@ -239,8 +239,8 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
         defer allocator.free(fmt_result.stderr);
         std.debug.assert(fmt_result.stderr.len == 0);
 
-        try build_zig.writer().print("    _ = b.addModule(\"{}\", .{{ .root_source_file = b.path(\"{s}.zig\") }});\n", .{ Namespace{ .str = namespace }, namespace });
-        try build_zig_zon.writer().print("        \"{s}.zig\",\n", .{namespace});
+        try build_zig.writer().print("    _ = b.addModule(\"{}\", .{{ .root_source_file = b.path(\"{s}\") }});\n", .{ Namespace{ .str = namespace }, filename });
+        try build_zig_zon.writer().print("        \"{s}\",\n", .{filename});
     }
 
     try build_zig.writer().writeAll(

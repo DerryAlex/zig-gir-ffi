@@ -1,6 +1,6 @@
-const glib = @import("GLib.zig");
-const gobject = @import("GObject.zig");
-const gio = @import("Gio.zig");
+const glib = @import("glib.zig");
+const gobject = @import("gobject.zig");
+const gio = @import("gio.zig");
 
 const std = @import("std");
 const root = @import("root");
