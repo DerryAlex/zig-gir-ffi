@@ -4,8 +4,8 @@ gir_version="0.19.2"
 
 apt-get source gobject-introspection
 cd $(ls -F | grep 'gobject-introspection' | grep '/$')
-meson setup build && cd build
 patch girepository/girnode.c ../../girnode.patch
+meson setup build && cd build
 meson compile
 export PATH=$(pwd)/tools:${PATH}
 cd ../../..
@@ -17,3 +17,4 @@ do
     typelib=$(echo ${gir} | sed 's/.gir/.typelib/')
     g-ir-compiler ${gir} -o ${typelib} --includedir .
 done
+cd ..

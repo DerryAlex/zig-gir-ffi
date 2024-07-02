@@ -35,8 +35,7 @@ jobs:
       
       - name: Generate typelibs
         run: |
-          ls
-          cd lib/tools && ./ci.sh
+          cd lib/tools && ./ci.sh && cd ../..
 
       - uses: actions/upload-artifact@v4.3.3
         with:
