@@ -19,6 +19,8 @@ Before zig reaches 1.0,
 
 - [Usage of Bindings](#usage-of-bindings)
 
+- [Contributing](#contributing)
+
 ## Usage
 
 ```bash
@@ -130,3 +132,11 @@ doSomething() catch {
   // ...
 }
 ```
+
+## Contributing
+
+Read [docs/design.md](docs/design.md) and [docs/hacking.md](docs/hacking.md).
+
+> **Note**
+> 
+> (Newly written) source code should follow [Tigerbeetle's Style](https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md) while generated code should follow [Zig's Style](https://ziglang.org/documentation/master/#Style-Guide).
