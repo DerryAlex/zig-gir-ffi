@@ -31,11 +31,13 @@ jobs:
         run: |
           sudo sed -Ei 's/^# deb-src /deb-src /' /etc/apt/sources.list
           sudo apt-get update
-          sudo apt build-dep gobject-introspection
+          sudo apt-get build-dep gobject-introspection
       
       - name: Generate typelibs
-        run: ./lib/tools/ci.sh
+        run: |
+          ls
+          cd lib/tools && ./ci.sh
 
       - uses: actions/upload-artifact@v4.3.3
         with:
-          path: git/*.typelib
+          path: lib/tools/gir-files/*.typelib
