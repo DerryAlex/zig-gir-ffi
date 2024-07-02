@@ -7,10 +7,10 @@ on:
   # Triggers the workflow on push or pull request events but only for the "master" branch
   push:
     branches: [ "master" ]
-    paths: [ "lib/tools/ci.sh", "lib/tools/girnode.patch", ".github/workflow/typelib.yml" ]
+    paths: [ "lib/girepository-1.0/ci.sh", "lib/girepository-1.0/girnode.patch", ".github/workflow/typelib.yml" ]
   pull_request:
     branches: [ "master" ]
-    paths: [ "lib/tools/ci.sh", "lib/tools/girnode.patch", ".github/workflow/typelib.yml" ]
+    paths: [ "lib/girepository-1.0/ci.sh", "lib/girepository-1.0/girnode.patch", ".github/workflow/typelib.yml" ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -35,7 +35,7 @@ jobs:
       
       - name: Generate typelibs
         run: |
-          cd lib/tools && ./ci.sh && cd ../..
+          cd lib/girepository-1.0/ && ./ci.sh && cd ../..
 
       - uses: peter-evans/create-pull-request@v6
         with:
