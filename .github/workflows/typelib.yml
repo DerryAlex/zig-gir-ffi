@@ -56,6 +56,6 @@ jobs:
           done
           cd ..
 
-      - uses: action/upload-artifact@v4.3.3
+      - uses: actions/upload-artifact@v4.3.3
         with:
           path: git/*.typelib
