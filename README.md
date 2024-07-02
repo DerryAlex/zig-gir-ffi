@@ -32,24 +32,6 @@ zig build run -- -N Gtk -V 3.0
 zig build run -- --help
 ```
 
-### Patch typelib
-
-Typelibs need to be patched as bitfield info is currently not embedded.
-
-```bash
-cd lib/tools
-# build patched g-ir-compiler
-# if `time_t` related problem is encountered, use 1.80.1 or newer version of gobject-introspection
-./fetch-compiler.sh
-# generate patched typelib
-# gir files may be downloaded from
-# - https://github.com/gtk-rs/gir-files
-# - https://packages.debian.org/sid/amd64/{libgtk-4-dev, gir1.2-glib-2.0-dev, libpango1.0-dev, libharfbuzz-dev}/download
-./generate.sh
-```
-
-`--includedir lib/girepository-1.0` can be passed to binding generator to use patched typelibs.
-
 ## Usage of Bindings
 
 Run `zig fetch --save=gtk4 https://url/to/bindings.tar.gz` and add the following lines to your `build.zig`. For more information, refer to [Zig Build System](https://ziglang.org/learn/build-system/).
