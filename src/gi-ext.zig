@@ -39,45 +39,9 @@ fn Iterator(comptime Context: type, comptime Item: type) type {
     };
 }
 
-// helper functions
 const std = @import("std");
 const root = @import("root");
-const Namespace = root.Namespace;
-const Identifier = root.Identifier;
-
-fn snakeToCamel(src: []const u8, buf: []u8) []u8 {
-    var len: usize = 0;
-    var upper = false;
-    for (src) |ch| {
-        if (ch == '_' or ch == '-') {
-            upper = true;
-        } else {
-            if (upper) {
-                buf[len] = std.ascii.toUpper(ch);
-            } else {
-                buf[len] = ch;
-            }
-            len += 1;
-            upper = false;
-        }
-    }
-    return buf[0..len];
-}
-
-fn camelToSnake(src: []const u8, buf: []u8) []u8 {
-    var len: usize = 0;
-    var idx: usize = 0;
-    for (src) |ch| {
-        if (idx != 0 and std.ascii.isUpper(ch)) {
-            buf[len] = '_';
-            len += 1;
-        }
-        buf[len] = ch;
-        len += 1;
-        idx += 1;
-    }
-    return buf[0..len];
-}
+const String = @import("string.zig").String;
 
 // extensions
 pub const BaseInfoExt = struct {
@@ -472,9 +436,8 @@ pub const FlagsInfoExt = struct {
             if (values.contains(idx)) {
                 continue;
             }
-            var buf: [256]u8 = undefined;
-            const name_v = camelToSnake(std.mem.span(value.into(BaseInfo).getName().?), buf[0..]);
-            const name_dup = allocator.dupe(u8, name_v) catch @panic("Out of Memory");
+            const name_v = String.new_from("{s}", .{std.mem.span(value.into(BaseInfo).getName().?)});
+            const name_dup = allocator.dupe(u8, name_v.slice()) catch @panic("Out of Memory");
             values.put(idx, name_dup) catch @panic("Out of Memory");
         }
         var padding_bits: usize = 0;
@@ -484,7 +447,7 @@ pub const FlagsInfoExt = struct {
                     try writer.print("_{d}: u{d} = 0,\n", .{ idx - padding_bits, padding_bits });
                     padding_bits = 0;
                 }
-                try writer.print("{}: bool = false,\n", .{Identifier{ .str = name_v }});
+                try writer.print("{s}: bool = false,\n", .{String.new_from("{s}", .{name_v}).to_identifier()});
             } else {
                 padding_bits += 1;
             }
@@ -525,7 +488,7 @@ pub const FieldInfoExt = struct {
             }
         }
 
-        const field_name = self.into(BaseInfo).getName().?;
+        const field_name = String.new_from("{s}", .{self.into(BaseInfo).getName().?}).to_identifier();
         const field_type = self.getTypeInfo();
         const field_size = self.getSize();
         if (field_size != 0) {
@@ -542,7 +505,7 @@ pub const FieldInfoExt = struct {
         } else if (BitField.remaining != null) {
             try BitField.end(writer);
         }
-        try writer.print("{}", .{Identifier{ .str = std.mem.span(field_name) }});
+        try writer.print("{s}", .{field_name});
         if (field_size == 0) {
             try writer.print(": {n},\n", .{field_type});
         } else if (field_size == 1) {
@@ -586,13 +549,12 @@ pub const FunctionInfoExt = struct {
         var buffer: [4096]u8 = undefined;
         var fixed_buffer_allocator = std.heap.FixedBufferAllocator.init(buffer[0..]);
         const allocator = fixed_buffer_allocator.allocator();
-        var buf: [256]u8 = undefined;
-        const func_name = snakeToCamel(std.mem.span(self.into(BaseInfo).getName().?), buf[0..]);
+        const func_name = String.new_from("{s}", .{std.mem.span(self.into(BaseInfo).getName().?)}).to_camel();
         try root.generateDocs(.{ .function = self }, writer);
         if (self.into(BaseInfo).isDeprecated()) {
-            try writer.print("pub const {} = if (config.disable_deprecated) core.Deprecated else struct {{", .{Identifier{ .str = func_name }});
+            try writer.print("pub const {s} = if (config.disable_deprecated) core.Deprecated else struct {{", .{func_name.to_identifier()});
         }
-        try writer.print("pub fn {}", .{Identifier{ .str = func_name }});
+        try writer.print("pub fn {s}", .{func_name.to_identifier()});
         const return_type = self.into(CallableInfo).getReturnType();
         const args = self.into(CallableInfo).argsAlloc(allocator) catch @panic("Out of Memory");
         var slice_info = allocator.alloc(SliceInfo, args.len) catch @panic("Out of Memory");
@@ -630,7 +592,7 @@ pub const FunctionInfoExt = struct {
             }
         }
         const return_bool = return_type.getTag() == .boolean;
-        const throw_bool = return_bool and (n_out_param > 0) and (self.into(CallableInfo).isMethod() and func_name.len >= 3 and std.mem.eql(u8, "get", func_name[0..3]));
+        const throw_bool = return_bool and (n_out_param > 0) and (self.into(CallableInfo).isMethod() and func_name.len >= 3 and std.mem.eql(u8, "get", func_name.slice()[0..3]));
         const throw_error = self.into(CallableInfo).canThrowGerror();
         const skip_return = self.into(CallableInfo).skipReturn();
         const real_skip_return = skip_return or throw_bool;
@@ -889,7 +851,7 @@ pub const FunctionInfoExt = struct {
         try writer.writeAll(";\n");
         try writer.writeAll("}\n");
         if (self.into(BaseInfo).isDeprecated()) {
-            try writer.print("}}.{s};\n", .{Identifier{ .str = func_name }});
+            try writer.print("}}.{s};\n", .{func_name.to_identifier()});
         }
     }
 };
@@ -955,7 +917,7 @@ pub const InterfaceInfoExt = struct {
                 } else {
                     try writer.writeAll(", ");
                 }
-                try writer.print("{}.{s}", .{ Namespace{ .str = std.mem.span(prerequisite.into(BaseInfo).getNamespace().?) }, prerequisite.into(BaseInfo).getName().? });
+                try writer.print("{s}.{s}", .{ String.new_from("{s}", .{std.mem.span(prerequisite.into(BaseInfo).getNamespace().?)}).to_snake(), prerequisite.into(BaseInfo).getName().? });
             }
             try writer.writeAll("};\n");
         }
@@ -1055,15 +1017,15 @@ pub const ObjectInfoExt = struct {
                 } else {
                     try writer.writeAll(", ");
                 }
-                try writer.print("{}.{s}", .{ Namespace{ .str = std.mem.span(interface.into(BaseInfo).getNamespace().?) }, interface.into(BaseInfo).getName().? });
+                try writer.print("{s}.{s}", .{ String.new_from("{s}", .{std.mem.span(interface.into(BaseInfo).getNamespace().?)}).to_snake(), interface.into(BaseInfo).getName().? });
             }
             try writer.writeAll("};\n");
         }
         if (self.getParent()) |_parent| {
-            try writer.print("pub const Parent = {}.{s};\n", .{ Namespace{ .str = std.mem.span(_parent.into(BaseInfo).getNamespace().?) }, _parent.into(BaseInfo).getName().? });
+            try writer.print("pub const Parent = {s}.{s};\n", .{ String.new_from("{s}", .{std.mem.span(_parent.into(BaseInfo).getNamespace().?)}).to_snake(), _parent.into(BaseInfo).getName().? });
         }
         if (self.getClassStruct()) |_class| {
-            try writer.print("pub const Class = {}.{s};\n", .{ Namespace{ .str = std.mem.span(_class.into(BaseInfo).getNamespace().?) }, _class.into(BaseInfo).getName().? });
+            try writer.print("pub const Class = {s}.{s};\n", .{ String.new_from("{s}", .{std.mem.span(_class.into(BaseInfo).getNamespace().?)}).to_snake(), _class.into(BaseInfo).getName().? });
         }
         var c_iter = self.constantIter();
         while (c_iter.next()) |constant| {
@@ -1171,14 +1133,13 @@ pub const SignalInfoExt = struct {
         }
 
         const container_name = self.into(BaseInfo).getContainer().?.getName().?;
-        var buf: [256]u8 = undefined;
-        const raw_name = std.mem.span(self.into(BaseInfo).getName().?);
-        const name = snakeToCamel(raw_name, buf[0..]);
+        const raw_name = String.new_from("{s}", .{std.mem.span(self.into(BaseInfo).getName().?)});
+        const name = raw_name.to_camel();
         try root.generateDocs(.{ .signal = self }, writer);
         if (self.into(BaseInfo).isDeprecated()) {
-            try writer.print("pub const connect{c}{s} = if (config.disable_deprecated) core.Deprecated else struct {{\n", .{ std.ascii.toUpper(name[0]), name[1..] });
+            try writer.print("pub const connect{c}{s} = if (config.disable_deprecated) core.Deprecated else struct {{\n", .{ std.ascii.toUpper(name.slice()[0]), name.slice()[1..] });
         }
-        try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name[0]), name[1..], container_name });
+        try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name.slice()[0]), name.slice()[1..], container_name });
         try writer.print("return self.connect(\"{s}\", handler, args, flags, &.{{", .{raw_name});
         const return_type = self.into(CallableInfo).getReturnType();
         var interface_returned = false;
@@ -1201,7 +1162,7 @@ pub const SignalInfoExt = struct {
         try writer.writeAll("});\n");
         try writer.writeAll("}\n");
         if (self.into(BaseInfo).isDeprecated()) {
-            try writer.print("}}.{c}{s};\n", .{ std.ascii.toUpper(name[0]), name[1..] });
+            try writer.print("}}.{c}{s};\n", .{ std.ascii.toUpper(name.slice()[0]), name.slice()[1..] });
         }
     }
 };
@@ -1397,7 +1358,7 @@ pub const TypeInfoExt = struct {
                         }
                         const callback_name = child_type.getName().?;
                         if (std.ascii.isUpper(callback_name[0])) {
-                            try writer.print("{}.{s}", .{ Namespace{ .str = std.mem.span(child_type.getNamespace().?) }, child_type.getName().? });
+                            try writer.print("{s}.{s}", .{ String.new_from("{s}", .{std.mem.span(child_type.getNamespace().?)}).to_snake(), child_type.getName().? });
                         } else {
                             try writer.print("{}", .{child_type.tryInto(CallbackInfo).?});
                         }
@@ -1409,7 +1370,7 @@ pub const TypeInfoExt = struct {
                             }
                             try writer.writeAll("*");
                         }
-                        try writer.print("{}.{s}", .{ Namespace{ .str = std.mem.span(child_type.getNamespace().?) }, child_type.getName().? });
+                        try writer.print("{s}.{s}", .{ String.new_from("{s}", .{std.mem.span(child_type.getNamespace().?)}).to_snake(), child_type.getName().? });
                     },
                     .object, .interface => {
                         if (self.isPointer()) {
@@ -1418,11 +1379,11 @@ pub const TypeInfoExt = struct {
                             }
                             try writer.writeAll("*");
                         }
-                        try writer.print("{}.{s}", .{ Namespace{ .str = std.mem.span(child_type.getNamespace().?) }, child_type.getName().? });
+                        try writer.print("{s}.{s}", .{ String.new_from("{s}", .{std.mem.span(child_type.getNamespace().?)}).to_snake(), child_type.getName().? });
                     },
                     .invalid, .function, .constant, .invalid_0, .value, .signal, .vfunc, .property, .field, .arg, .type => unreachable,
                     .unresolved => {
-                        try writer.print("{}.{s}", .{ Namespace{ .str = std.mem.span(child_type.getNamespace().?) }, child_type.getName().? });
+                        try writer.print("{s}.{s}", .{ String.new_from("{s}", .{std.mem.span(child_type.getNamespace().?)}).to_snake(), child_type.getName().? });
                         std.log.warn("[Unresolved] {s}.{s}", .{ child_type.getNamespace().?, child_type.getName().? });
                     },
                 }
@@ -1485,8 +1446,8 @@ pub const ValueInfoExt = struct {
             }
         }
 
-        const value_name = self.into(BaseInfo).getName().?;
-        try writer.print("{}", .{Identifier{ .str = std.mem.span(value_name) }});
+        const value_name = String.new_from("{s}", .{self.into(BaseInfo).getName().?});
+        try writer.print("{s}", .{value_name.to_identifier()});
         if (convert_func) |func| {
             try writer.print(": @This() = @{s}(", .{func});
         } else {
@@ -1509,9 +1470,8 @@ pub const VFuncInfoExt = struct {
             }
         }
 
-        var buf: [256]u8 = undefined;
-        const raw_vfunc_name = std.mem.span(self.into(BaseInfo).getName().?);
-        const vfunc_name = snakeToCamel(raw_vfunc_name, buf[0..]);
+        const raw_vfunc_name = String.new_from("{s}", .{std.mem.span(self.into(BaseInfo).getName().?)});
+        const vfunc_name = raw_vfunc_name.to_camel();
         const container = self.into(BaseInfo).getContainer().?;
         const class = switch (container.getType()) {
             .object => container.tryInto(ObjectInfo).?.getClassStruct().?,
