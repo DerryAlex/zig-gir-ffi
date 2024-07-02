@@ -37,6 +37,6 @@ jobs:
         run: |
           cd lib/tools && ./ci.sh && cd ../..
 
-      - uses: actions/upload-artifact@v4.3.3
+      - uses: peter-evans/create-pull-request@v6
         with:
-          path: lib/tools/gir-files/*.typelib
+          add-paths: lib/girepository-1.0/*.typelib

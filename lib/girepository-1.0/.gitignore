@@ -1,1 +1,4 @@
-*.typelib
+*
+!*.sh
+!*.patch
+!*.typelib

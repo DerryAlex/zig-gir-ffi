@@ -16,6 +16,6 @@ sed 's/gconstpointer/gpointer/' -i Pango-1.0.gir
 for gir in $(ls *.gir)
 do
     typelib=$(echo ${gir} | sed 's/.gir/.typelib/')
-    g-ir-compiler ${gir} -o ${typelib} --includedir .
+    g-ir-compiler ${gir} -o ../${typelib} --includedir .
 done
 cd ..
