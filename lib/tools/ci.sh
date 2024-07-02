@@ -2,7 +2,7 @@
 
 gir_version="0.19.2"
 
-apt src gobject-introspection
+apt-get source gobject-introspection
 cd $(ls -F | grep 'gobject-introspection' | grep '/$')
 meson setup build && cd build
 patch girepository/girnode.c ../../girnode.patch
