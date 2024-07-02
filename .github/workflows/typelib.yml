@@ -7,10 +7,10 @@ on:
   # Triggers the workflow on push or pull request events but only for the "master" branch
   push:
     branches: [ "master" ]
-    paths: [ "lib/tools/girnode.patch", ".github/workflow/typelib.yml" ]
+    paths: [ "lib/tools/ci.sh", "lib/tools/girnode.patch", ".github/workflow/typelib.yml" ]
   pull_request:
     branches: [ "master" ]
-    paths: [ "lib/tools/girnode.patch", ".github/workflow/typelib.yml" ]
+    paths: [ "lib/tools/ci.sh", "lib/tools/girnode.patch", ".github/workflow/typelib.yml" ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -27,34 +27,14 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
-      - name: Install gobject-introspection
+      - name: Install build dependencies
         run: |
+          sudo sed -Ei 's/^# deb-src /deb-src /' /etc/apt/sources.list
+          sudo apt-get update
           sudo apt build-dep gobject-introspection
-          mkdir gobject-introspection && cd gobject-introspection
-          apt source gobject-introspection
-          cd $(ls -F | grep '/$')
-          patch girepository/girnode.c ../../../lib/tools/girnode.patch
-          meson setup build && cd build
-          meson compile
-          export PATH=$(pwd)/tool:${PATH}
-          cd ../../..
-
-      - name: Download gir-files
-        run: |
-          git clone https://github.com/gtk-rs/gir.git
-          cd gir
-          git checkout 0.19.2
-          cd ..
       
       - name: Generate typelibs
-        run: |
-          cd gir
-          for gir in $(ls *.gir)
-          do
-            typelib=$(echo ${gir} | sed 's/.gir/.typelib/')
-            g-ir-compiler ${gir} -o ${typelib} --includedir .
-          done
-          cd ..
+        run: ./lib/tools/ci.sh
 
       - uses: actions/upload-artifact@v4.3.3
         with:
