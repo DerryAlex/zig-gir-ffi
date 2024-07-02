@@ -1,0 +1,61 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "master" branch
+  push:
+    branches: [ "master" ]
+    paths: "lib/tools/girnode.patch"
+  pull_request:
+    branches: [ "master" ]
+    paths: "lib/tools/girnode.patch"
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+
+      - name: Install gobject-introspection
+        run: |
+          apt build-dep gobject-introspection
+          mkdir gobject-introspection && cd gobject-introspection
+          apt source gobject-introspection
+          cd $(ls -F | grep '/$')
+          patch girepository/girnode.c ../../../lib/tools/girnode.patch
+          meson setup build && cd build
+          meson compile
+          export PATH=$(pwd)/tool:${PATH}
+          cd ../../..
+
+      - name: Download gir-files
+        run: |
+          git clone https://github.com/gtk-rs/gir.git
+          cd gir
+          git checkout 0.19.2
+          cd ..
+      
+      - name: Generate typelibs
+        run: |
+          cd gir
+          for gir in $(ls *.gir)
+          do
+            typelib=$(echo ${gir} | sed 's/.gir/.typelib/')
+            g-ir-compiler ${gir} -o ${typelib} --includedir .
+          done
+          cd ..
+
+      - uses: action/upload-artifact@v4.3.3
+        with:
+          path: git/*.typelib
