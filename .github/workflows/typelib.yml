@@ -8,9 +8,6 @@ on:
   push:
     branches: [ "master" ]
     paths: [ "lib/girepository-1.0/ci.sh", "lib/girepository-1.0/girnode.patch", ".github/workflows/typelib.yml" ]
-  pull_request:
-    branches: [ "master" ]
-    paths: [ "lib/girepository-1.0/ci.sh", "lib/girepository-1.0/girnode.patch", ".github/workflows/typelib.yml" ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -40,3 +37,4 @@ jobs:
       - uses: peter-evans/create-pull-request@v6
         with:
           add-paths: lib/girepository-1.0/*.typelib
+          commit-message: Update typelibs
