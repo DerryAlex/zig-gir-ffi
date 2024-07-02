@@ -7,10 +7,10 @@ on:
   # Triggers the workflow on push or pull request events but only for the "master" branch
   push:
     branches: [ "master" ]
-    paths: "lib/tools/girnode.patch"
+    paths: [ "lib/tools/girnode.patch", ".github/workflow/typelib.yml" ]
   pull_request:
     branches: [ "master" ]
-    paths: "lib/tools/girnode.patch"
+    paths: [ "lib/tools/girnode.patch", ".github/workflow/typelib.yml" ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -29,7 +29,7 @@ jobs:
 
       - name: Install gobject-introspection
         run: |
-          apt build-dep gobject-introspection
+          sudo apt build-dep gobject-introspection
           mkdir gobject-introspection && cd gobject-introspection
           apt source gobject-introspection
           cd $(ls -F | grep '/$')
