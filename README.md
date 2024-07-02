@@ -72,7 +72,7 @@ exe.root_module.addImport("gtk", gtk.module("gtk"));
   pub fn main() u8 {
     var app = Application.new("org.gtk.example", .{}).into(GApplication);
     defer app.__call("unref", .{});
-    app.connectActivate(activate, .{}, .{});
+    _ = app.connectActivate(activate, .{}, .{});
     return @intCast(app.run(std.os.argv));
   }
   ```
