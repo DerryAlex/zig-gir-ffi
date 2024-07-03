@@ -32,9 +32,15 @@ zig build run -- -N Gtk -V 3.0
 zig build run -- --help
 ```
 
+*Note*: This project relies on `field_info_get_size` to work properly.
+Due to an [issue](https://gitlab.gnome.org/GNOME/gobject-introspection/-/issues/5) in gobject-introspection, a patched version of `g-ir-compiler` (or `gi-compile-repository`) may be required.
+As bitfields are not commonly found in GIR files, users can use typelibs from their package manager (e.g., `apt`, `msys2`) without recompiling.
+For notable exceptions (`glib`, `gobject` and `pango`), this project ships patched typelibs, which can be enabled by `--includedir lib/girepository-1.0` option.
+For example, `zig build run -- -N Adw --includedir lib/girepository-1.0` should work perfectly if you have installed `gir1.2-adw-1` package or its equivalent.
+
 ## Usage of Bindings
 
-Run `zig fetch --save=gtk4 https://url/to/bindings.tar.gz` and add the following lines to your `build.zig`. For more information, refer to [Zig Build System](https://ziglang.org/learn/build-system/).
+Run `zig fetch --save https://url/to/bindings.tar.gz` and add the following lines to your `build.zig`. For more information, refer to [Zig Build System](https://ziglang.org/learn/build-system/).
 
 ```zig
 const gtk = b.dependency("gtk4", .{});
@@ -82,43 +88,6 @@ exe.root_module.addImport("gtk", gtk.module("gtk"));
 
 - [interface](examples/interface) : Define interface
 
-### Object Interface
-
-```zig
-pub fn into(*Self, T) *T; // comptime-checked upcast
-pub fn tryInto(*Self, T) ?*T; // runtime-checked downcast
-```
-
-```zig
-pub fn connect(*Self, signal, handler, args, flags, signature) signal_id; // type-safe connect
-pub fn connectNotify(...) signal_id; // connect notify::$property
-```
-
-```zig
-pub fn get(*Self, T, property) value; // get property
-pub fn set(*Self, T, property, value) void; // set property
-```
-
-```zig
-pub fn __call(*Self, method, args) result; // call inherited functions, desired function may be shadowed
-box.__call("setHalign", .{.center}); // equivalent to box.into(Widget).setHalign(.center)
-```
-
-### GError handling
-
-```zig
-doSomething() catch {
-  var err = core.getError();
-  defer err.free();
-  std.log.err("{s}", .{err.message.?});
-  // ...
-}
-```
-
 ## Contributing
 
 Read [docs/design.md](docs/design.md) and [docs/hacking.md](docs/hacking.md).
-
-> **Note**
-> 
-> (Newly written) source code should follow [Tigerbeetle's Style](https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md) while generated code should follow [Zig's Style](https://ziglang.org/documentation/master/#Style-Guide).
