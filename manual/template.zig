@@ -1,9 +1,9 @@
 const std = @import("std");
 const meta = std.meta;
 const assert = std.debug.assert;
-const Gtk = @import("gtk.zig");
-const core = Gtk.core;
-const WidgetClass = Gtk.WidgetClass;
+const gtk = @import("gtk.zig");
+const core = gtk.core;
+const WidgetClass = gtk.WidgetClass;
 
 pub const BindingZ = struct {
     /// The name in the template XML

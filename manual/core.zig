@@ -1,6 +1,5 @@
 const glib = @import("glib.zig");
 const gobject = @import("gobject.zig");
-const gio = @import("gio.zig");
 
 const std = @import("std");
 const root = @import("root");
@@ -11,7 +10,7 @@ pub const Configs = struct {
 pub const config: Configs = if (@hasDecl(root, "gi_configs")) root.gi_configs else .{};
 
 /// Deprecated
-pub const Deprecated = @compileError("Deprecated");
+pub const Deprecated = @compileError("deprecated");
 
 // ----------
 // type begin
@@ -255,6 +254,7 @@ fn callMethod(self: anytype, comptime Self: type, comptime method: []const u8, a
 // -----------
 // value begin
 
+/// Is `T` a basic C type
 fn isBasicType(comptime T: type) bool {
     if (T == void) return true;
     if (T == bool) return true;
@@ -275,6 +275,7 @@ fn isBasicType(comptime T: type) bool {
     return false;
 }
 
+/// How should `value: T` be passed as function argument
 fn Arg(comptime T: type) type {
     return if (isBasicType(T)) T else *T;
 }
