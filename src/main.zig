@@ -69,17 +69,13 @@ pub fn main() !void {
     // Load GIR
     const repository = gi.Repository.new();
     for (includedir) |i| {
-        const p = try allocator.dupeZ(u8, i);
-        defer allocator.free(p);
-        repository.prependSearchPath(p);
+        const _i = String.new_from("{s}", .{i});
+        repository.prependSearchPath(_i.slice());
     }
     {
-        const n = try allocator.dupeZ(u8, gi_namespace);
-        defer allocator.free(n);
-        const v_dupe: ?[:0]u8 = if (gi_version) |version| try allocator.dupeZ(u8, version) else null;
-        defer if (v_dupe) |version| allocator.free(version);
-        const v: ?[*:0]u8 = if (v_dupe) |v| v.ptr else null;
-        _ = repository.require(n, v, .{}) catch |err| switch (err) {
+        const n = String.new_from("{s}", .{gi_namespace});
+        const v = String.new_from("{?s}", .{gi_version});
+        _ = repository.require(n.slice(), if (gi_version == null) null else v.slice(), .{}) catch |err| switch (err) {
             error.GError => {
                 std.log.warn("{s}", .{gi.core.getError().message.?});
                 return error.UnexpectedError;
@@ -117,11 +113,9 @@ pub fn main() !void {
             .file => {
                 const filename = try allocator.dupe(u8, e.basename);
                 try manual_files.append(filename);
-                const target = try std.mem.concat(allocator, u8, &.{ manualdir_r, "/", filename });
-                defer allocator.free(target);
-                const symlink = try std.mem.concat(allocator, u8, &.{ outputdir_r, "/", filename });
-                defer allocator.free(symlink);
-                manual_dir.symLink(target, symlink, .{}) catch |err| switch (err) {
+                const target = String.new_from("{s}/{s}", .{ manualdir_r, filename });
+                const symlink = String.new_from("{s}/{s}", .{ outputdir_r, filename });
+                manual_dir.symLink(target.slice(), symlink.slice(), .{}) catch |err| switch (err) {
                     error.PathAlreadyExists => {},
                     else => return err,
                 };
@@ -167,6 +161,11 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
         \\
     );
     for (pkg_config.extra_files) |e| {
+        const mod = std.mem.sliceTo(e, '-');
+        try build_zig.writer().print(
+            \\    _ = b.addModule("{s}", .{{ .root_source_file = b.path("{s}") }});
+            \\
+        , .{ mod, e });
         try build_zig_zon.writer().print(
             \\        "{s}",
             \\
@@ -187,13 +186,19 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
             const dependencies = repository.getDependencies(namespace.slice());
             for (dependencies.ret[0..dependencies.n_dependencies_out]) |dependencyZ| {
                 const dependency = String.new_from("{s}", .{std.mem.sliceTo(dependencyZ, '-')}).to_snake();
-                try writer.print("pub const {s} = @import(\"{s}.zig\");\n", .{ dependency, dependency });
+                try writer.print(
+                    \\pub const {s} = @import("{s}.zig");
+                    \\
+                , .{ dependency, dependency });
             }
-            try writer.writeAll("pub const core = @import(\"core.zig\");\n");
-            if (std.mem.eql(u8, namespace.slice(), "Gtk")) {
-                try writer.writeAll("pub const template = @import(\"template.zig\");\n");
-            }
-            try writer.writeAll("const std = @import(\"std\");\n");
+            try writer.writeAll(
+                \\pub const core = @import("core.zig");
+                \\
+            );
+            try writer.writeAll(
+                \\const std = @import("std");
+                \\
+            );
             try writer.writeAll(
                 \\const config = core.config;
                 \\
@@ -203,7 +208,10 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
             for (0..@intCast(n)) |i| {
                 const info = repository.getInfo(namespace.slice(), @intCast(i));
                 switch (info.getType()) {
-                    .boxed => try writer.print("pub const {s} = opaque {{}};\n", .{info.getName().?}),
+                    .boxed => try writer.print(
+                        \\pub const {s} = opaque {{}};
+                        \\
+                    , .{info.getName().?}),
                     .callback => {
                         try generateDocs(.{ .callback = info.tryInto(gi.CallbackInfo).? }, writer);
                         try writer.print("pub const {s} = ", .{info.getName().?});
@@ -215,9 +223,7 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
                     .constant => try writer.print("{}", .{info.tryInto(gi.ConstantInfo).?}),
                     .@"enum" => try writer.print("{}", .{info.tryInto(gi.EnumInfo).?}),
                     .flags => try writer.print("{}", .{info.tryInto(gi.FlagsInfo).?}),
-                    .function => {
-                        try writer.print("{}", .{info.tryInto(gi.FunctionInfo).?});
-                    },
+                    .function => try writer.print("{}", .{info.tryInto(gi.FunctionInfo).?}),
                     .interface => try writer.print("{}", .{info.tryInto(gi.InterfaceInfo).?}),
                     .object => try writer.print("{}", .{info.tryInto(gi.ObjectInfo).?}),
                     .@"struct" => try writer.print("{}", .{info.tryInto(gi.StructInfo).?}),
@@ -239,8 +245,14 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
         defer allocator.free(fmt_result.stderr);
         std.debug.assert(fmt_result.stderr.len == 0);
 
-        try build_zig.writer().print("    _ = b.addModule(\"{s}\", .{{ .root_source_file = b.path(\"{s}\") }});\n", .{ namespace.to_snake(), filename });
-        try build_zig_zon.writer().print("        \"{s}\",\n", .{filename});
+        try build_zig.writer().print(
+            \\    _ = b.addModule("{s}", .{{ .root_source_file = b.path("{s}") }});
+            \\
+        , .{ namespace.to_snake(), filename });
+        try build_zig_zon.writer().print(
+            \\        "{s}",
+            \\
+        , .{filename});
     }
 
     try build_zig.writer().writeAll(
