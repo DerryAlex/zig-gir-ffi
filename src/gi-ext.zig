@@ -42,10 +42,12 @@ fn Iterator(comptime Context: type, comptime Item: type) type {
 const std = @import("std");
 const root = @import("root");
 const String = @import("string.zig").String;
+// TODO: cleanup String related stuff
 
 // extensions
 pub const BaseInfoExt = struct {
-    const InfoType = enum(u32) {
+    /// Legacy `GIInfoType`
+    pub const InfoType = enum(u32) {
         invalid = 0,
         function = 1,
         callback = 2,
@@ -68,6 +70,7 @@ pub const BaseInfoExt = struct {
         unresolved = 19,
     };
 
+    /// Legacy `g_base_info_get_type`
     pub fn getType(self: *BaseInfo) InfoType {
         if (self.tryInto(ArgInfo)) |_| return .arg;
         if (self.tryInto(CallbackInfo)) |_| return .callback;
@@ -91,6 +94,11 @@ pub const BaseInfoExt = struct {
 };
 
 pub const ArgInfoExt = struct {
+    /// Print `arg_name: arg_type`
+    ///
+    /// Specifiers
+    /// - t: only print `arg_name`
+    /// - p: convert `arg_type` to pointer aggressively (patch for signal param)
     pub fn format(self_immut: *const ArgInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *ArgInfo = @constCast(self_immut);
@@ -144,6 +152,7 @@ pub const ArgInfoExt = struct {
 };
 
 pub const CallableInfoExt = struct {
+    /// Collect all `ArgInfo`
     pub fn argsAlloc(self: *CallableInfo, allocator: std.mem.Allocator) ![]*ArgInfo {
         const args = try allocator.alloc(*ArgInfo, @intCast(self.getNArgs()));
         for (args, 0..) |*arg, index| {
@@ -153,10 +162,17 @@ pub const CallableInfoExt = struct {
     }
 
     const ArgsIter = Iterator(*CallableInfo, *ArgInfo);
-    pub fn argsIter(self: *CallableInfo) ArgsIter {
+    pub fn args_iter(self: *CallableInfo) ArgsIter {
         return .{ .context = self, .capacity = self.getNArgs(), .next_fn = CallableInfo.getArg };
     }
 
+    /// Print `(arg_names...) return_type`
+    ///
+    /// Specifiers:
+    /// - e: print `(arg_names...: arg_types...) return_type`
+    /// - o: print `(arg_types...) return_type`
+    /// - c: addtionally print `callconv(.C)`
+    /// - v: `_error` instead of `&_error` (vfunc pass in `_error`)
     pub fn format(self_immut: *const CallableInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *CallableInfo = @constCast(self_immut);
@@ -189,7 +205,7 @@ pub const CallableInfoExt = struct {
             }
         }
 
-        var iter = self.argsIter();
+        var iter = self.args_iter();
         while (iter.next()) |arg| {
             if (first) {
                 first = false;
@@ -253,6 +269,7 @@ pub const CallableInfoExt = struct {
 };
 
 pub const CallbackInfoExt = struct {
+    /// Print `*const fn(arg_names...: arg_types...) callconv(.C) return_type`
     pub fn format(self_immut: *CallbackInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *CallbackInfo = @constCast(self_immut);
@@ -278,6 +295,7 @@ pub const ConstantInfoExt = struct {
         return ret;
     }
 
+    /// Print `pub const name = value;`
     pub fn format(self_immut: *const ConstantInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *ConstantInfo = @constCast(self_immut);
@@ -323,15 +341,16 @@ pub const ConstantInfoExt = struct {
 
 pub const EnumInfoExt = struct {
     const ValueIter = Iterator(*EnumInfo, *ValueInfo);
-    pub fn valueIter(self: *EnumInfo) ValueIter {
+    pub fn value_iter(self: *EnumInfo) ValueIter {
         return .{ .context = self, .capacity = self.getNValues(), .next_fn = EnumInfo.getValue };
     }
 
     const MethodIter = Iterator(*EnumInfo, *FunctionInfo);
-    pub fn methodIter(self: *EnumInfo) MethodIter {
+    pub fn method_iter(self: *EnumInfo) MethodIter {
         return .{ .context = self, .capacity = self.getNMethods(), .next_fn = EnumInfo.getMethod };
     }
 
+    /// Print `pub const name = enum(backing_int) {...}`
     pub fn format(self_immut: *const EnumInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *EnumInfo = @constCast(self_immut);
@@ -359,7 +378,7 @@ pub const EnumInfoExt = struct {
         const allocator = gpa.allocator();
         var values = std.AutoHashMap(i64, void).init(allocator);
         defer values.deinit();
-        var iter = self.valueIter();
+        var iter = self.value_iter();
         while (iter.next()) |value| {
             if (values.contains(value.getValue())) {
                 continue;
@@ -372,9 +391,10 @@ pub const EnumInfoExt = struct {
             }
             try writer.writeAll(",\n");
         }
-        iter = self.valueIter();
+        iter = self.value_iter();
         while (iter.next()) |value| {
             if (values.remove(value.getValue())) continue;
+            // emit alias
             try writer.writeAll("pub const ");
             switch (self.getStorageType()) {
                 .int32 => try writer.print("{e}", .{value}),
@@ -383,7 +403,7 @@ pub const EnumInfoExt = struct {
             }
             try writer.writeAll(";\n");
         }
-        var m_iter = self.methodIter();
+        var m_iter = self.method_iter();
         while (m_iter.next()) |method| {
             try writer.print("\n{}", .{method});
         }
@@ -393,6 +413,7 @@ pub const EnumInfoExt = struct {
 };
 
 pub const FlagsInfoExt = struct {
+    /// Print `pub const name = packed struct(backing_int) {...}`
     pub fn format(self_immut: *const FlagsInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *FlagsInfo = @constCast(self_immut);
@@ -426,7 +447,7 @@ pub const FlagsInfoExt = struct {
             }
             values.deinit();
         }
-        var iter = self.into(EnumInfo).valueIter();
+        var iter = self.into(EnumInfo).value_iter();
         while (iter.next()) |value| {
             const _value = value.getValue();
             if (_value <= 0 or !std.math.isPowerOfTwo(_value)) {
@@ -455,12 +476,13 @@ pub const FlagsInfoExt = struct {
         if (padding_bits != 0) {
             try writer.print("_: u{d} = 0,\n", .{padding_bits});
         }
-        iter = self.into(EnumInfo).valueIter();
+        iter = self.into(EnumInfo).value_iter();
         while (iter.next()) |value| {
             const _value = value.getValue();
             if (_value == 0 or (_value > 0 and std.math.isPowerOfTwo(_value))) {
                 continue;
             }
+            // emit multi-bit flags
             try writer.writeAll("pub const ");
             switch (self.into(EnumInfo).getStorageType()) {
                 .int32 => try writer.print("{b}", .{value}),
@@ -469,7 +491,7 @@ pub const FlagsInfoExt = struct {
             }
             try writer.writeAll(";\n");
         }
-        var m_iter = self.into(EnumInfo).methodIter();
+        var m_iter = self.into(EnumInfo).method_iter();
         while (m_iter.next()) |method| {
             try writer.print("\n{}", .{method});
         }
@@ -479,6 +501,7 @@ pub const FlagsInfoExt = struct {
 };
 
 pub const FieldInfoExt = struct {
+    /// Print `field_name: field_type,`
     pub fn format(self_immut: *const FieldInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *FieldInfo = @constCast(self_immut);
@@ -521,6 +544,7 @@ pub const FieldInfoExt = struct {
 };
 
 pub const FunctionInfoExt = struct {
+    /// Print `pub fn name(...) ...`
     pub fn format(self_immut: *const FunctionInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *FunctionInfo = @constCast(self_immut);
@@ -530,6 +554,7 @@ pub const FunctionInfoExt = struct {
             }
         }
 
+        // TODO: explain the logic, which is kind of complex
         const SliceInfo = struct {
             is_slice_ptr: bool = false,
             slice_len: usize = undefined,
@@ -858,35 +883,36 @@ pub const FunctionInfoExt = struct {
 
 pub const InterfaceInfoExt = struct {
     const PrerequisiteIter = Iterator(*InterfaceInfo, *BaseInfo);
-    pub fn prerequisiteIter(self: *InterfaceInfo) PrerequisiteIter {
+    pub fn prerequisite_iter(self: *InterfaceInfo) PrerequisiteIter {
         return .{ .context = self, .capacity = self.getNPrerequisites(), .next_fn = InterfaceInfo.getPrerequisite };
     }
 
     const PropertyIter = Iterator(*InterfaceInfo, *PropertyInfo);
-    pub fn propertyIter(self: *InterfaceInfo) PropertyIter {
+    pub fn property_iter(self: *InterfaceInfo) PropertyIter {
         return .{ .context = self, .capacity = self.getNProperties(), .next_fn = InterfaceInfo.getProperty };
     }
 
     const MethodIter = Iterator(*InterfaceInfo, *FunctionInfo);
-    pub fn methodIter(self: *InterfaceInfo) MethodIter {
+    pub fn method_iter(self: *InterfaceInfo) MethodIter {
         return .{ .context = self, .capacity = self.getNMethods(), .next_fn = InterfaceInfo.getMethod };
     }
 
     const SignalIter = Iterator(*InterfaceInfo, *SignalInfo);
-    pub fn signalIter(self: *InterfaceInfo) SignalIter {
+    pub fn signal_iter(self: *InterfaceInfo) SignalIter {
         return .{ .context = self, .capacity = self.getNSignals(), .next_fn = InterfaceInfo.getSignal };
     }
 
     const VFuncIter = Iterator(*InterfaceInfo, *VFuncInfo);
-    pub fn vfuncIter(self: *InterfaceInfo) VFuncIter {
+    pub fn vfunc_iter(self: *InterfaceInfo) VFuncIter {
         return .{ .context = self, .capacity = self.getNVfuncs(), .next_fn = InterfaceInfo.getVfunc };
     }
 
     const ConstantIter = Iterator(*InterfaceInfo, *ConstantInfo);
-    pub fn constantIter(self: *InterfaceInfo) ConstantIter {
+    pub fn constant_iter(self: *InterfaceInfo) ConstantIter {
         return .{ .context = self, .capacity = self.getNConstants(), .next_fn = InterfaceInfo.getConstant };
     }
 
+    /// Print `pub const name = opaque {...}`
     pub fn format(self_immut: *const InterfaceInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *InterfaceInfo = @constCast(self_immut);
@@ -897,7 +923,7 @@ pub const InterfaceInfoExt = struct {
         }
 
         try root.generateDocs(.{ .interface = self }, writer);
-        var p_iter = self.propertyIter();
+        var p_iter = self.property_iter();
         while (p_iter.next()) |property| {
             try writer.print("{}", .{property});
         }
@@ -907,7 +933,7 @@ pub const InterfaceInfoExt = struct {
         } else {
             try writer.print("pub const {s} = opaque {{\n", .{name});
         }
-        var pre_iter = self.prerequisiteIter();
+        var pre_iter = self.prerequisite_iter();
         if (pre_iter.capacity > 0) {
             var first = true;
             try writer.writeAll("pub const Prerequisites = [_]type{");
@@ -921,19 +947,19 @@ pub const InterfaceInfoExt = struct {
             }
             try writer.writeAll("};\n");
         }
-        var c_iter = self.constantIter();
+        var c_iter = self.constant_iter();
         while (c_iter.next()) |constant| {
             try writer.print("{}", .{constant});
         }
-        var m_iter = self.methodIter();
+        var m_iter = self.method_iter();
         while (m_iter.next()) |method| {
             try writer.print("{}", .{method});
         }
-        var v_iter = self.vfuncIter();
+        var v_iter = self.vfunc_iter();
         while (v_iter.next()) |vfunc| {
             try writer.print("{}", .{vfunc});
         }
-        var s_iter = self.signalIter();
+        var s_iter = self.signal_iter();
         while (s_iter.next()) |signal| {
             try writer.print("{}", .{signal});
         }
@@ -945,40 +971,41 @@ pub const InterfaceInfoExt = struct {
 
 pub const ObjectInfoExt = struct {
     const ConstantIter = Iterator(*ObjectInfo, *ConstantInfo);
-    pub fn constantIter(self: *ObjectInfo) ConstantIter {
+    pub fn constant_iter(self: *ObjectInfo) ConstantIter {
         return .{ .context = self, .capacity = self.getNConstants(), .next_fn = ObjectInfo.getConstant };
     }
 
     const FieldIter = Iterator(*ObjectInfo, *FieldInfo);
-    pub fn fieldIter(self: *ObjectInfo) FieldIter {
+    pub fn field_iter(self: *ObjectInfo) FieldIter {
         return .{ .context = self, .capacity = self.getNFields(), .next_fn = ObjectInfo.getField };
     }
 
     const InterfaceIter = Iterator(*ObjectInfo, *InterfaceInfo);
-    pub fn interfaceIter(self: *ObjectInfo) InterfaceIter {
+    pub fn interface_iter(self: *ObjectInfo) InterfaceIter {
         return .{ .context = self, .capacity = self.getNInterfaces(), .next_fn = ObjectInfo.getInterface };
     }
 
     const MethodIter = Iterator(*ObjectInfo, *FunctionInfo);
-    pub fn methodIter(self: *ObjectInfo) MethodIter {
+    pub fn method_iter(self: *ObjectInfo) MethodIter {
         return .{ .context = self, .capacity = self.getNMethods(), .next_fn = ObjectInfo.getMethod };
     }
 
     const PropertyIter = Iterator(*ObjectInfo, *PropertyInfo);
-    pub fn propertyIter(self: *ObjectInfo) PropertyIter {
+    pub fn property_iter(self: *ObjectInfo) PropertyIter {
         return .{ .context = self, .capacity = self.getNProperties(), .next_fn = ObjectInfo.getProperty };
     }
 
     const SignalIter = Iterator(*ObjectInfo, *SignalInfo);
-    pub fn signalIter(self: *ObjectInfo) SignalIter {
+    pub fn signal_iter(self: *ObjectInfo) SignalIter {
         return .{ .context = self, .capacity = self.getNSignals(), .next_fn = ObjectInfo.getSignal };
     }
 
     const VFuncIter = Iterator(*ObjectInfo, *VFuncInfo);
-    pub fn vfuncIter(self: *ObjectInfo) VFuncIter {
+    pub fn vfunc_iter(self: *ObjectInfo) VFuncIter {
         return .{ .context = self, .capacity = self.getNVfuncs(), .next_fn = ObjectInfo.getVfunc };
     }
 
+    /// Print `pub const name = extern struct {...}`
     pub fn format(self_immut: *const ObjectInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *ObjectInfo = @constCast(self_immut);
@@ -989,12 +1016,12 @@ pub const ObjectInfoExt = struct {
         }
 
         try root.generateDocs(.{ .object = self }, writer);
-        var p_iter = self.propertyIter();
+        var p_iter = self.property_iter();
         while (p_iter.next()) |property| {
             try writer.print("{}", .{property});
         }
         const name = self.into(BaseInfo).getName().?;
-        var iter = self.fieldIter();
+        var iter = self.field_iter();
         try writer.print("pub const {s} = ", .{name});
         if (self.into(BaseInfo).isDeprecated()) {
             try writer.writeAll("if (config.disable_deprecated) core.Deprecated else ");
@@ -1007,7 +1034,7 @@ pub const ObjectInfoExt = struct {
         if (BitField.remaining != null) {
             try BitField.end(writer);
         }
-        var i_iter = self.interfaceIter();
+        var i_iter = self.interface_iter();
         if (i_iter.capacity > 0) {
             var first = true;
             try writer.writeAll("pub const Interfaces = [_]type{");
@@ -1027,19 +1054,19 @@ pub const ObjectInfoExt = struct {
         if (self.getClassStruct()) |_class| {
             try writer.print("pub const Class = {s}.{s};\n", .{ String.new_from("{s}", .{std.mem.span(_class.into(BaseInfo).getNamespace().?)}).to_snake(), _class.into(BaseInfo).getName().? });
         }
-        var c_iter = self.constantIter();
+        var c_iter = self.constant_iter();
         while (c_iter.next()) |constant| {
             try writer.print("{}", .{constant});
         }
-        var m_iter = self.methodIter();
+        var m_iter = self.method_iter();
         while (m_iter.next()) |method| {
             try writer.print("{}", .{method});
         }
-        var v_iter = self.vfuncIter();
+        var v_iter = self.vfunc_iter();
         while (v_iter.next()) |vfunc| {
             try writer.print("{}", .{vfunc});
         }
-        var s_iter = self.signalIter();
+        var s_iter = self.signal_iter();
         while (s_iter.next()) |signal| {
             try writer.print("{}", .{signal});
         }
@@ -1050,6 +1077,7 @@ pub const ObjectInfoExt = struct {
 };
 
 pub const PropertyInfoExt = struct {
+    /// Print nothing (except docs)
     pub fn format(self_immut: *const PropertyInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *PropertyInfo = @constCast(self_immut);
@@ -1064,6 +1092,7 @@ pub const PropertyInfoExt = struct {
 };
 
 pub const RegisteredTypeInfoExt = struct {
+    /// Print `pub fn gType() core.Type {...}`
     pub fn format(self_immut: *const RegisteredTypeInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *RegisteredTypeInfo = @constCast(self_immut);
@@ -1123,6 +1152,7 @@ pub const RegisteredTypeInfoExt = struct {
 };
 
 pub const SignalInfoExt = struct {
+    /// Print `pub fn connectSignal(self, handler, args, flags) usize {...}`
     pub fn format(self_immut: *const SignalInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *SignalInfo = @constCast(self_immut);
@@ -1155,7 +1185,7 @@ pub const SignalInfoExt = struct {
             try writer.print("{m}", .{return_type});
         }
         try writer.print(", *{s}", .{container_name});
-        var iter = self.into(CallableInfo).argsIter();
+        var iter = self.into(CallableInfo).args_iter();
         while (iter.next()) |arg| {
             try writer.print(", {tp}", .{arg});
         }
@@ -1169,15 +1199,16 @@ pub const SignalInfoExt = struct {
 
 pub const StructInfoExt = struct {
     const FieldIter = Iterator(*StructInfo, *FieldInfo);
-    pub fn fieldIter(self: *StructInfo) FieldIter {
+    pub fn field_iter(self: *StructInfo) FieldIter {
         return .{ .context = self, .capacity = self.getNFields(), .next_fn = StructInfo.getField };
     }
 
     const MethodIter = Iterator(*StructInfo, *FunctionInfo);
-    pub fn methodIter(self: *StructInfo) MethodIter {
+    pub fn method_iter(self: *StructInfo) MethodIter {
         return .{ .context = self, .capacity = self.getNMethods(), .next_fn = StructInfo.getMethod };
     }
 
+    /// Print `pub const name = extern struct {...}`
     pub fn format(self_immut: *const StructInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *StructInfo = @constCast(self_immut);
@@ -1196,7 +1227,7 @@ pub const StructInfoExt = struct {
         }
         try writer.print("{s}{{\n", .{if (self.getSize() == 0) "opaque" else "extern struct"});
         BitField.reset();
-        var iter = self.fieldIter();
+        var iter = self.field_iter();
         while (iter.next()) |field| {
             // TODO: https://github.com/ziglang/zig/issues/12325
             if (std.mem.eql(u8, namespace, "GObject") and std.mem.eql(u8, name, "Closure") and std.mem.eql(u8, std.mem.span(field.into(BaseInfo).getName().?), "notifiers")) {
@@ -1208,7 +1239,7 @@ pub const StructInfoExt = struct {
         if (BitField.remaining != null) {
             try BitField.end(writer);
         }
-        var m_iter = self.methodIter();
+        var m_iter = self.method_iter();
         while (m_iter.next()) |method| {
             try writer.print("{}", .{method});
         }
@@ -1218,6 +1249,13 @@ pub const StructInfoExt = struct {
 };
 
 pub const TypeInfoExt = struct {
+    /// Print type
+    ///
+    /// Specifiers:
+    /// - m: muttable
+    /// - n: nullable
+    /// - o: out
+    /// - p: optional
     pub fn format(self_immut: *const TypeInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *TypeInfo = @constCast(self_immut);
@@ -1394,15 +1432,16 @@ pub const TypeInfoExt = struct {
 
 pub const UnionInfoExt = struct {
     const FieldIter = Iterator(*UnionInfo, *FieldInfo);
-    pub fn fieldIter(self: *UnionInfo) FieldIter {
+    pub fn field_iter(self: *UnionInfo) FieldIter {
         return .{ .context = self, .capacity = self.getNFields(), .next_fn = UnionInfo.getField };
     }
 
     const MethodIter = Iterator(*UnionInfo, *FunctionInfo);
-    pub fn methodIter(self: *UnionInfo) MethodIter {
+    pub fn method_iter(self: *UnionInfo) MethodIter {
         return .{ .context = self, .capacity = self.getNMethods(), .next_fn = UnionInfo.getMethod };
     }
 
+    /// Print `pub const name = extern union {...}`
     pub fn format(self_immut: *const UnionInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *UnionInfo = @constCast(self_immut);
@@ -1418,11 +1457,11 @@ pub const UnionInfoExt = struct {
             try writer.writeAll("if (config.disable_deprecated) core.Deprecated else ");
         }
         try writer.writeAll("extern union{\n");
-        var iter = self.fieldIter();
+        var iter = self.field_iter();
         while (iter.next()) |field| {
             try writer.print("{}", .{field});
         }
-        var m_iter = self.methodIter();
+        var m_iter = self.method_iter();
         while (m_iter.next()) |method| {
             try writer.print("{}", .{method});
         }
@@ -1432,6 +1471,12 @@ pub const UnionInfoExt = struct {
 };
 
 pub const ValueInfoExt = struct {
+    /// Print value
+    ///
+    /// Specifiers:
+    /// - u: unsigned
+    /// - e: @enumFromInt
+    /// - b: @bitCast
     pub fn format(self_immut: *const ValueInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *ValueInfo = @constCast(self_immut);
@@ -1461,6 +1506,7 @@ pub const ValueInfoExt = struct {
 };
 
 pub const VFuncInfoExt = struct {
+    /// Print `pub fn nameV(...) ...`
     pub fn format(self_immut: *const VFuncInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *VFuncInfo = @constCast(self_immut);
@@ -1508,6 +1554,7 @@ pub const VFuncInfoExt = struct {
 
 pub const UnresolvedInfoExt = struct {};
 
+// TODO: document this?
 const BitField = struct {
     var remaining: ?usize = null;
 
