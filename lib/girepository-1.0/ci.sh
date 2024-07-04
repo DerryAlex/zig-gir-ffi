@@ -4,7 +4,7 @@ gir_version="0.19.2"
 
 apt-get source gobject-introspection
 cd $(ls -F | grep 'gobject-introspection' | grep '/$')
-patch girepository/girnode.c ../../girnode.patch
+patch girepository/girnode.c ../girnode.patch
 meson setup build && cd build
 meson compile
 export PATH=$(pwd)/tools:${PATH}
