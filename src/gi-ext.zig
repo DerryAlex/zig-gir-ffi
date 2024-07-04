@@ -526,14 +526,9 @@ pub const FieldInfoExt = struct {
                 .int32, .uint32 => 32,
                 else => unreachable,
             };
-            if (BitField.remaining == null) {
-                try BitField.begin(field_container_bits, self.getOffset(), writer);
-            } else {
-                try BitField.ensure(field_size, field_container_bits, self.getOffset(), writer);
-            }
-            BitField.emit(field_size);
-        } else if (BitField.remaining != null) {
-            try BitField.end(writer);
+            try BitField._emit(writer, field_size, field_container_bits, self.getOffset());
+        } else {
+            try BitField._end(writer);
         }
         try writer.print("{s}", .{field_name});
         if (field_size == 0) {
@@ -1034,13 +1029,10 @@ pub const ObjectInfoExt = struct {
             try writer.writeAll("if (config.disable_deprecated) core.Deprecated else ");
         }
         try writer.print("{s} {{\n", .{if (iter.capacity == 0) "opaque" else "extern struct"});
-        BitField.reset();
         while (iter.next()) |field| {
             try writer.print("{}", .{field});
         }
-        if (BitField.remaining != null) {
-            try BitField.end(writer);
-        }
+        try BitField._end(writer);
         var i_iter = self.interface_iter();
         if (i_iter.capacity > 0) {
             var first = true;
@@ -1233,7 +1225,6 @@ pub const StructInfoExt = struct {
             try writer.writeAll("if (config.disable_deprecated) core.Deprecated else ");
         }
         try writer.print("{s}{{\n", .{if (self.getSize() == 0) "opaque" else "extern struct"});
-        BitField.reset();
         var iter = self.field_iter();
         while (iter.next()) |field| {
             // TODO: https://github.com/ziglang/zig/issues/12325
@@ -1243,9 +1234,7 @@ pub const StructInfoExt = struct {
             }
             try writer.print("{}", .{field});
         }
-        if (BitField.remaining != null) {
-            try BitField.end(writer);
-        }
+        try BitField._end(writer);
         var m_iter = self.method_iter();
         while (m_iter.next()) |method| {
             try writer.print("{}", .{method});
@@ -1561,39 +1550,25 @@ pub const VFuncInfoExt = struct {
 
 pub const UnresolvedInfoExt = struct {};
 
-// TODO: document this?
 const BitField = struct {
     var remaining: ?usize = null;
 
-    pub fn reset() void {
-        BitField.remaining = null;
-    }
-
-    pub fn begin(bits: usize, offset: usize, writer: anytype) !void {
-        std.debug.assert(BitField.remaining == null);
-        BitField.remaining = bits;
-        try writer.print("_{d} : packed struct(u{d}) {{\n", .{ offset, bits });
-    }
-
-    pub fn end(writer: anytype) !void {
-        std.debug.assert(BitField.remaining != null);
-        if (BitField.remaining.? != 0) {
+    /// Make sure bitfield ends
+    pub fn _end(writer: std.io.AnyWriter) anyerror!void {
+        if (remaining != null) {
             try writer.print("_: u{d},\n", .{BitField.remaining.?});
-        }
-        BitField.remaining = null;
-        try writer.writeAll("},\n");
-    }
-
-    pub fn ensure(bits: usize, alloc: usize, offset: usize, writer: anytype) !void {
-        std.debug.assert(BitField.remaining != null);
-        if (BitField.remaining.? < bits) {
-            try BitField.end(writer);
-            try BitField.begin(alloc, offset, writer);
+            try writer.writeAll("},\n");
+            remaining = null;
         }
     }
 
-    pub fn emit(bits: usize) void {
-        std.debug.assert(BitField.remaining != null);
-        BitField.remaining.? -= bits;
+    /// Alloc `bits`. If failed, create a new container of `container_size` and retry.
+    pub fn _emit(writer: std.io.AnyWriter, bits: usize, container_size: usize, container_name: usize) anyerror!void {
+        if ((remaining orelse 0) < bits) {
+            try _end(writer);
+            remaining = container_size;
+            try writer.print("_{d}: packed struct(u{d}) {{\n", .{ container_name, container_size });
+        }
+        remaining.? -= bits;
     }
 };
