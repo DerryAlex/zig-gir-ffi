@@ -546,6 +546,25 @@ pub const FieldInfoExt = struct {
 };
 
 pub const FunctionInfoExt = struct {
+    /// Infomation to convert `[*]T, usize` to `[]T`
+    const SliceInfo = struct {
+        is_slice_ptr: bool = false,
+        slice_len: usize = undefined,
+        is_slice_len: bool = false,
+        slice_ptr: usize = undefined,
+    };
+
+    /// Infomation to convert `void (*)(void), void*` to `handler, args`
+    const ClosureInfo = struct {
+        scope: gi.ScopeType = .invalid,
+        is_func: bool = false,
+        closure_data: usize = undefined,
+        is_data: bool = false,
+        closure_func: usize = undefined,
+        is_destroy: bool = false,
+        closure_destroy: usize = undefined,
+    };
+
     /// Print `pub fn name(...) ...`
     pub fn format(self_immut: *const FunctionInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
@@ -556,43 +575,34 @@ pub const FunctionInfoExt = struct {
             }
         }
 
-        // TODO: explain the logic, which is kind of complex
-        const SliceInfo = struct {
-            is_slice_ptr: bool = false,
-            slice_len: usize = undefined,
-            is_slice_len: bool = false,
-            slice_ptr: usize = undefined,
-        };
-        const ClosureInfo = struct {
-            scope: gi.ScopeType = .invalid,
-            is_func: bool = false,
-            closure_data: usize = undefined,
-            is_data: bool = false,
-            closure_func: usize = undefined,
-            is_destroy: bool = false,
-            closure_destroy: usize = undefined,
-        };
-
+        // create a `FixedBufferAllocator` to alloc `ArgInfo`s on stack
         var buffer: [4096]u8 = undefined;
         var fixed_buffer_allocator = std.heap.FixedBufferAllocator.init(buffer[0..]);
         const allocator = fixed_buffer_allocator.allocator();
+        // obtain infomation about parameters
+        const args = self.into(CallableInfo).argsAlloc(allocator) catch @panic("Out of Memory");
+        // initialize slice info and closure info
+        var slice_info = allocator.alloc(SliceInfo, args.len) catch @panic("Out of Memory");
+        @memset(slice_info[0..], .{});
+        var closure_info = allocator.alloc(ClosureInfo, args.len) catch @panic("Out of Memory");
+        @memset(closure_info[0..], .{});
+
+        // print function name
         const func_name = self.into(BaseInfo).name_string().to_camel();
         try root.generateDocs(.{ .function = self }, writer);
         if (self.into(BaseInfo).isDeprecated()) {
             try writer.print("pub const {s} = if (config.disable_deprecated) core.Deprecated else struct {{", .{func_name.to_identifier()});
         }
         try writer.print("pub fn {s}", .{func_name.to_identifier()});
-        const return_type = self.into(CallableInfo).getReturnType();
-        const args = self.into(CallableInfo).argsAlloc(allocator) catch @panic("Out of Memory");
-        var slice_info = allocator.alloc(SliceInfo, args.len) catch @panic("Out of Memory");
-        @memset(slice_info[0..], .{});
-        var closure_info = allocator.alloc(ClosureInfo, args.len) catch @panic("Out of Memory");
-        @memset(closure_info[0..], .{});
+
+        // analyse parameters
         var n_out_param: usize = 0;
         for (args, 0..) |arg, idx| {
+            // collect out parameter info
             if (arg.getDirection() == .out and !arg.isCallerAllocates()) {
                 n_out_param += 1;
             }
+            // collect slice info
             const arg_type = arg.getTypeInfo();
             if (arg_type.getArrayLengthIndex()) |pos| {
                 slice_info[idx].is_slice_ptr = true;
@@ -602,6 +612,7 @@ pub const FunctionInfoExt = struct {
                     slice_info[pos].slice_ptr = idx;
                 }
             }
+            // collect closure info
             const arg_name = std.mem.span(arg.into(BaseInfo).getName().?);
             if (arg.getScope() != .invalid and arg.getClosureIndex() != null and !std.mem.eql(u8, "data", arg_name[arg_name.len - 4 .. arg_name.len])) {
                 closure_info[idx].scope = arg.getScope();
@@ -618,50 +629,71 @@ pub const FunctionInfoExt = struct {
                 }
             }
         }
+
+        // analyse return type
+        const return_type = self.into(CallableInfo).getReturnType();
         const return_bool = return_type.getTag() == .boolean;
+        // some function returns true if out parameters are valid
         const throw_bool = return_bool and (n_out_param > 0) and (self.into(CallableInfo).isMethod() and func_name.len >= 3 and std.mem.eql(u8, "get", func_name.slice()[0..3]));
         const throw_error = self.into(CallableInfo).canThrowGerror();
         const skip_return = self.into(CallableInfo).skipReturn();
         const real_skip_return = skip_return or throw_bool;
         const n_out = n_out_param + @intFromBool(!real_skip_return);
+
         {
+            // parameters
             try writer.writeAll("(");
             var first = true;
+
             if (self.into(CallableInfo).isMethod()) {
                 if (first) {
                     first = false;
                 } else {
                     try writer.writeAll(", ");
                 }
+
                 const container = self.into(BaseInfo).getContainer().?;
                 try writer.print("self: *{s}", .{container.getName().?});
             }
+
             for (args, 0..) |arg, idx| {
+                // skip out parameter
                 if (arg.getDirection() == .out and !arg.isCallerAllocates()) continue;
+                // skip slice len
                 if (slice_info[idx].is_slice_len) continue;
+                // skip closure data
                 if (closure_info[idx].is_data) continue;
+                // skip closure destroy
                 if (closure_info[idx].is_destroy) continue;
+
                 if (first) {
                     first = false;
                 } else {
                     try writer.writeAll(", ");
                 }
+
                 if (slice_info[idx].is_slice_ptr) {
+                    // slice
                     try writer.print("_{s}s: ", .{arg.into(BaseInfo).getName().?});
                     if (arg.isOptional()) {
                         try writer.writeAll("?");
                     }
                     try writer.print("[]{}", .{arg.getTypeInfo().getParamType(0).?});
                 } else if (closure_info[idx].is_func) {
+                    // closure
                     try writer.print("{s}: anytype, {s}_args: anytype", .{ arg.into(BaseInfo).getName().?, arg.into(BaseInfo).getName().? });
                 } else {
                     try writer.print("{}", .{arg});
                 }
             }
+
             try writer.writeAll(") ");
+
+            // return type
             if (throw_error) {
                 try writer.writeAll("error{GError}!");
-            } else if (throw_bool) {
+            }
+            if (throw_bool) {
                 try writer.writeAll("?");
             }
             if (n_out > 1) {
@@ -671,10 +703,12 @@ pub const FunctionInfoExt = struct {
                 if (n_out > 1) {
                     try writer.writeAll("ret: ");
                 }
+
                 var ctor = false;
                 if (self.getFlags().is_constructor) {
                     ctor = true;
                 }
+
                 if (return_bool) {
                     try writer.writeAll("bool");
                 } else if (ctor) {
@@ -690,6 +724,7 @@ pub const FunctionInfoExt = struct {
                         try writer.print("{m}", .{return_type});
                     }
                 }
+
                 if (n_out > 1) {
                     try writer.writeAll(",\n");
                 }
@@ -698,9 +733,11 @@ pub const FunctionInfoExt = struct {
                 for (args, 0..) |arg, idx| {
                     if (arg.getDirection() != .out or arg.isCallerAllocates()) continue;
                     if (slice_info[idx].is_slice_len) continue;
+
                     if (n_out > 1) {
                         try writer.print("{s}: ", .{arg.into(BaseInfo).getName().?});
                     }
+
                     if (slice_info[idx].is_slice_ptr) {
                         if (arg.isOptional()) {
                             try writer.writeAll("?");
@@ -713,6 +750,7 @@ pub const FunctionInfoExt = struct {
                             try writer.print("{m}", .{arg.getTypeInfo()});
                         }
                     }
+
                     if (n_out > 1) {
                         try writer.writeAll(",\n");
                     }
@@ -722,6 +760,8 @@ pub const FunctionInfoExt = struct {
                 try writer.writeAll("}");
             }
         }
+
+        // function body
         try writer.writeAll(" {\n");
         // prepare error
         if (throw_error) {
@@ -812,24 +852,24 @@ pub const FunctionInfoExt = struct {
             }
             try writer.print("const _{s} = &{s}_out;\n", .{ arg_name, arg_name });
         }
+        // call C function
         try writer.writeAll("const cFn = @extern(*const fn");
         try writer.print("{oc}", .{self.into(CallableInfo)});
         try writer.print(", .{{ .name = \"{s}\"}});\n", .{self.getSymbol()});
         try writer.writeAll("const ret = cFn");
         try writer.print("{}", .{self.into(CallableInfo)});
         try writer.writeAll(";\n");
+        // return
         if (skip_return) {
             try writer.writeAll("_ = ret;\n");
         }
         if (throw_error) {
-            if (throw_bool) {
-                try writer.writeAll("_ = ret;\n");
-            }
             try writer.writeAll("if (_error) |some| {\n");
             try writer.writeAll("    core.setError(some);\n");
             try writer.writeAll("    return error.GError;\n");
             try writer.writeAll("}\n");
-        } else if (throw_bool) {
+        }
+        if (throw_bool) {
             try writer.writeAll("if (!ret) return null;\n");
         }
         try writer.writeAll("return ");
@@ -877,6 +917,7 @@ pub const FunctionInfoExt = struct {
         }
         try writer.writeAll(";\n");
         try writer.writeAll("}\n");
+
         if (self.into(BaseInfo).isDeprecated()) {
             try writer.print("}}.{s};\n", .{func_name.to_identifier()});
         }
