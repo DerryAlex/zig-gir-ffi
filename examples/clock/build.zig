@@ -8,6 +8,17 @@ pub fn build(b: *std.Build) !void {
 
     const gtk = b.dependency("gtk", .{});
 
+    const exe_check = b.addExecutable(.{
+        .name = "main",
+        .root_source_file = b.path("main.zig"),
+        .optimize = optimize,
+        .target = target,
+    });
+    exe_check.root_module.addImport("gtk", gtk.module("gtk"));
+    exe_check.linkLibC();
+    const check = b.step("check", "Check if compiles");
+    check.dependOn(&exe_check.step);
+
     const exe = b.addExecutable(.{
         .name = "main",
         .root_source_file = b.path("main.zig"),
