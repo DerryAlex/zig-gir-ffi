@@ -1,5 +1,5 @@
-const glib = @import("glib.zig");
-const gobject = @import("gobject.zig");
+const glib = @import("glib");
+const gobject = @import("gobject");
 
 const std = @import("std");
 const root = @import("root");

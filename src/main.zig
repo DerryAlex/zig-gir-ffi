@@ -163,9 +163,9 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
     for (pkg_config.extra_files) |e| {
         const mod = std.mem.sliceTo(e, '.');
         try build_zig.writer().print(
-            \\    _ = b.addModule("{s}", .{{ .root_source_file = b.path("{s}") }});
+            \\    var {s} = b.addModule("{s}", .{{ .root_source_file = b.path("{s}") }});
             \\
-        , .{ mod, e });
+        , .{ mod, mod, e });
         try build_zig_zon.writer().print(
             \\        "{s}",
             \\
@@ -187,12 +187,12 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
             for (dependencies.ret[0..dependencies.n_dependencies_out]) |dependencyZ| {
                 const dependency = String.new_from("{s}", .{std.mem.sliceTo(dependencyZ, '-')}).to_snake();
                 try writer.print(
-                    \\pub const {s} = @import("{s}.zig");
+                    \\pub const {s} = @import("{s}");
                     \\
                 , .{ dependency, dependency });
             }
             try writer.writeAll(
-                \\pub const core = @import("core.zig");
+                \\pub const core = @import("core");
                 \\
             );
             try writer.writeAll(
@@ -246,13 +246,53 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
         std.debug.assert(fmt_result.stderr.len == 0);
 
         try build_zig.writer().print(
-            \\    _ = b.addModule("{s}", .{{ .root_source_file = b.path("{s}") }});
+            \\    var {s} = b.addModule("{s}", .{{ .root_source_file = b.path("{s}") }});
             \\
-        , .{ namespace.to_snake(), filename });
+        , .{ namespace.to_snake(), namespace.to_snake(), filename });
         try build_zig_zon.writer().print(
             \\        "{s}",
             \\
         , .{filename});
+    }
+
+    var has_gtk = false;
+    for (loaded_namespaces.ret[0..loaded_namespaces.n_namespaces_out]) |namespaceZ| {
+        const namespace = String.new_from("{s}", .{namespaceZ});
+        const dependencies = repository.getDependencies(namespace.slice());
+        for (dependencies.ret[0..dependencies.n_dependencies_out]) |dependencyZ| {
+            const dependency = String.new_from("{s}", .{std.mem.sliceTo(dependencyZ, '-')}).to_snake();
+            try build_zig.writer().print(
+                \\    {s}.addImport("{s}", {s});
+                \\
+            , .{ namespace.to_snake(), dependency, dependency });
+        }
+        try build_zig.writer().print(
+            \\    {s}.addImport("core", core);
+            \\
+        , .{namespace.to_snake()});
+        if (std.mem.eql(u8, namespace.slice(), "Gtk")) {
+            has_gtk = true;
+        }
+    }
+    for (pkg_config.extra_files) |e| {
+        const mod = std.mem.sliceTo(e, '.');
+        if (std.mem.eql(u8, mod, "core")) {
+            try build_zig.writer().writeAll(
+                \\    core.addImport("glib", glib);
+                \\    core.addImport("gobject", gobject);
+                \\
+            );
+        } else if (std.mem.eql(u8, mod, "template") and has_gtk) {
+            try build_zig.writer().writeAll(
+                \\    template.addImport("gtk", gtk);
+                \\
+            );
+        } else {
+            try build_zig.writer().print(
+                \\    _ = &{s};
+                \\
+            , .{mod});
+        }
     }
 
     try build_zig.writer().writeAll(
