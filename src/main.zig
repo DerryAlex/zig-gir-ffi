@@ -161,7 +161,7 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
         \\
     );
     for (pkg_config.extra_files) |e| {
-        const mod = std.mem.sliceTo(e, '-');
+        const mod = std.mem.sliceTo(e, '.');
         try build_zig.writer().print(
             \\    _ = b.addModule("{s}", .{{ .root_source_file = b.path("{s}") }});
             \\
