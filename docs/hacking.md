@@ -29,3 +29,8 @@ You are suggested to read in the following order:
 - `FunctionInfoExt` and its helper `CallableInfoExt`. This is relatively complex.
 
 - `CallbackInfoExt`, `PropertyInfoExt`, `RegisteredTypeInfoExt`, `SignalInfoExt` and `VFuncInfoExt`. Simple but may be confusing if you are not familiar with other `Ext`s.
+
+### TODOs
+
+- [ ] Override syntax
+- [ ] Ability to export C bindings and GIR files (unlikely to happen in near future unless someone in the community contributes)
