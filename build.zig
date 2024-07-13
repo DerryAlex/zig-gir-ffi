@@ -54,7 +54,10 @@ pub fn get_version(b: *std.Build) []const u8 {
     }, &code, .Ignore) catch {
         return version_string;
     };
-    const git_describe = std.mem.trim(u8, git_describe_untrimmed, " \n\r");
+    const git_describe = git_describe: {
+        const git_describe_trimmed = std.mem.trim(u8, git_describe_untrimmed, " \n\r");
+        break :git_describe if (git_describe_trimmed[0] != 'v') git_describe_trimmed else git_describe_trimmed[1..];
+    };
 
     switch (std.mem.count(u8, git_describe, "-")) {
         0 => {
@@ -72,7 +75,7 @@ pub fn get_version(b: *std.Build) []const u8 {
             const commit_height = it.next().?;
             const commit_id = it.next().?;
 
-            const ancestor_ver = std.SemanticVersion.parse(tagged_ancestor[@intFromBool(tagged_ancestor[0] == 'v')..]) catch {
+            const ancestor_ver = std.SemanticVersion.parse(tagged_ancestor) catch {
                 std.debug.print("Failed to parse tagged ancestor '{s}'", .{tagged_ancestor});
                 std.process.exit(1);
             };
