@@ -243,7 +243,7 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
                     },
                     .function => {
                         if (pkg_config.emit_abi) {
-                            try writer.print("{b}", .{info.tryInto(gi.FunctionInfo).?});
+                            try writer.print("{bG}", .{info.tryInto(gi.FunctionInfo).?});
                         } else {
                             try writer.print("{}", .{info.tryInto(gi.FunctionInfo).?});
                         }

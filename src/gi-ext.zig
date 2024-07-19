@@ -590,15 +590,17 @@ pub const FunctionInfoExt = struct {
         _ = options;
         const self: *FunctionInfo = @constCast(self_immut);
         var emit_abi = false;
+        var global_namespace = false;
         inline for (fmt) |ch| {
             switch (ch) {
                 'b' => emit_abi = true,
+                'G' => global_namespace = true,
                 else => @compileError(std.fmt.comptimePrint("Invalid format string '{c}' for type {s}", .{ ch, @typeName(@This()) })),
             }
         }
 
         if (emit_abi) {
-            try writer.print("pub const {s} = @extern(*const fn{oc}, .{{ .name = \"{s}\" }});\n", .{ self.getSymbol(), self.into(CallableInfo), self.getSymbol() });
+            try writer.print("pub const {s}{s} = @extern(*const fn{oc}, .{{ .name = \"{s}\" }});\n", .{ if (global_namespace) "GLOBAL_" else "", self.getSymbol(), self.into(CallableInfo), self.getSymbol() });
             return;
         }
 
