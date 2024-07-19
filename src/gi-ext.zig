@@ -361,8 +361,10 @@ pub const EnumInfoExt = struct {
     pub fn format(self_immut: *const EnumInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *EnumInfo = @constCast(self_immut);
+        var emit_abi = false;
         inline for (fmt) |ch| {
             switch (ch) {
+                'b' => emit_abi = true,
                 else => @compileError(std.fmt.comptimePrint("Invalid format string '{c}' for type {s}", .{ ch, @typeName(@This()) })),
             }
         }
@@ -410,6 +412,14 @@ pub const EnumInfoExt = struct {
             }
             try writer.writeAll(";\n");
         }
+        if (emit_abi) {
+            try writer.writeAll("};\n");
+            var m_iter = self.method_iter();
+            while (m_iter.next()) |method| {
+                try writer.print("{b}", .{method});
+            }
+            return;
+        }
         var m_iter = self.method_iter();
         while (m_iter.next()) |method| {
             try writer.print("\n{}", .{method});
@@ -424,8 +434,10 @@ pub const FlagsInfoExt = struct {
     pub fn format(self_immut: *const FlagsInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *FlagsInfo = @constCast(self_immut);
+        var emit_abi = false;
         inline for (fmt) |ch| {
             switch (ch) {
+                'b' => emit_abi = true,
                 else => @compileError(std.fmt.comptimePrint("Invalid format string '{c}' for type {s}", .{ ch, @typeName(@This()) })),
             }
         }
@@ -498,6 +510,14 @@ pub const FlagsInfoExt = struct {
             }
             try writer.writeAll(";\n");
         }
+        if (emit_abi) {
+            try writer.writeAll("};\n");
+            var m_iter = self.into(EnumInfo).method_iter();
+            while (m_iter.next()) |method| {
+                try writer.print("{b}", .{method});
+            }
+            return;
+        }
         var m_iter = self.into(EnumInfo).method_iter();
         while (m_iter.next()) |method| {
             try writer.print("\n{}", .{method});
@@ -569,10 +589,17 @@ pub const FunctionInfoExt = struct {
     pub fn format(self_immut: *const FunctionInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *FunctionInfo = @constCast(self_immut);
+        var emit_abi = false;
         inline for (fmt) |ch| {
             switch (ch) {
+                'b' => emit_abi = true,
                 else => @compileError(std.fmt.comptimePrint("Invalid format string '{c}' for type {s}", .{ ch, @typeName(@This()) })),
             }
+        }
+
+        if (emit_abi) {
+            try writer.print("pub const {s} = @extern(*const fn{oc}, .{{ .name = \"{s}\" }});\n", .{ self.getSymbol(), self.into(CallableInfo), self.getSymbol() });
+            return;
         }
 
         // create a `FixedBufferAllocator` to alloc `ArgInfo`s on stack
@@ -959,8 +986,10 @@ pub const InterfaceInfoExt = struct {
     pub fn format(self_immut: *const InterfaceInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *InterfaceInfo = @constCast(self_immut);
+        var emit_abi = false;
         inline for (fmt) |ch| {
             switch (ch) {
+                'b' => emit_abi = true,
                 else => @compileError(std.fmt.comptimePrint("Invalid format string '{c}' for type {s}", .{ ch, @typeName(@This()) })),
             }
         }
@@ -993,6 +1022,14 @@ pub const InterfaceInfoExt = struct {
         var c_iter = self.constant_iter();
         while (c_iter.next()) |constant| {
             try writer.print("{}", .{constant});
+        }
+        if (emit_abi) {
+            try writer.writeAll("};\n");
+            var m_iter = self.method_iter();
+            while (m_iter.next()) |method| {
+                try writer.print("{b}\n", .{method});
+            }
+            return;
         }
         var m_iter = self.method_iter();
         while (m_iter.next()) |method| {
@@ -1052,8 +1089,10 @@ pub const ObjectInfoExt = struct {
     pub fn format(self_immut: *const ObjectInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *ObjectInfo = @constCast(self_immut);
+        var emit_abi = false;
         inline for (fmt) |ch| {
             switch (ch) {
+                'b' => emit_abi = true,
                 else => @compileError(std.fmt.comptimePrint("Invalid format string '{c}' for type {s}", .{ ch, @typeName(@This()) })),
             }
         }
@@ -1097,6 +1136,14 @@ pub const ObjectInfoExt = struct {
         var c_iter = self.constant_iter();
         while (c_iter.next()) |constant| {
             try writer.print("{}", .{constant});
+        }
+        if (emit_abi) {
+            try writer.writeAll("};\n");
+            var m_iter = self.method_iter();
+            while (m_iter.next()) |method| {
+                try writer.print("{b}", .{method});
+            }
+            return;
         }
         var m_iter = self.method_iter();
         while (m_iter.next()) |method| {
@@ -1252,8 +1299,10 @@ pub const StructInfoExt = struct {
     pub fn format(self_immut: *const StructInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *StructInfo = @constCast(self_immut);
+        var emit_abi = false;
         inline for (fmt) |ch| {
             switch (ch) {
+                'b' => emit_abi = true,
                 else => @compileError(std.fmt.comptimePrint("Invalid format string '{c}' for type {s}", .{ ch, @typeName(@This()) })),
             }
         }
@@ -1276,6 +1325,14 @@ pub const StructInfoExt = struct {
             try writer.print("{}", .{field});
         }
         try BitField._end(writer);
+        if (emit_abi) {
+            try writer.writeAll("};\n");
+            var m_iter = self.method_iter();
+            while (m_iter.next()) |method| {
+                try writer.print("{b}", .{method});
+            }
+            return;
+        }
         var m_iter = self.method_iter();
         while (m_iter.next()) |method| {
             try writer.print("{}", .{method});
@@ -1482,8 +1539,10 @@ pub const UnionInfoExt = struct {
     pub fn format(self_immut: *const UnionInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *UnionInfo = @constCast(self_immut);
+        var emit_abi = false;
         inline for (fmt) |ch| {
             switch (ch) {
+                'b' => emit_abi = true,
                 else => @compileError(std.fmt.comptimePrint("Invalid format string '{c}' for type {s}", .{ ch, @typeName(@This()) })),
             }
         }
@@ -1497,6 +1556,14 @@ pub const UnionInfoExt = struct {
         var iter = self.field_iter();
         while (iter.next()) |field| {
             try writer.print("{}", .{field});
+        }
+        if (emit_abi) {
+            try writer.writeAll("};\n");
+            var m_iter = self.method_iter();
+            while (m_iter.next()) |method| {
+                try writer.print("{b}", .{method});
+            }
+            return;
         }
         var m_iter = self.method_iter();
         while (m_iter.next()) |method| {

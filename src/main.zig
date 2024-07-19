@@ -19,6 +19,7 @@ pub fn main() !void {
         \\--outputdir <str>          Output directory (default: {s})
         \\--pkg-name <str>           Generated package name (default: $gi-namespace)
         \\--pkg-version <str>        Generated package version (default: $gi-version)
+        \\--emit-abi                 Output ABI description
         \\
     , .{ config.gi_namespace, config.outputdir }));
     var diag = clap.Diagnostic{};
@@ -65,6 +66,7 @@ pub fn main() !void {
     if (res.args.@"pkg-version") |p| {
         pkg_version = p;
     }
+    const emit_abi = res.args.@"emit-abi" != 0;
 
     // Load GIR
     const repository = gi.Repository.new();
@@ -128,6 +130,7 @@ pub fn main() !void {
         .name = String.new_from("{s}", .{pkg_name}).to_snake(),
         .version = String.new_from("{s}", .{pkg_version}),
         .extra_files = manual_files.items,
+        .emit_abi = emit_abi,
     });
 }
 
@@ -135,6 +138,7 @@ const PkgConfig = struct {
     name: String,
     version: String,
     extra_files: [][]const u8,
+    emit_abi: bool,
 };
 
 pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository, output_dir: std.fs.Dir, pkg_config: PkgConfig) !void {
@@ -223,13 +227,55 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
                         try writer.print("{};\n", .{info.tryInto(gi.CallbackInfo).?});
                     },
                     .constant => try writer.print("{}", .{info.tryInto(gi.ConstantInfo).?}),
-                    .@"enum" => try writer.print("{}", .{info.tryInto(gi.EnumInfo).?}),
-                    .flags => try writer.print("{}", .{info.tryInto(gi.FlagsInfo).?}),
-                    .function => try writer.print("{}", .{info.tryInto(gi.FunctionInfo).?}),
-                    .interface => try writer.print("{}", .{info.tryInto(gi.InterfaceInfo).?}),
-                    .object => try writer.print("{}", .{info.tryInto(gi.ObjectInfo).?}),
-                    .@"struct" => try writer.print("{}", .{info.tryInto(gi.StructInfo).?}),
-                    .@"union" => try writer.print("{}", .{info.tryInto(gi.UnionInfo).?}),
+                    .@"enum" => {
+                        if (pkg_config.emit_abi) {
+                            try writer.print("{b}", .{info.tryInto(gi.EnumInfo).?});
+                        } else {
+                            try writer.print("{}", .{info.tryInto(gi.EnumInfo).?});
+                        }
+                    },
+                    .flags => {
+                        if (pkg_config.emit_abi) {
+                            try writer.print("{b}", .{info.tryInto(gi.FlagsInfo).?});
+                        } else {
+                            try writer.print("{}", .{info.tryInto(gi.FlagsInfo).?});
+                        }
+                    },
+                    .function => {
+                        if (pkg_config.emit_abi) {
+                            try writer.print("{b}", .{info.tryInto(gi.FunctionInfo).?});
+                        } else {
+                            try writer.print("{}", .{info.tryInto(gi.FunctionInfo).?});
+                        }
+                    },
+                    .interface => {
+                        if (pkg_config.emit_abi) {
+                            try writer.print("{b}", .{info.tryInto(gi.InterfaceInfo).?});
+                        } else {
+                            try writer.print("{}", .{info.tryInto(gi.InterfaceInfo).?});
+                        }
+                    },
+                    .object => {
+                        if (pkg_config.emit_abi) {
+                            try writer.print("{b}", .{info.tryInto(gi.ObjectInfo).?});
+                        } else {
+                            try writer.print("{}", .{info.tryInto(gi.ObjectInfo).?});
+                        }
+                    },
+                    .@"struct" => {
+                        if (pkg_config.emit_abi) {
+                            try writer.print("{b}", .{info.tryInto(gi.StructInfo).?});
+                        } else {
+                            try writer.print("{}", .{info.tryInto(gi.StructInfo).?});
+                        }
+                    },
+                    .@"union" => {
+                        if (pkg_config.emit_abi) {
+                            try writer.print("{b}", .{info.tryInto(gi.UnionInfo).?});
+                        } else {
+                            try writer.print("{}", .{info.tryInto(gi.UnionInfo).?});
+                        }
+                    },
                     else => unreachable,
                 }
             }
