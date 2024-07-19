@@ -125,17 +125,19 @@ pub fn main() !void {
     }
 
     try generateBindings(allocator, repository, output_dir, .{
-        .name = pkg_name,
-        .version = pkg_version,
+        .name = String.new_from("{s}", .{pkg_name}).to_snake(),
+        .version = String.new_from("{s}", .{pkg_version}),
         .extra_files = manual_files.items,
     });
 }
 
-pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository, output_dir: std.fs.Dir, pkg_config: struct {
-    name: []const u8,
-    version: []const u8,
+const PkgConfig = struct {
+    name: String,
+    version: String,
     extra_files: [][]const u8,
-}) !void {
+};
+
+pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository, output_dir: std.fs.Dir, pkg_config: PkgConfig) !void {
     var build_zig = try output_dir.createFile("build.zig", .{});
     defer build_zig.close();
     var build_zig_zon = try output_dir.createFile("build.zig.zon", .{});
