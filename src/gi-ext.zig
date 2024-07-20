@@ -1358,6 +1358,10 @@ pub const StructInfoExt = struct {
                 try writer.writeAll("notifiers: ?*anyopaque,\n");
                 continue;
             }
+            if (std.mem.eql(u8, namespace, "GLib") and std.mem.eql(u8, name, "HookList") and std.mem.eql(u8, std.mem.span(field.into(BaseInfo).getName().?), "finalize_hook")) {
+                try writer.writeAll("finalize_hook: ?*anyopaque,\n");
+                continue;
+            }
             try writer.print("{}", .{field});
         }
         try BitField._end(writer);
@@ -1488,6 +1492,14 @@ pub const TypeInfoExt = struct {
                                     .int8, .uint8, .int16, .uint16, .int32, .uint32, .int64, .uint64, .float, .double, .unichar => {
                                         try writer.print("[*:0]{}", .{child_type});
                                     },
+                                    .interface => {
+                                        const interface = child_type.getInterface().?;
+                                        if (interface.getType() == .@"struct" and interface.tryInto(StructInfo).?.getSize() == 0) {
+                                            try writer.print("[*:null]?*{n}", .{child_type}); // TODO: fix this in TypeInfoExt ?
+                                        } else {
+                                            try writer.print("[*:std.mem.zeroes({n})]{n}", .{ child_type, child_type });
+                                        }
+                                    },
                                     else => {
                                         try writer.print("[*:std.mem.zeroes({n})]{n}", .{ child_type, child_type });
                                     },
@@ -1551,7 +1563,8 @@ pub const TypeInfoExt = struct {
                     },
                     .invalid, .function, .constant, .invalid_0, .value, .signal, .vfunc, .property, .field, .arg, .type => unreachable,
                     .unresolved => {
-                        try writer.print("{s}.{s}", .{ child_type.namespace_string(), child_type.getName().? });
+                        // try writer.print("{s}.{s}", .{ child_type.namespace_string(), child_type.getName().? });
+                        try writer.writeAll("*anyopaque");
                         std.log.warn("[Unresolved] {s}.{s}", .{ child_type.getNamespace().?, child_type.getName().? });
                     },
                 }
@@ -1635,11 +1648,17 @@ pub const ValueInfoExt = struct {
         try writer.print("{s}", .{value_name.to_identifier()});
         if (convert_func) |func| {
             try writer.print(": @This() = @{s}(", .{func});
+            if (func[0] == 'b') {
+                try writer.print("@as({s}, ", .{@typeName(Storage)});
+            }
         } else {
             try writer.writeAll(" = ");
         }
         try writer.print("{d}", .{@as(Storage, @intCast(self.getValue()))});
-        if (convert_func) |_| {
+        if (convert_func) |func| {
+            if (func[0] == 'b') {
+                try writer.writeAll(")");
+            }
             try writer.writeAll(")");
         }
     }

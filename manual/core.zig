@@ -1,7 +1,8 @@
-const glib = @import("glib");
-const gobject = @import("gobject");
+const glib = @import("glib.zig");
+const gobject = @import("gobject.zig");
 
 const std = @import("std");
+const builtin = @import("builtin");
 const root = @import("root");
 
 pub const Configs = struct {
@@ -10,7 +11,7 @@ pub const Configs = struct {
 pub const config: Configs = if (@hasDecl(root, "gi_configs")) root.gi_configs else .{};
 
 /// Deprecated
-pub const Deprecated = opaque {};
+pub const Deprecated = if (builtin.is_test) *opaque {} else @compileError("deprecated");
 
 // ----------
 // type begin
@@ -813,3 +814,82 @@ pub fn typeInstanceGetInterface(comptime Interface: type, self: *Interface) *Int
 
 // subclass end
 // ------------
+
+// ---------------
+// ABI check begin
+
+/// For internal use only
+pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
+    var typeinfo_u = @typeInfo(U);
+    var typeinfo_v = @typeInfo(V);
+
+    if (typeinfo_u == .Opaque or typeinfo_v == .Opaque) return true;
+
+    if (typeinfo_u == .Optional and @typeInfo(typeinfo_u.Optional.child) == .Pointer) {
+        typeinfo_u = @typeInfo(typeinfo_u.Optional.child);
+    }
+    if (typeinfo_v == .Optional and @typeInfo(typeinfo_v.Optional.child) == .Pointer) {
+        typeinfo_v = @typeInfo(typeinfo_v.Optional.child);
+    }
+
+    if (typeinfo_u == .Enum) {
+        typeinfo_u = @typeInfo(typeinfo_u.Enum.tag_type);
+    }
+    if (typeinfo_v == .Enum) {
+        typeinfo_v = @typeInfo(typeinfo_v.Enum.tag_type);
+    }
+    if (typeinfo_u == .Struct and typeinfo_u.Struct.layout == .@"packed") {
+        typeinfo_u = @typeInfo(typeinfo_u.Struct.backing_integer.?);
+    }
+    if (typeinfo_v == .Struct and typeinfo_v.Struct.layout == .@"packed") {
+        typeinfo_v = @typeInfo(typeinfo_v.Struct.backing_integer.?);
+    }
+
+    if (@as(std.builtin.TypeId, typeinfo_u) != @as(std.builtin.TypeId, typeinfo_v)) return false;
+
+    switch (typeinfo_u) {
+        .Type, .Void, .Bool, .ComptimeFloat, .ComptimeInt => return true,
+        .Int => {
+            const intinfo_u = typeinfo_u.Int;
+            const intinfo_v = typeinfo_v.Int;
+            return intinfo_u.signedness == intinfo_v.signedness and intinfo_u.bits == intinfo_v.bits;
+        },
+        .Float => return typeinfo_u.Float.bits == typeinfo_v.Float.bits,
+        .Pointer => {
+            const pointerinfo_u = typeinfo_u.Pointer;
+            const pointerinfo_v = typeinfo_v.Pointer;
+            if (pointerinfo_u.size != .C and pointerinfo_v.size != .C) {
+                if (pointerinfo_u.size != pointerinfo_v.size) return false;
+                if (pointerinfo_u.is_const != pointerinfo_v.is_const) return false;
+                if ((pointerinfo_u.sentinel == null) != (pointerinfo_v.sentinel == null)) return false;
+            } else {
+                if (pointerinfo_u.size == .Slice or pointerinfo_v.size == .Slice) return false;
+            }
+            return isAbiCompatitable(pointerinfo_u.child, pointerinfo_v.child);
+        },
+        .Array => {
+            const arrayinfo_u = typeinfo_u.Array;
+            const arrayinfo_v = typeinfo_v.Array;
+            return arrayinfo_u.len == arrayinfo_v.len and isAbiCompatitable(arrayinfo_u.child, arrayinfo_v.child);
+        },
+        .Struct => return typeinfo_u.Struct.layout == typeinfo_v.Struct.layout and @sizeOf(U) == @sizeOf(V),
+        .Optional => return isAbiCompatitable(typeinfo_u.Optional.child, typeinfo_v.Optional.child),
+        .Enum => return U == V,
+        .Union => return typeinfo_u.Union.layout == typeinfo_v.Union.layout and @sizeOf(U) == @sizeOf(V),
+        .Fn => {
+            const fninfo_u = typeinfo_u.Fn;
+            const fninfo_v = typeinfo_v.Fn;
+            if (fninfo_u.calling_convention != fninfo_v.calling_convention) return false;
+            if (fninfo_u.params.len != fninfo_v.params.len) return false;
+            inline for (0..fninfo_u.params.len) |idx| {
+                if (!isAbiCompatitable(fninfo_u.params[idx].type.?, fninfo_v.params[idx].type.?)) return false;
+            }
+            return isAbiCompatitable(fninfo_u.return_type.?, fninfo_v.return_type.?);
+        },
+        else => unreachable,
+    }
+    return false;
+}
+
+// ABI check end
+// -------------
