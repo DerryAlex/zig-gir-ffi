@@ -153,12 +153,25 @@ pub fn build(b: *std.Build) !void {
     } else {
         run_cmd.addArgs(&.{ "--outputdir", "gtk4" });
         run_cmd.addArgs(&.{ "--includedir", "lib/girepository-1.0" });
-        run_cmd.addArgs(&.{ "--pkg-name", "gtk4" });
         run_cmd.addArgs(&.{ "--pkg-version", version });
     }
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
+
+    // Dump abi step
+    const run_abi_cmd = b.addRunArtifact(exe);
+    run_abi_cmd.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        run_abi_cmd.addArgs(args);
+    } else {
+        run_abi_cmd.addArgs(&.{ "--outputdir", "test/abi" });
+        run_abi_cmd.addArgs(&.{ "--includedir", "lib/girepository-1.0" });
+        run_abi_cmd.addArgs(&.{"--emit-abi"});
+    }
+
+    const dump_abi_step = b.step("dump-abi", "Dump abi");
+    dump_abi_step.dependOn(&run_abi_cmd.step);
 
     // Dist step
     const run_tar = b.addSystemCommand(&.{ "tar", "cahf" });

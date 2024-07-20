@@ -209,6 +209,12 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
                 \\const config = core.config;
                 \\
             );
+            if (pkg_config.emit_abi) {
+                try writer.writeAll(
+                    \\const c = @import("c.zig");
+                    \\
+                );
+            }
 
             const n = repository.getNInfos(namespace.slice());
             for (0..@intCast(n)) |i| {
@@ -279,6 +285,14 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
                     else => unreachable,
                 }
             }
+
+            try writer.writeAll(
+                \\test {
+                \\    @setEvalBranchQuota(1_000_000);
+                \\    std.testing.refAllDeclsRecursive(@This());
+                \\}
+                \\
+            );
         }
 
         const outputdir_r = try output_dir.realpathAlloc(allocator, ".");

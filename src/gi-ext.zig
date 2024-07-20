@@ -600,7 +600,20 @@ pub const FunctionInfoExt = struct {
         }
 
         if (emit_abi) {
-            try writer.print("pub const {s}{s} = @extern(*const fn{oc}, .{{ .name = \"{s}\" }});\n", .{ if (global_namespace) "GLOBAL_" else "", self.getSymbol(), self.into(CallableInfo), self.getSymbol() });
+            try writer.print(
+                \\test "{s}{s}" {{
+                \\    if (comptime @hasDecl(c, "{s}")) {{
+                \\        try std.testing.expect(comptime core.isAbiCompatitable(@TypeOf(c.{s}), fn{oc}));
+                \\    }}
+                \\}}
+                \\
+            , .{
+                if (global_namespace) "GLOBAL_" else "",
+                self.getSymbol(),
+                self.getSymbol(),
+                self.getSymbol(),
+                self.into(CallableInfo),
+            });
             return;
         }
 
