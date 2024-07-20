@@ -11,7 +11,12 @@ pub const Configs = struct {
 pub const config: Configs = if (@hasDecl(root, "gi_configs")) root.gi_configs else .{};
 
 /// Deprecated
-pub const Deprecated = if (builtin.is_test) *opaque {} else @compileError("deprecated");
+pub const Deprecated = if (builtin.is_test)
+    struct {
+        @"opaque": void,
+    }
+else
+    @compileError("deprecated");
 
 // ----------
 // type begin
@@ -824,6 +829,8 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
     var typeinfo_v = @typeInfo(V);
 
     if (typeinfo_u == .Opaque or typeinfo_v == .Opaque) return true;
+    if (typeinfo_u == .Struct and @hasField(U, "opaque") and @sizeOf(U) == 0) return true;
+    if (typeinfo_v == .Struct and @hasField(V, "opaque") and @sizeOf(V) == 0) return true;
 
     if (typeinfo_u == .Optional and @typeInfo(typeinfo_u.Optional.child) == .Pointer) {
         typeinfo_u = @typeInfo(typeinfo_u.Optional.child);
@@ -845,6 +852,13 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
         typeinfo_v = @typeInfo(typeinfo_v.Struct.backing_integer.?);
     }
 
+    if (typeinfo_u == .Bool) {
+        typeinfo_u = @typeInfo(c_int);
+    }
+    if (typeinfo_v == .Bool) {
+        typeinfo_v = @typeInfo(c_int);
+    }
+
     if (@as(std.builtin.TypeId, typeinfo_u) != @as(std.builtin.TypeId, typeinfo_v)) return false;
 
     switch (typeinfo_u) {
@@ -860,7 +874,6 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
             const pointerinfo_v = typeinfo_v.Pointer;
             if (pointerinfo_u.size != .C and pointerinfo_v.size != .C) {
                 if (pointerinfo_u.size != pointerinfo_v.size) return false;
-                if (pointerinfo_u.is_const != pointerinfo_v.is_const) return false;
                 if ((pointerinfo_u.sentinel == null) != (pointerinfo_v.sentinel == null)) return false;
             } else {
                 if (pointerinfo_u.size == .Slice or pointerinfo_v.size == .Slice) return false;

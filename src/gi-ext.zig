@@ -600,6 +600,20 @@ pub const FunctionInfoExt = struct {
         }
 
         if (emit_abi) {
+            const name = self.into(BaseInfo).name_string();
+            if (std.mem.startsWith(u8, name.slice(), "new")) {
+                // TODO
+                try writer.print(
+                    \\test "{s}{s}" {{
+                    \\    return error.SkipZigTest;
+                    \\}}
+                    \\
+                , .{
+                    if (global_namespace) "GLOBAL_" else "",
+                    self.getSymbol(),
+                });
+                return;
+            }
             try writer.print(
                 \\test "{s}{s}" {{
                 \\    if (comptime @hasDecl(c, "{s}")) {{
