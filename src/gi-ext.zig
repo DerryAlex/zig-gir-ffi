@@ -1045,7 +1045,21 @@ pub const InterfaceInfoExt = struct {
         while (s_iter.next()) |signal| {
             try writer.print("{}", .{signal});
         }
-        try writer.writeAll("pub usingnamespace core.Extend(@This());\n");
+        try writer.writeAll(
+            \\pub fn into(self: *@This(), comptime T: type) *T {
+            \\    return core.upCast(T, self);
+            \\}
+            \\pub fn tryInto(self: *@This(), comptime T: type) ?*T {
+            \\    return core.downCast(T, self);
+            \\}
+            \\
+        );
+        try writer.writeAll(
+            \\pub fn __method__(self: *@This()) core.MethodMixin(@This()) {
+            \\    return .{ .self = self };
+            \\}
+            \\
+        );
         try writer.print("{}", .{self.into(RegisteredTypeInfo)});
         try writer.writeAll("};\n");
     }
@@ -1159,7 +1173,27 @@ pub const ObjectInfoExt = struct {
         while (s_iter.next()) |signal| {
             try writer.print("{}", .{signal});
         }
-        try writer.writeAll("pub usingnamespace core.Extend(@This());\n");
+        try writer.writeAll(
+            \\pub fn into(self: *@This(), comptime T: type) *T {
+            \\    return core.upCast(T, self);
+            \\}
+            \\pub fn tryInto(self: *@This(), comptime T: type) ?*T {
+            \\    return core.downCast(T, self);
+            \\}
+            \\
+        );
+        try writer.writeAll(
+            \\pub fn __method__(self: *@This()) core.MethodMixin(@This()) {
+            \\    return .{ .self = self };
+            \\}
+            \\pub fn __property__(self: *@This()) core.PropertyMixin(@This()) {
+            \\    return .{ .self = self };
+            \\}
+            \\pub fn __signal__(self: *@This()) core.SignalMixin(@This()) {
+            \\    return .{ .self = self };
+            \\}
+            \\
+        );
         try writer.print("{}", .{self.into(RegisteredTypeInfo)});
         try writer.writeAll("};\n");
     }
@@ -1259,7 +1293,7 @@ pub const SignalInfoExt = struct {
             try writer.print("pub const connect{c}{s} = if (config.disable_deprecated) core.Deprecated else struct {{\n", .{ std.ascii.toUpper(name.slice()[0]), name.slice()[1..] });
         }
         try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name.slice()[0]), name.slice()[1..], container_name });
-        try writer.print("return self.connect(\"{s}\", handler, args, flags, &.{{", .{raw_name});
+        try writer.print("return self.__signal__().connect(\"{s}\", handler, args, flags, &.{{", .{raw_name});
         const return_type = self.into(CallableInfo).getReturnType();
         var interface_returned = false;
         if (return_type.getInterface()) |child_type| {

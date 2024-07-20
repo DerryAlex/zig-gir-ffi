@@ -14,7 +14,6 @@ pub const PartialOrd = extern struct {
     ge_fn: ?*const fn (self: *PartialOrd, rhs: *PartialOrd) bool = &defaultGe,
 
     pub const Prerequisites = [_]type{PartialEq};
-    pub usingnamespace core.Extend(PartialOrd);
 
     pub const Order = enum { Lt, Eq, Gt };
 
@@ -74,6 +73,18 @@ pub const PartialOrd = extern struct {
             .Lt => false,
             .Eq, .Gt => false,
         };
+    }
+
+    pub fn into(self: *PartialOrd, comptime T: type) *T {
+        return core.upCast(T, self);
+    }
+
+    pub fn tryInto(self: *PartialOrd, comptime T: type) ?*T {
+        return core.downCast(T, self);
+    }
+
+    pub fn __method__(self: *PartialOrd) core.MethodMixin(PartialOrd) {
+        return .{ .self = self };
     }
 
     pub fn gType() core.Type {
