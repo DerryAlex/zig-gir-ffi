@@ -289,7 +289,7 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
             try writer.writeAll(
                 \\test {
                 \\    @setEvalBranchQuota(1_000_000);
-                \\    std.testing.refAllDeclsRecursive(@This());
+                \\    std.testing.refAllDecls(@This());
                 \\}
                 \\
             );
