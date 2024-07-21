@@ -866,7 +866,12 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
         .Int => {
             const intinfo_u = typeinfo_u.Int;
             const intinfo_v = typeinfo_v.Int;
-            return intinfo_u.signedness == intinfo_v.signedness and intinfo_u.bits == intinfo_v.bits;
+            if (intinfo_u.bits != intinfo_v.bits) return false;
+            if (intinfo_u.signedness != intinfo_v.signedness) {
+                // char and flags may be translated as unsigned
+                if (intinfo_u.bits != 8 and intinfo_u.bits != 32) return false;
+            }
+            return true;
         },
         .Float => return typeinfo_u.Float.bits == typeinfo_v.Float.bits,
         .Pointer => {
