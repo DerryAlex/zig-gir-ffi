@@ -600,6 +600,7 @@ pub const FunctionInfoExt = struct {
         }
 
         if (emit_abi) {
+            if (self.into(BaseInfo).isDeprecated()) return;
             const name = self.into(BaseInfo).name_string();
             if (std.mem.startsWith(u8, name.slice(), "new")) {
                 // TODO
