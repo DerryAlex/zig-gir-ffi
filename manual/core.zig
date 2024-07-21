@@ -12,7 +12,9 @@ pub const config: Configs = if (@hasDecl(root, "gi_configs")) root.gi_configs el
 
 /// Deprecated
 pub const Deprecated = if (builtin.is_test)
-    ?*anyopaque
+    struct {
+        skip_zig_test: void = {},
+    }
 else
     @compileError("deprecated");
 
@@ -827,6 +829,8 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
     var typeinfo_v = @typeInfo(V);
 
     if (typeinfo_u == .Opaque or typeinfo_v == .Opaque) return true;
+    if (typeinfo_u == .Struct and @sizeOf(U) == 0 and @hasField(U, "skip_zig_test")) return true;
+    if (typeinfo_v == .Struct and @sizeOf(V) == 0 and @hasField(V, "skip_zig_test")) return true;
 
     if (typeinfo_u == .Optional and @typeInfo(typeinfo_u.Optional.child) == .Pointer) {
         typeinfo_u = @typeInfo(typeinfo_u.Optional.child);
