@@ -134,7 +134,7 @@ pub const ArgInfoExt = struct {
                 option_signal_param = false;
             }
         }
-        if ((self.getDirection() != .in and !(self.isCallerAllocates() and arg_type.getTag() == .array)) or option_signal_param) {
+        if ((self.getDirection() != .in and !(self.isCallerAllocates() and arg_type.getTag() == .array and arg_type.getArrayType() == .c)) or option_signal_param) {
             if (self.isOptional()) {
                 if (self.mayBeNull()) {
                     try writer.print("{mnop}", .{arg_type});
