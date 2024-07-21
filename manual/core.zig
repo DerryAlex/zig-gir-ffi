@@ -909,7 +909,45 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
             inline for (0..fninfo_u.params.len) |idx| {
                 if (!isAbiCompatitable(fninfo_u.params[idx].type.?, fninfo_v.params[idx].type.?)) return false;
             }
-            return isAbiCompatitable(fninfo_u.return_type.?, fninfo_v.return_type.?);
+            const return_type_u = fninfo_u.return_type.?;
+            const return_type_v = fninfo_v.return_type.?;
+            if (isAbiCompatitable(return_type_u, return_type_v)) {
+                return true;
+            } else if (@typeInfo(return_type_u) == .Pointer and @typeInfo(return_type_v) == .Pointer) {
+                const UObj = @typeInfo(return_type_u).Pointer.child;
+                const VObj = @typeInfo(return_type_v).Pointer.child;
+                if (@typeInfo(UObj) == .Struct and @typeInfo(VObj) == .Struct) {
+                    if (isA(gobject.Object)(UObj)) {
+                        var flag = false;
+                        comptime {
+                            var T = UObj;
+                            while (@hasDecl(T, "Parent")) {
+                                T = T.Parent;
+                                if (isAbiCompatitable(T, VObj)) {
+                                    flag = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (flag) return true;
+                    }
+                    if (isA(gobject.Object)(VObj)) {
+                        var flag = false;
+                        comptime {
+                            var T = VObj;
+                            while (@hasDecl(T, "Parent")) {
+                                T = T.Parent;
+                                if (isAbiCompatitable(UObj, T)) {
+                                    flag = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (flag) return true;
+                    }
+                }
+            }
+            return false;
         },
         else => unreachable,
     }
