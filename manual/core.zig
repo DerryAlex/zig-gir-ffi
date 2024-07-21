@@ -12,9 +12,7 @@ pub const config: Configs = if (@hasDecl(root, "gi_configs")) root.gi_configs el
 
 /// Deprecated
 pub const Deprecated = if (builtin.is_test)
-    struct {
-        @"opaque": void,
-    }
+    ?*anyopaque
 else
     @compileError("deprecated");
 
@@ -829,8 +827,6 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
     var typeinfo_v = @typeInfo(V);
 
     if (typeinfo_u == .Opaque or typeinfo_v == .Opaque) return true;
-    if (typeinfo_u == .Struct and @hasField(U, "opaque") and @sizeOf(U) == 0) return true;
-    if (typeinfo_v == .Struct and @hasField(V, "opaque") and @sizeOf(V) == 0) return true;
 
     if (typeinfo_u == .Optional and @typeInfo(typeinfo_u.Optional.child) == .Pointer) {
         typeinfo_u = @typeInfo(typeinfo_u.Optional.child);
@@ -885,8 +881,13 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
             const pointerinfo_u = typeinfo_u.Pointer;
             const pointerinfo_v = typeinfo_v.Pointer;
             if (pointerinfo_u.size != .C and pointerinfo_v.size != .C) {
-                if (pointerinfo_u.size != pointerinfo_v.size) return false;
-                if ((pointerinfo_u.sentinel == null) != (pointerinfo_v.sentinel == null)) return false;
+                var has_anyopaque = false;
+                if (pointerinfo_u.size == .One and @typeInfo(pointerinfo_u.child) == .Opaque) has_anyopaque = true;
+                if (pointerinfo_v.size == .One and @typeInfo(pointerinfo_v.child) == .Opaque) has_anyopaque = true;
+                if (!has_anyopaque) {
+                    if (pointerinfo_u.size != pointerinfo_v.size) return false;
+                    if ((pointerinfo_u.sentinel == null) != (pointerinfo_v.sentinel == null)) return false;
+                }
             } else {
                 if (pointerinfo_u.size == .Slice or pointerinfo_v.size == .Slice) return false;
             }
