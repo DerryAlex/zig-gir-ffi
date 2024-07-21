@@ -186,12 +186,14 @@ pub const CallableInfoExt = struct {
         var type_annotation: enum { disable, enable, only } = .disable;
         var c_callconv = false;
         var vfunc = false;
+        var emit_abi = false;
         inline for (fmt) |ch| {
             switch (ch) {
                 'e' => type_annotation = .enable,
                 'o' => type_annotation = .only,
                 'c' => c_callconv = true,
                 'v' => vfunc = true,
+                'b' => emit_abi = true,
                 else => @compileError(std.fmt.comptimePrint("Invalid format string '{c}' for type {s}", .{ ch, @typeName(@This()) })),
             }
         }
@@ -247,7 +249,7 @@ pub const CallableInfoExt = struct {
             if (c_callconv) {
                 try writer.writeAll("callconv(.C) ");
             }
-            if (self.skipReturn()) {
+            if (self.skipReturn() and !emit_abi) {
                 try writer.writeAll("void");
             } else {
                 const return_type = self.getReturnType();
@@ -604,7 +606,7 @@ pub const FunctionInfoExt = struct {
             try writer.print(
                 \\test "{s}{s}" {{
                 \\    if (comptime @hasDecl(c, "{s}")) {{
-                \\        try std.testing.expect(comptime core.isAbiCompatitable(@TypeOf(c.{s}), fn{oc}));
+                \\        try std.testing.expect(comptime core.isAbiCompatitable(@TypeOf(c.{s}), fn{ocb}));
                 \\    }}
                 \\}}
                 \\
