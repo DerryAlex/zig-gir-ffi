@@ -839,6 +839,13 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
         typeinfo_v = @typeInfo(typeinfo_v.Optional.child);
     }
 
+    if (typeinfo_u == .Pointer and typeinfo_u.Pointer.size == .One and @typeInfo(typeinfo_u.Pointer.child) == .Array) {
+        typeinfo_u = @typeInfo([*]@typeInfo(typeinfo_u.Pointer.child).Array.child);
+    }
+    if (typeinfo_v == .Pointer and typeinfo_v.Pointer.size == .One and @typeInfo(typeinfo_v.Pointer.child) == .Array) {
+        typeinfo_v = @typeInfo([*]@typeInfo(typeinfo_v.Pointer.child).Array.child);
+    }
+
     if (typeinfo_u == .Enum) {
         typeinfo_u = @typeInfo(typeinfo_u.Enum.tag_type);
     }
