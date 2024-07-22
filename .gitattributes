@@ -1,3 +1,4 @@
 *.zig text eol=lf
 *.zon text eol=lf
 *.typelib filter=lfs diff=lfs merge=lfs -text
+test/abi/c_*.zig filter=lfs diff=lfs merge=lfs -text
