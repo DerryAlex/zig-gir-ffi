@@ -619,6 +619,8 @@ pub const FunctionInfoExt = struct {
                 \\test "{s}{s}" {{
                 \\    if (comptime @hasDecl(c, "{s}")) {{
                 \\        try std.testing.expect(comptime core.isAbiCompatitable(@TypeOf(c.{s}), fn{ocb}));
+                \\    }} else {{
+                \\        return error.SkipZigTest;
                 \\    }}
                 \\}}
                 \\
