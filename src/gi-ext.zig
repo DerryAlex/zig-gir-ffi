@@ -554,7 +554,19 @@ pub const FieldInfoExt = struct {
         }
         try writer.print("{s}", .{field_name});
         if (field_size == 0) {
-            try writer.print(": {n},\n", .{field_type});
+            try writer.print(": {n}", .{field_type});
+            // patch for simd align
+            if (field_type.getTag() == .interface) {
+                const interface = field_type.getInterface().?;
+                if (interface.getType() == .@"struct") {
+                    const type_namespace = std.mem.span(interface.getNamespace().?);
+                    const type_name = std.mem.span(interface.getName().?);
+                    if (std.mem.eql(u8, type_namespace, "Graphene") and std.mem.eql(u8, type_name, "Simd4F")) {
+                        try writer.writeAll(" align(16)");
+                    }
+                }
+            }
+            try writer.writeAll(",\n");
         } else if (field_size == 1) {
             try writer.writeAll(": bool,\n");
         } else {
