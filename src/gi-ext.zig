@@ -1544,11 +1544,13 @@ pub const TypeInfoExt = struct {
                         }
                     },
                     .array, .ptr_array, .byte_array => |t| {
-                        if (self.isPointer()) {
-                            if (option_nullable) {
-                                try writer.writeAll("?");
+                        if (!option_out) {
+                            if (self.isPointer()) {
+                                if (option_nullable) {
+                                    try writer.writeAll("?");
+                                }
+                                try writer.writeAll("*");
                             }
-                            try writer.writeAll("*");
                         }
                         try writer.writeAll(switch (t) {
                             .array => "core.Array",
