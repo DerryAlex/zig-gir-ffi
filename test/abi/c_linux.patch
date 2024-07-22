@@ -1,0 +1,13 @@
+--- a/c_linux.zig
++++ b/c_linux.zig
+@@ -1,5 +1,9 @@
+ // /usr/include/pango-1.0/pango/pango-glyph.h:105:9: warning: struct demoted to opaque type - has bitfield
+-pub const struct__PangoGlyphVisAttr = opaque {};
++pub const struct__PangoGlyphVisAttr = packed struct(u32) {
++    is_cluster_start: bool,
++    is_color: bool,
++    _: u30,
++};
+ pub const PangoGlyphVisAttr = struct__PangoGlyphVisAttr;
+ pub const struct__PangoGlyphInfo = extern struct {
+     glyph: PangoGlyph = @import("std").mem.zeroes(PangoGlyph),
