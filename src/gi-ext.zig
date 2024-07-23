@@ -134,6 +134,43 @@ pub const ArgInfoExt = struct {
                 option_signal_param = false;
             }
         }
+        {
+            const func = self.into(BaseInfo).getContainer().?;
+            if (func.getType() == .function) {
+                const func_symbol = std.mem.span(func.tryInto(FunctionInfo).?.getSymbol());
+                const arg_name = std.mem.span(self.into(BaseInfo).getName().?);
+                // PATCH: utf8 is char**
+                if (std.mem.eql(u8, "g_variant_parse", func_symbol) and std.mem.eql(u8, "endptr", arg_name)) {
+                    try writer.writeAll("?*[*:0]const u8");
+                    return;
+                }
+                if (std.mem.eql(u8, "g_assertion_message_cmpstrv", func_symbol) and std.mem.eql(u8, "arg1", arg_name)) {
+                    try writer.writeAll("*const [*:0]const u8");
+                    return;
+                }
+                if (std.mem.eql(u8, "g_assertion_message_cmpstrv", func_symbol) and std.mem.eql(u8, "arg2", arg_name)) {
+                    try writer.writeAll("*const [*:0]const u8");
+                    return;
+                }
+                // PATCH: out buf
+                if (std.mem.eql(u8, "g_base64_decode_inplace", func_symbol) and std.mem.eql(u8, "text", arg_name)) {
+                    try writer.writeAll("[*]u8");
+                    return;
+                }
+                if (std.mem.eql(u8, "g_base64_encode_close", func_symbol) and std.mem.eql(u8, "out", arg_name)) {
+                    try writer.writeAll("[*]u8");
+                    return;
+                }
+                if (std.mem.eql(u8, "g_base64_encode_step", func_symbol) and std.mem.eql(u8, "out", arg_name)) {
+                    try writer.writeAll("[*]u8");
+                    return;
+                }
+                if (std.mem.eql(u8, "g_unichar_to_utf8", func_symbol) and std.mem.eql(u8, "outbuf", arg_name)) {
+                    try writer.writeAll("[*]u8");
+                    return;
+                }
+            }
+        }
         if ((self.getDirection() != .in and !(self.isCallerAllocates() and arg_type.getTag() == .array and arg_type.getArrayType() == .c)) or option_signal_param) {
             if (self.isOptional()) {
                 if (self.mayBeNull()) {
@@ -555,7 +592,7 @@ pub const FieldInfoExt = struct {
         try writer.print("{s}", .{field_name});
         if (field_size == 0) {
             try writer.print(": {n}", .{field_type});
-            // patch for simd align
+            // PATCH: simd4f alignment
             if (field_type.getTag() == .interface) {
                 const interface = field_type.getInterface().?;
                 if (interface.getType() == .@"struct") {

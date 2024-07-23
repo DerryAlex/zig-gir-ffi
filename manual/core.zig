@@ -832,6 +832,13 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
     if (typeinfo_u == .Struct and @sizeOf(U) == 0 and @hasField(U, "skip_zig_test")) return true;
     if (typeinfo_v == .Struct and @sizeOf(V) == 0 and @hasField(V, "skip_zig_test")) return true;
 
+    if (typeinfo_u == .NoReturn) {
+        typeinfo_u = @typeInfo(void);
+    }
+    if (typeinfo_v == .NoReturn) {
+        typeinfo_v = @typeInfo(void);
+    }
+
     if (typeinfo_u == .Optional and @typeInfo(typeinfo_u.Optional.child) == .Pointer) {
         typeinfo_u = @typeInfo(typeinfo_u.Optional.child);
     }
