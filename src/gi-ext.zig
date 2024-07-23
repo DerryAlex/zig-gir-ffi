@@ -746,6 +746,19 @@ pub const FunctionInfoExt = struct {
                 );
                 return;
             }
+            // PATCH: g_list_store_splice
+            if (std.mem.eql(u8, "g_list_store_splice", func_symbol)) {
+                try writer.writeAll(
+                    \\(self: *ListStore, _position: u32, _n_removals: u32, _additionss: []*gobject.Object) void {
+                    \\    const _additions = _additionss.ptr;
+                    \\    const _n_additions: u32 = @intCast(_additionss.len);
+                    \\    const cFn = @extern(*const fn (*ListStore, u32, u32, [*]*gobject.Object, u32) callconv(.C) void, .{ .name = "g_list_store_splice" });
+                    \\    const ret = cFn(self, _position, _n_removals, _additions, _n_additions);
+                    \\    return ret;
+                    \\}
+                );
+                return;
+            }
         }
 
         // analyse parameters
