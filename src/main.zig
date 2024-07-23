@@ -286,13 +286,15 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
                 }
             }
 
-            try writer.writeAll(
-                \\test {
-                \\    @setEvalBranchQuota(1_000_000);
-                \\    std.testing.refAllDecls(@This());
-                \\}
-                \\
-            );
+            if (pkg_config.emit_abi) {
+                try writer.writeAll(
+                    \\test {
+                    \\    @setEvalBranchQuota(1_000_000);
+                    \\    std.testing.refAllDecls(@This());
+                    \\}
+                    \\
+                );
+            }
         }
 
         const outputdir_r = try output_dir.realpathAlloc(allocator, ".");

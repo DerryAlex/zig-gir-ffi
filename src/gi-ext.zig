@@ -169,6 +169,11 @@ pub const ArgInfoExt = struct {
                     try writer.writeAll("[*]u8");
                     return;
                 }
+                // PATCH: g_list_store_splice
+                if (std.mem.eql(u8, "g_list_store_splice", func_symbol) and std.mem.eql(u8, "additions", arg_name)) {
+                    try writer.writeAll("[*]*gobject.Object");
+                    return;
+                }
             }
         }
         if ((self.getDirection() != .in and !(self.isCallerAllocates() and arg_type.getTag() == .array and arg_type.getArrayType() == .c)) or option_signal_param) {
@@ -259,7 +264,16 @@ pub const CallableInfoExt = struct {
                 try writer.writeAll(", ");
             }
             switch (type_annotation) {
-                .disable => try writer.print("_{s}", .{arg.into(BaseInfo).getName().?}),
+                .disable => {
+                    const type_info = arg.getTypeInfo();
+                    if (type_info.getTag() == .void and type_info.isPointer()) {
+                        try writer.writeAll("@ptrCast(");
+                    }
+                    try writer.print("_{s}", .{arg.into(BaseInfo).getName().?});
+                    if (type_info.getTag() == .void and type_info.isPointer()) {
+                        try writer.writeAll(")");
+                    }
+                },
                 .enable => try writer.print("{}", .{arg}),
                 .only => try writer.print("{t}", .{arg}),
             }
@@ -591,7 +605,7 @@ pub const FieldInfoExt = struct {
         }
         try writer.print("{s}", .{field_name});
         if (field_size == 0) {
-            try writer.print(": {n}", .{field_type});
+            try writer.print(": {nw}", .{field_type});
             // PATCH: simd4f alignment
             if (field_type.getTag() == .interface) {
                 const interface = field_type.getInterface().?;
@@ -691,6 +705,49 @@ pub const FunctionInfoExt = struct {
         }
         try writer.print("pub fn {s}", .{func_name.to_identifier()});
 
+        {
+            // PATCH: out len
+            const func_symbol = std.mem.span(self.getSymbol());
+            if (std.mem.eql(u8, "g_base64_decode_inplace", func_symbol)) {
+                try writer.writeAll(
+                    \\(_texts: []u8) []u8 {
+                    \\    const _text = _texts.ptr;
+                    \\    var _out_len: u64 = @intCast(_texts.len);
+                    \\    const cFn = @extern(*const fn ([*]u8, *u64) callconv(.C) [*]u8, .{ .name = "g_base64_decode_inplace" });
+                    \\    const ret = cFn(_text, &_out_len);
+                    \\    return ret[0.._out_len];
+                    \\}
+                    \\
+                );
+                return;
+            }
+            // PATCH: out buf
+            if (std.mem.eql(u8, "g_base64_encode_close", func_symbol)) {
+                try writer.writeAll(
+                    \\(_break_lines: bool, _out: [*]u8, _state: *i32, _save: *i32) u64 {
+                    \\    const cFn = @extern(*const fn (bool, [*]u8, *i32, *i32) callconv(.C) u64, .{ .name = "g_base64_encode_close" });
+                    \\    const ret = cFn(_break_lines, _out, _state, _save);
+                    \\    return ret;
+                    \\}
+                    \\
+                );
+                return;
+            }
+            if (std.mem.eql(u8, "g_base64_encode_step", func_symbol)) {
+                try writer.writeAll(
+                    \\(_ins: []u8, _break_lines: bool, _out: [*]u8, _state: *i32, _save: *i32) u64 {
+                    \\    const _in = _ins.ptr;
+                    \\    const _len: u64 = @intCast(_ins.len);
+                    \\    const cFn = @extern(*const fn ([*]u8, u64, bool, [*]u8, *i32, *i32) callconv(.C) u64, .{ .name = "g_base64_encode_step" });
+                    \\    const ret = cFn(_in, _len, _break_lines, _out, _state, _save);
+                    \\    return ret;
+                    \\}
+                    \\
+                );
+                return;
+            }
+        }
+
         // analyse parameters
         var n_out_param: usize = 0;
         for (args, 0..) |arg, idx| {
@@ -774,7 +831,11 @@ pub const FunctionInfoExt = struct {
                     if (arg.isOptional()) {
                         try writer.writeAll("?");
                     }
-                    try writer.print("[]{}", .{arg.getTypeInfo().getParamType(0).?});
+                    try writer.writeAll("[]");
+                    if (arg.getTypeInfo().isZeroTerminated()) {
+                        try writer.writeAll("?");
+                    }
+                    try writer.print("{}", .{arg.getTypeInfo().getParamType(0).?});
                 } else if (closure_info[idx].is_func) {
                     // closure
                     try writer.print("{s}: anytype, {s}_args: anytype", .{ arg.into(BaseInfo).getName().?, arg.into(BaseInfo).getName().? });
@@ -838,7 +899,11 @@ pub const FunctionInfoExt = struct {
                         if (arg.isOptional()) {
                             try writer.writeAll("?");
                         }
-                        try writer.print("[]{}", .{arg.getTypeInfo().getParamType(0).?});
+                        try writer.writeAll("[]");
+                        if (arg.getTypeInfo().isZeroTerminated()) {
+                            try writer.writeAll("?");
+                        }
+                        try writer.print("{}", .{arg.getTypeInfo().getParamType(0).?});
                     } else {
                         if (arg.mayBeNull()) {
                             try writer.print("{mn}", .{arg.getTypeInfo()});
@@ -1412,7 +1477,6 @@ pub const StructInfoExt = struct {
 
         try root.generateDocs(.{ .@"struct" = self }, writer);
         const name = std.mem.span(self.into(BaseInfo).getName().?);
-        const namespace = std.mem.span(self.into(BaseInfo).getNamespace().?);
         try writer.print("pub const {s} = ", .{name});
         if (self.into(BaseInfo).isDeprecated()) {
             try writer.writeAll("if (config.disable_deprecated) core.Deprecated else ");
@@ -1420,15 +1484,6 @@ pub const StructInfoExt = struct {
         try writer.print("{s}{{\n", .{if (self.getSize() == 0) "opaque" else "extern struct"});
         var iter = self.field_iter();
         while (iter.next()) |field| {
-            // TODO: https://github.com/ziglang/zig/issues/12325
-            if (std.mem.eql(u8, namespace, "GObject") and std.mem.eql(u8, name, "Closure") and std.mem.eql(u8, std.mem.span(field.into(BaseInfo).getName().?), "notifiers")) {
-                try writer.writeAll("notifiers: ?*anyopaque,\n");
-                continue;
-            }
-            if (std.mem.eql(u8, namespace, "GLib") and std.mem.eql(u8, name, "HookList") and std.mem.eql(u8, std.mem.span(field.into(BaseInfo).getName().?), "finalize_hook")) {
-                try writer.writeAll("finalize_hook: ?*anyopaque,\n");
-                continue;
-            }
             try writer.print("{}", .{field});
         }
         try BitField._end(writer);
@@ -1457,6 +1512,7 @@ pub const TypeInfoExt = struct {
     /// - n: nullable
     /// - o: out
     /// - p: optional
+    /// - w: expand callback to workaround zig compiler bug
     pub fn format(self_immut: *const TypeInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *TypeInfo = @constCast(self_immut);
@@ -1464,12 +1520,14 @@ pub const TypeInfoExt = struct {
         var option_nullable = false;
         var option_out = false;
         var option_optional = false;
+        var option_expand_callback = false;
         inline for (fmt) |ch| {
             switch (ch) {
                 'm' => option_mut = true,
                 'n' => option_nullable = true,
                 'o' => option_out = true,
                 'p' => option_optional = true,
+                'w' => option_expand_callback = true,
                 else => @compileError(std.fmt.comptimePrint("Invalid format string '{c}' for type {s}", .{ ch, @typeName(@This()) })),
             }
         }
@@ -1562,7 +1620,7 @@ pub const TypeInfoExt = struct {
                                     .interface => {
                                         const interface = child_type.getInterface().?;
                                         if (interface.getType() == .@"struct" and interface.tryInto(StructInfo).?.getSize() == 0) {
-                                            try writer.print("[*:null]?*{n}", .{child_type}); // TODO: fix this in TypeInfoExt ?
+                                            try writer.print("[*:null]?*{n}", .{child_type});
                                         } else {
                                             try writer.print("[*:std.mem.zeroes({n})]{n}", .{ child_type, child_type });
                                         }
@@ -1607,7 +1665,12 @@ pub const TypeInfoExt = struct {
                         }
                         const callback_name = child_type.getName().?;
                         if (std.ascii.isUpper(callback_name[0])) {
-                            try writer.print("{s}.{s}", .{ child_type.namespace_string(), child_type.getName().? });
+                            // TODO: https://github.com/ziglang/zig/issues/12325
+                            if (option_expand_callback) {
+                                try writer.print("{}", .{child_type.tryInto(CallbackInfo).?});
+                            } else {
+                                try writer.print("{s}.{s}", .{ child_type.namespace_string(), child_type.getName().? });
+                            }
                         } else {
                             try writer.print("{}", .{child_type.tryInto(CallbackInfo).?});
                         }
