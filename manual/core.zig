@@ -662,42 +662,11 @@ fn init(comptime T: type, value: *T) void {
     }
 }
 
-/// Initializes fields using provided values
-fn overrideMethods(comptime Override: type, comptime Class: type, class: *Class) void {
-    const info = @typeInfo(Class).Struct;
-    inline for (info.fields) |field| {
-        if (comptime @hasDecl(Override, field.name)) {
-            comptime var field_info = @typeInfo(field.type);
-            if (field_info == .Optional) {
-                field_info = @typeInfo(field_info.Optional.child);
-            }
-            if (field_info == .Pointer) {
-                const pointer_child_info = @typeInfo(field_info.Pointer.child);
-                if (pointer_child_info == .Fn) {
-                    @field(class, field.name) = @field(Override, field.name);
-                }
-            }
-        }
-    }
-}
-
-/// Overrides class virtual function
-fn doClassOverride(comptime Class: type, comptime T: type, class: *anyopaque) void {
-    if (comptime @hasDecl(T, "Parent")) {
-        doClassOverride(Class, T.Parent, class);
-    }
-    if (comptime @hasDecl(T, "Class")) {
-        const ParentClass = T.Class;
-        const parent_class_name = @typeName(ParentClass)[(if (comptime std.mem.lastIndexOfScalar(u8, @typeName(ParentClass), '.')) |some| some + 1 else 0)..];
-        if (comptime @hasDecl(Class, parent_class_name ++ "Override")) {
-            const Override = @field(Class, parent_class_name ++ "Override");
-            overrideMethods(Override, ParentClass, @ptrCast(@alignCast(class)));
-        }
-    }
-}
-
 /// Registers a new static type
 pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: gobject.TypeFlags) Type {
+    if (@hasDecl(Object, "Override")) {
+        checkOverride(Object, Object.Override);
+    }
     const Class: type = Object.Class;
     const class_init = struct {
         fn trampoline(class: *Class) callconv(.C) void {
@@ -705,8 +674,8 @@ pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: gobject.T
                 _ = gobject.typeClassAdjustPrivateOffset(class, &typeTag(Object).private_offset);
             }
             init(Class, class);
-            if (comptime @hasDecl(Object, "Parent")) {
-                doClassOverride(Class, Object.Parent, class);
+            if (comptime @hasDecl(Object, "Override")) {
+                classOverride(Object, Object.Override, class);
             }
             if (comptime @hasDecl(Class, "properties")) {
                 @as(*gobject.ObjectClass, @ptrCast(class)).installProperties(Class.properties());
@@ -748,31 +717,87 @@ pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: gobject.T
         if (@hasDecl(Object, "Private")) {
             typeTag(Object).private_offset = gobject.typeAddInstancePrivate(type_id, @sizeOf(Object.Private));
         }
-        if (@hasDecl(Object, "Interfaces")) {
+        if (@hasDecl(Object, "Override") and @hasDecl(Object, "Interfaces")) {
             inline for (Object.Interfaces) |Interface| {
-                const interface_init = struct {
-                    const interface_name = @typeName(Interface)[(if (std.mem.lastIndexOfScalar(u8, @typeName(Interface), '.')) |some| some + 1 else 0)..];
-                    fn trampoline(self: *Interface) callconv(.C) void {
-                        if (comptime @hasDecl(Object, interface_name ++ "Override")) {
-                            const Override = @field(Object, interface_name ++ "Override");
-                            if (@hasDecl(Override, "init")) {
-                                Override.init(self);
-                            }
-                            overrideMethods(Override, Interface, self);
-                        }
-                    }
-                }.trampoline;
-                var interface_info: gobject.InterfaceInfo = .{
-                    .interface_init = @ptrCast(&interface_init),
-                    .interface_finalize = null,
-                    .interface_data = null,
-                };
-                gobject.typeAddInterfaceStatic(type_id, Interface.gType(), &interface_info);
+                interfaceOverride(Interface, Object.Override, type_id);
             }
         }
         glib.onceInitLeave(&typeTag(Object).type_id, @intFromEnum(type_id));
     }
     return typeTag(Object).type_id;
+}
+
+fn classOverride(comptime Object: type, comptime Override: type, class: *anyopaque) void {
+    if (Object != gobject.InitiallyUnowned and @hasDecl(Object, "Class")) {
+        const Class: type = Object.Class;
+        inline for (comptime std.meta.declarations(Override)) |decl| {
+            if (@hasField(Class, decl.name)) {
+                @field(unsafeCast(Class, class), decl.name) = @field(Override, decl.name);
+            }
+        }
+    }
+    if (@hasDecl(Object, "Parent")) {
+        classOverride(Object.Parent, Override, class);
+    }
+}
+
+fn interfaceOverride(comptime Interface: type, comptime Override: type, type_id: Type) void {
+    const interface_init = struct {
+        pub fn trampoline(interface: *Interface) callconv(.C) void {
+            inline for (comptime std.meta.declarations(Override)) |decl| {
+                if (@hasField(Interface, decl.name)) {
+                    @field(interface, decl.name) = @field(Override, decl.name);
+                }
+            }
+        }
+    }.trampoline;
+    var info: gobject.InterfaceInfo = .{
+        .interface_init = @ptrCast(&interface_init),
+        .interface_finalize = null,
+        .interface_data = null,
+    };
+    gobject.typeAddInterfaceStatic(type_id, Interface.gType(), &info);
+}
+
+fn checkOverride(comptime Object: type, comptime Override: type) void {
+    comptime {
+        const decls = std.meta.declarations(Override);
+        var overriden_count = [_]usize{0} ** decls.len;
+        if (@hasDecl(Object, "Interfaces")) {
+            for (Object.Interfaces) |Interface| {
+                for (decls, 0..) |decl, idx| {
+                    if (@hasField(Interface, decl.name)) {
+                        // @compileLog("Overrides", Interface, decl.name);
+                        overriden_count[idx] += 1;
+                    }
+                }
+            }
+        }
+        var T: type = Object;
+        while (true) {
+            if (T != gobject.InitiallyUnowned and @hasDecl(T, "Class")) {
+                const Class: type = T.Class;
+                for (decls, 0..) |decl, idx| {
+                    if (@hasField(Class, decl.name)) {
+                        overriden_count[idx] += 1;
+                    }
+                }
+            }
+            if (@hasDecl(T, "Parent")) {
+                T = T.Parent;
+            } else {
+                break;
+            }
+        }
+        for (overriden_count, 0..) |count, idx| {
+            if (count == 0) {
+                @compileError("'" ++ decls[idx].name ++ "' does not override any symbol");
+            }
+            if (count > 1) {
+                @compileError("'" ++ decls[idx].name ++ "' overrides multiple symbols");
+            }
+        }
+    }
 }
 
 /// Registers a new static type

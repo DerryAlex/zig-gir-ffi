@@ -50,7 +50,7 @@ pub const CstrContext = struct {
 pub const ExampleAppWindowClass = extern struct {
     parent: ApplicationWindowClass,
 
-    var parent_class: ?*ApplicationWindowClass = null;
+    pub var parent_class: ?*ApplicationWindowClass = null;
 
     pub fn init(class: *ExampleAppWindowClass) void {
         parent_class = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
@@ -78,16 +78,6 @@ pub const ExampleAppWindowClass = extern struct {
             },
         });
     }
-
-    pub const ObjectClassOverride = struct {
-        pub fn dispose(arg_object: *Object) callconv(.C) void {
-            var self = arg_object.tryInto(ExampleAppWindow).?;
-            self.settings.__call("unref", .{});
-            self.__call("disposeTemplate", .{ExampleAppWindow.gType()});
-            const p_class: *ObjectClass = @ptrCast(parent_class);
-            p_class.dispose.?(arg_object);
-        }
-    };
 
     pub fn searchTextChanged(entry: *Entry, self: *ExampleAppWindow) callconv(.C) void {
         const text = entry.__call("getText", .{});
@@ -129,6 +119,16 @@ pub const ExampleAppWindow = extern struct {
     pub const Parent = ApplicationWindow;
     pub const Class = ExampleAppWindowClass;
     pub usingnamespace core.Extend(ExampleAppWindow);
+
+    pub const Override = struct {
+        pub fn dispose(arg_object: *Object) callconv(.C) void {
+            var self = arg_object.tryInto(ExampleAppWindow).?;
+            self.settings.__call("unref", .{});
+            self.__call("disposeTemplate", .{ExampleAppWindow.gType()});
+            const p_class: *ObjectClass = @ptrCast(Class.parent_class.?);
+            p_class.dispose.?(arg_object);
+        }
+    };
 
     pub fn init(self: *ExampleAppWindow) void {
         self.__call("initTemplate", .{});

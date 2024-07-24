@@ -23,7 +23,7 @@ pub const CustomButtonClass = extern struct {
     parent: ButtonClass,
     zero_reached: ?*const fn (self: *CustomButton) callconv(.C) void,
 
-    var parent_class: ?*ButtonClass = null;
+    pub var parent_class: ?*ButtonClass = null;
 
     pub fn init(class: *CustomButtonClass) void {
         parent_class = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
@@ -46,8 +46,22 @@ pub const CustomButtonClass = extern struct {
         });
         return _signals[0..];
     }
+};
 
-    pub const ObjectClassOverride = struct {
+pub const CustomButtonPrivate = struct {
+    number: i32 = 10,
+};
+
+pub const CustomButton = extern struct {
+    parent: Button,
+    private: *Private,
+
+    pub const Parent = Button;
+    pub const Private = CustomButtonPrivate;
+    pub const Class = CustomButtonClass;
+    pub usingnamespace core.Extend(CustomButton);
+
+    pub const Override = struct {
         pub fn set_property(arg_object: *Object, arg_property_id: u32, arg_value: *Value, _: *ParamSpec) callconv(.C) void {
             var self = arg_object.tryInto(CustomButton).?;
             switch (@as(Properties, @enumFromInt(arg_property_id))) {
@@ -68,33 +82,17 @@ pub const CustomButtonClass = extern struct {
 
         pub fn constructed(arg_object: *Object) callconv(.C) void {
             var self = arg_object.tryInto(CustomButton).?;
-            const p_class: *gobject.ObjectClass = @ptrCast(parent_class);
+            const p_class: *gobject.ObjectClass = @ptrCast(Class.parent_class);
             p_class.constructed.?(arg_object);
             _ = self.__call("bindProperty", .{ "number", self.into(Object), "label", .{ .sync_create = true } });
         }
-    };
 
-    pub const ButtonClassOverride = struct {
         pub fn clicked(arg_button: *Button) callconv(.C) void {
             var self = arg_button.tryInto(CustomButton).?;
             const decremented_number = self.private.number - 1;
             self.setNumber(decremented_number);
         }
     };
-};
-
-pub const CustomButtonPrivate = struct {
-    number: i32 = 10,
-};
-
-pub const CustomButton = extern struct {
-    parent: Button,
-    private: *Private,
-
-    pub const Parent = Button;
-    pub const Private = CustomButtonPrivate;
-    pub const Class = CustomButtonClass;
-    pub usingnamespace core.Extend(CustomButton);
 
     pub fn new() *CustomButton {
         return core.newObject(CustomButton, .{});

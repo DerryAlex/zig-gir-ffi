@@ -20,7 +20,7 @@ const Window = gtk.Window;
 const ExampleAppPrefsClass = extern struct {
     parent: DialogClass,
 
-    var parent_class: ?*DialogClass = null;
+    pub var parent_class: ?*DialogClass = null;
 
     pub fn init(class: *ExampleAppPrefsClass) void {
         parent_class = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
@@ -31,16 +31,6 @@ const ExampleAppPrefsClass = extern struct {
             .{ .name = "transition" },
         });
     }
-
-    pub const ObjectClassOverride = struct {
-        pub fn dispose(arg_object: *Object) callconv(.C) void {
-            var self = arg_object.tryInto(ExampleAppPrefs).?;
-            self.private.settings.__call("unref", .{});
-            self.__call("disposeTemplate", .{ExampleAppPrefs.gType()});
-            const p_class: *ObjectClass = @ptrCast(parent_class.?);
-            p_class.dispose.?(arg_object);
-        }
-    };
 };
 
 const ExampleAppPrefsPrivate = struct {
@@ -57,6 +47,16 @@ pub const ExampleAppPrefs = extern struct {
     pub const Private = ExampleAppPrefsPrivate;
     pub const Class = ExampleAppPrefsClass;
     pub usingnamespace core.Extend(ExampleAppPrefs);
+
+    pub const Override = struct {
+        pub fn dispose(arg_object: *Object) callconv(.C) void {
+            var self = arg_object.tryInto(ExampleAppPrefs).?;
+            self.private.settings.__call("unref", .{});
+            self.__call("disposeTemplate", .{ExampleAppPrefs.gType()});
+            const p_class: *ObjectClass = @ptrCast(Class.parent_class.?);
+            p_class.dispose.?(arg_object);
+        }
+    };
 
     pub fn init(self: *ExampleAppPrefs) void {
         self.__call("initTemplate", .{});

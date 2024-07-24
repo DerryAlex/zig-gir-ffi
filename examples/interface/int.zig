@@ -25,21 +25,13 @@ pub const TypedInt = extern struct {
     pub const Interfaces = [_]type{ PartialEq, PartialOrd };
     pub usingnamespace core.Extend(TypedInt);
 
-    pub fn new(value: i32) *TypedInt {
-        var object = core.newObject(TypedInt, .{});
-        object.private.value = value;
-        return object;
-    }
-
-    pub const PartialEqOverride = struct {
+    pub const Override = struct {
         pub fn eq_fn(self: *PartialEq, rhs: *PartialEq) bool {
             const lhs_value = self.tryInto(TypedInt).?.private.value;
             const rhs_value = rhs.tryInto(TypedInt).?.private.value;
             return lhs_value == rhs_value;
         }
-    };
 
-    pub const PartialOrdOverride = struct {
         pub fn cmp_fn(self: *PartialOrd, rhs: *PartialOrd) PartialOrd.Order {
             const lhs_value = self.tryInto(TypedInt).?.private.value;
             const rhs_value = rhs.tryInto(TypedInt).?.private.value;
@@ -47,6 +39,12 @@ pub const TypedInt = extern struct {
             return if (lhs_value < rhs_value) .Lt else .Gt;
         }
     };
+
+    pub fn new(value: i32) *TypedInt {
+        var object = core.newObject(TypedInt, .{});
+        object.private.value = value;
+        return object;
+    }
 
     pub fn gType() core.Type {
         return core.registerType(TypedInt, "TypedInt", .{});

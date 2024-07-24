@@ -20,13 +20,21 @@ const GApplicationClass = gio.ApplicationClass;
 pub const ExampleAppClass = extern struct {
     parent: ApplicationClass,
 
-    var parent_class: ?*ApplicationClass = null;
+    pub var parent_class: ?*ApplicationClass = null;
 
     pub fn init(class: *ExampleAppClass) void {
         parent_class = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
     }
+};
 
-    pub const ApplicationClassOverride = struct {
+pub const ExampleApp = extern struct {
+    parent: Parent,
+
+    pub const Parent = Application;
+    pub const Class = ExampleAppClass;
+    pub usingnamespace core.Extend(ExampleApp);
+
+    pub const Override = struct {
         pub fn activate(arg_app: *GApplication) callconv(.C) void {
             const self = arg_app.tryInto(ExampleApp).?;
             var win = ExampleAppWindow.new(self);
@@ -56,10 +64,17 @@ pub const ExampleAppClass = extern struct {
             self.__call("addAction", .{action_quit.into(Action)});
             var quit_accels = [_:null]?[*:0]const u8{"<Ctrl>Q"};
             self.__call("setAccelsForAction", .{ "app.quit", &quit_accels });
-            const p_class: *GApplicationClass = @ptrCast(parent_class);
+            const p_class: *GApplicationClass = @ptrCast(Class.parent_class.?);
             p_class.startup.?(arg_app);
         }
     };
+
+    pub fn new() *ExampleApp {
+        return core.newObject(ExampleApp, .{
+            .@"application-id" = "org.gtk.example",
+            .flags = ApplicationFlags{ .handles_open = true },
+        });
+    }
 
     fn preferencesActivate(self: *ExampleApp) void {
         const win = self.__call("getActiveWindow", .{}).?.tryInto(ExampleAppWindow).?;
@@ -69,21 +84,6 @@ pub const ExampleAppClass = extern struct {
 
     fn quitActivate(self: *ExampleApp) void {
         self.__call("quit", .{});
-    }
-};
-
-pub const ExampleApp = extern struct {
-    parent: Parent,
-
-    pub const Parent = Application;
-    pub const Class = ExampleAppClass;
-    pub usingnamespace core.Extend(ExampleApp);
-
-    pub fn new() *ExampleApp {
-        return core.newObject(ExampleApp, .{
-            .@"application-id" = "org.gtk.example",
-            .flags = ApplicationFlags{ .handles_open = true },
-        });
     }
 
     pub fn gType() core.Type {
