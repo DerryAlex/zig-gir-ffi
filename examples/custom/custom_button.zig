@@ -20,7 +20,7 @@ var _properties: [2]*ParamSpec = undefined;
 var _signals: [1]u32 = undefined;
 
 pub const CustomButtonClass = extern struct {
-    parent: ButtonClass,
+    parent_class: ButtonClass,
     zero_reached: ?*const fn (self: *CustomButton) callconv(.C) void,
 
     pub var parent_class: ?*ButtonClass = null;

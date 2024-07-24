@@ -8,7 +8,7 @@ const PartialEq = @import("eq.zig").PartialEq;
 const PartialOrd = @import("ord.zig").PartialOrd;
 
 pub const TypedIntClass = extern struct {
-    parent: ObjectClass,
+    parent_class: ObjectClass,
 };
 
 pub const TypeIntPrivate = struct {

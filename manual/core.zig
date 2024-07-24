@@ -675,7 +675,7 @@ pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: gobject.T
             }
             init(Class, class);
             if (comptime @hasDecl(Object, "Override")) {
-                classOverride(Object, Object.Override, class);
+                classOverride(Class, Object.Override, class);
             }
             if (comptime @hasDecl(Class, "properties")) {
                 @as(*gobject.ObjectClass, @ptrCast(class)).installProperties(Class.properties());
@@ -727,17 +727,14 @@ pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: gobject.T
     return typeTag(Object).type_id;
 }
 
-fn classOverride(comptime Object: type, comptime Override: type, class: *anyopaque) void {
-    if (Object != gobject.InitiallyUnowned and @hasDecl(Object, "Class")) {
-        const Class: type = Object.Class;
-        inline for (comptime std.meta.declarations(Override)) |decl| {
-            if (@hasField(Class, decl.name)) {
-                @field(unsafeCast(Class, class), decl.name) = @field(Override, decl.name);
-            }
+fn classOverride(comptime Class: type, comptime Override: type, class: *Class) void {
+    inline for (comptime std.meta.declarations(Override)) |decl| {
+        if (@hasField(Class, decl.name)) {
+            @field(class, decl.name) = @field(Override, decl.name);
         }
     }
-    if (@hasDecl(Object, "Parent")) {
-        classOverride(Object.Parent, Override, class);
+    if (@hasField(Class, "parent_class")) {
+        classOverride(@TypeOf(@field(class, "parent_class")), Override, @ptrCast(class));
     }
 }
 

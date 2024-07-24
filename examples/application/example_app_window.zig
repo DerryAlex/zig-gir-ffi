@@ -48,7 +48,7 @@ pub const CstrContext = struct {
 };
 
 pub const ExampleAppWindowClass = extern struct {
-    parent: ApplicationWindowClass,
+    parent_class: ApplicationWindowClass,
 
     pub var parent_class: ?*ApplicationWindowClass = null;
 

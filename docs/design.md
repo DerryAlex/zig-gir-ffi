@@ -10,7 +10,7 @@ To define custom object, provide `gType` (through `core.registerType`) and `new`
 
 Properties of an object will be listed in the comment. User can use `object.property(T, property_name)` to access.
 
-To define custom property, provide `properties` in class, which returns a slice of properties. Override `Object.get_property` and `Object.set_property` if you expect them to work properly. Getter and setter method will usally be provided.
+To define custom property, provide `properties` in class, which returns a slice of properties. Override `Object.get_property` and `Object.set_property`. Getter and setter method will usally be provided.
 
 #### Signal
 
@@ -20,12 +20,10 @@ To define custom signal, provide `signals` in class, which returns a slice of si
 
 #### Vfunc
 
-A method with V suffix will be generated.
+A method with V suffix will be generated. Virtual funcs can be overriden in `Override` declaration.
 
-> *Warning*: The override syntax has not been finalized.
+To define a vfunc, simply define a function pointer field in `Class`.
 
 ### Interface
 
-See example/interface.
-
-> *Warning*: The override syntax has not been finalized.
+Similar to vfunc. See example/interface.

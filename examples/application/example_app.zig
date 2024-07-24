@@ -18,7 +18,7 @@ const GApplication = gio.Application;
 const GApplicationClass = gio.ApplicationClass;
 
 pub const ExampleAppClass = extern struct {
-    parent: ApplicationClass,
+    parent_class: ApplicationClass,
 
     pub var parent_class: ?*ApplicationClass = null;
 

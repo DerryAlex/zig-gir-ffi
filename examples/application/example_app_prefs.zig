@@ -18,7 +18,7 @@ const WidgetClass = gtk.WidgetClass;
 const Window = gtk.Window;
 
 const ExampleAppPrefsClass = extern struct {
-    parent: DialogClass,
+    parent_class: DialogClass,
 
     pub var parent_class: ?*DialogClass = null;
 
