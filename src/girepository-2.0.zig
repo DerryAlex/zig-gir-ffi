@@ -447,7 +447,6 @@ pub const EnumInfo = opaque {
     pub const signalConnect = Ext.signalConnect;
     const ManualExt = ext.EnumInfoExt;
     pub const format = ManualExt.format;
-    pub const value_iter = ManualExt.value_iter;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_enum_info_get_type" });
         return cFn();

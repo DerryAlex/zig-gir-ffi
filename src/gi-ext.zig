@@ -1327,6 +1327,19 @@ pub const ObjectInfoExt = struct {
                 \\pub const format = ManualExt.format;
                 \\
             , .{name});
+            if (std.mem.eql(u8, "BaseInfo", std.mem.span(name))) {
+                try writer.writeAll(
+                    \\pub const getType = ManualExt.getType;
+                    \\
+                );
+            }
+            if (std.mem.eql(u8, "ConstantInfo", std.mem.span(name))) {
+                try writer.writeAll(
+                    \\pub const getValue = ManualExt.getValue;
+                    \\pub const freeValue = ManualExt.freeValue;
+                    \\
+                );
+            }
         }
         try writer.print("{}", .{self.into(RegisteredTypeInfo)});
         try writer.writeAll("};\n");
