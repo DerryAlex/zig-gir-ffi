@@ -8,7 +8,7 @@ To define custom object, provide `gType` (through `core.registerType`) and `new`
 
 #### Property
 
-Properties of an object will be listed in the comment. User can use `object.set(T, property_name)` or `object.set(T, property_name)` to access.
+Properties of an object will be listed in the comment. User can use `object.property(T, property_name)` to access.
 
 To define custom property, provide `properties` in class, which returns a slice of properties. Override `Object.get_property` and `Object.set_property` if you expect them to work properly. Getter and setter method will usally be provided.
 

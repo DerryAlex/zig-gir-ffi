@@ -4,7 +4,7 @@ const core = gtk.core;
 const glib = gtk.glib;
 const gobject = gtk.gobject;
 const gio = gtk.gio;
-const template = @import("template");
+const template = gtk.template;
 const meta = std.meta;
 const assert = std.debug.assert;
 const ExampleApp = @import("example_app.zig").ExampleApp;
@@ -140,7 +140,7 @@ pub const ExampleAppWindow = extern struct {
         self.settings.bind("transition", self.stack.into(Object), "transition-type", .{});
         self.settings.bind("show-words", self.sidebar.into(Object), "reveal-child", .{});
         _ = self.search.__call("bindProperty", .{ "active", self.searchbar.into(Object), "search-mode-enabled", .{ .bidirectional = true } });
-        _ = self.sidebar.connectNotify("reveal-child", updateWords, .{self}, .{ .swapped = true });
+        _ = self.sidebar.signalConnect("notify::reveal-child", updateWords, .{self}, .{ .swapped = true }, &.{ void, *gobject.Object, *gobject.ParamSpec });
         const action_show_words = self.settings.createAction("show-words");
         defer core.unsafeCast(Object, action_show_words).unref();
         self.__call("addAction", .{action_show_words});

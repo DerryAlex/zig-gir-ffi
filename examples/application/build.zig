@@ -15,7 +15,6 @@ pub fn build(b: *std.Build) !void {
         .target = target,
     });
     exe_check.root_module.addImport("gtk", gtk.module("gtk"));
-    exe_check.root_module.addImport("template", gtk.module("template"));
     exe_check.linkLibC();
     const check = b.step("check", "Check if compiles");
     check.dependOn(&exe_check.step);
@@ -30,7 +29,6 @@ pub fn build(b: *std.Build) !void {
         .target = target,
     });
     exe.root_module.addImport("gtk", gtk.module("gtk"));
-    exe.root_module.addImport("template", gtk.module("template"));
     exe.addCSourceFile(.{
         .file = b.path("resources.c"),
         .flags = &[_][]const u8{},

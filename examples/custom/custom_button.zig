@@ -122,7 +122,7 @@ pub const CustomButton = extern struct {
     }
 
     pub fn connectZeroReached(self: *CustomButton, comptime handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags) usize {
-        return self.connect("zero-reached", handler, args, flags, &[_]type{ void, *CustomButton });
+        return self.signalConnect("zero-reached", handler, args, flags, &[_]type{ void, *CustomButton });
     }
 
     pub fn gType() core.Type {

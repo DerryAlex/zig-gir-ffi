@@ -2,6 +2,7 @@ const gi_repository = @This();
 pub const core = @import("core_min.zig");
 const std = @import("std");
 const ext = @import("gi-ext.zig");
+const config = core.config;
 /// Class [ArgInfo](https://docs.gtk.org/girepository/class.ArgInfo.html)
 pub const ArgInfo = extern struct {
     parent: gi_repository.BaseInfoStack,
@@ -74,8 +75,8 @@ pub const ArgInfo = extern struct {
         return ret;
     }
     /// method [load_type_info](https://docs.gtk.org/girepository/method.ArgInfo.load_type_info.html)
-    pub fn loadTypeInfo(self: *ArgInfo, _type: gi_repository.TypeInfo) void {
-        const cFn = @extern(*const fn (*ArgInfo, gi_repository.TypeInfo) callconv(.C) void, .{ .name = "gi_arg_info_load_type_info" });
+    pub fn loadTypeInfo(self: *ArgInfo, _type: *gi_repository.TypeInfo) void {
+        const cFn = @extern(*const fn (*ArgInfo, *gi_repository.TypeInfo) callconv(.C) void, .{ .name = "gi_arg_info_load_type_info" });
         const ret = cFn(self, _type);
         return ret;
     }
@@ -85,12 +86,18 @@ pub const ArgInfo = extern struct {
         const ret = cFn(self);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.ArgInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_arg_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.ArgInfoExt;
 };
 /// Union [Argument](https://docs.gtk.org/girepository/union.Argument.html)
 pub const Argument = extern union {
@@ -180,7 +187,7 @@ pub const BaseInfo = opaque {
         return ret;
     }
     /// method [iterate_attributes](https://docs.gtk.org/girepository/method.BaseInfo.iterate_attributes.html)
-    pub fn iterateAttributes(self: *BaseInfo, _iterator: gi_repository.AttributeIter) struct {
+    pub fn iterateAttributes(self: *BaseInfo, _iterator: *gi_repository.AttributeIter) struct {
         ret: bool,
         name: [*:0]u8,
         value: [*:0]u8,
@@ -189,7 +196,7 @@ pub const BaseInfo = opaque {
         const _name = &name_out;
         var value_out: [*:0]u8 = undefined;
         const _value = &value_out;
-        const cFn = @extern(*const fn (*BaseInfo, gi_repository.AttributeIter, ?[*:0]u8, ?[*:0]u8) callconv(.C) bool, .{ .name = "gi_base_info_iterate_attributes" });
+        const cFn = @extern(*const fn (*BaseInfo, *gi_repository.AttributeIter, *[*:0]u8, *[*:0]u8) callconv(.C) bool, .{ .name = "gi_base_info_iterate_attributes" });
         const ret = cFn(self, _iterator, _name, _value);
         return .{ .ret = ret, .name = name_out, .value = value_out };
     }
@@ -205,12 +212,21 @@ pub const BaseInfo = opaque {
         const ret = cFn(self);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.BaseInfoExt;
+    pub const format = ManualExt.format;
+    pub const getType = ManualExt.getType;
+    pub const name_string = ManualExt.name_string;
+    pub const namespace_string = ManualExt.namespace_string;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_base_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.BaseInfoExt;
 };
 pub const BaseInfoClass = opaque {};
 /// Struct [BaseInfoStack](https://docs.gtk.org/girepository/struct.BaseInfoStack.html)
@@ -267,14 +283,14 @@ pub const CallableInfo = opaque {
         return ret;
     }
     /// method [invoke](https://docs.gtk.org/girepository/method.CallableInfo.invoke.html)
-    pub fn invoke(self: *CallableInfo, _function: ?*anyopaque, _in_argss: []gi_repository.Argument, _out_argss: []gi_repository.Argument, _return_value: gi_repository.Argument) error{GError}!bool {
+    pub fn invoke(self: *CallableInfo, _function: ?*anyopaque, _in_argss: []gi_repository.Argument, _out_argss: []gi_repository.Argument, _return_value: *gi_repository.Argument) error{GError}!bool {
         var _error: ?*core.Error = null;
         const _in_args = _in_argss.ptr;
         const _n_in_args: u64 = @intCast(_in_argss.len);
         const _out_args = _out_argss.ptr;
         const _n_out_args: u64 = @intCast(_out_argss.len);
-        const cFn = @extern(*const fn (*CallableInfo, ?*anyopaque, [*]gi_repository.Argument, u64, [*]gi_repository.Argument, u64, gi_repository.Argument, *?*core.Error) callconv(.C) bool, .{ .name = "gi_callable_info_invoke" });
-        const ret = cFn(self, _function, _in_args, _n_in_args, _out_args, _n_out_args, _return_value, &_error);
+        const cFn = @extern(*const fn (*CallableInfo, ?*anyopaque, [*]gi_repository.Argument, u64, [*]gi_repository.Argument, u64, *gi_repository.Argument, *?*core.Error) callconv(.C) bool, .{ .name = "gi_callable_info_invoke" });
+        const ret = cFn(self, @ptrCast(_function), _in_args, _n_in_args, _out_args, _n_out_args, _return_value, &_error);
         if (_error) |some| {
             core.setError(some);
             return error.GError;
@@ -288,7 +304,7 @@ pub const CallableInfo = opaque {
         return ret;
     }
     /// method [iterate_return_attributes](https://docs.gtk.org/girepository/method.CallableInfo.iterate_return_attributes.html)
-    pub fn iterateReturnAttributes(self: *CallableInfo, _iterator: gi_repository.AttributeIter) struct {
+    pub fn iterateReturnAttributes(self: *CallableInfo, _iterator: *gi_repository.AttributeIter) struct {
         ret: bool,
         name: [*:0]u8,
         value: [*:0]u8,
@@ -297,19 +313,19 @@ pub const CallableInfo = opaque {
         const _name = &name_out;
         var value_out: [*:0]u8 = undefined;
         const _value = &value_out;
-        const cFn = @extern(*const fn (*CallableInfo, gi_repository.AttributeIter, ?[*:0]u8, ?[*:0]u8) callconv(.C) bool, .{ .name = "gi_callable_info_iterate_return_attributes" });
+        const cFn = @extern(*const fn (*CallableInfo, *gi_repository.AttributeIter, *[*:0]u8, *[*:0]u8) callconv(.C) bool, .{ .name = "gi_callable_info_iterate_return_attributes" });
         const ret = cFn(self, _iterator, _name, _value);
         return .{ .ret = ret, .name = name_out, .value = value_out };
     }
     /// method [load_arg](https://docs.gtk.org/girepository/method.CallableInfo.load_arg.html)
-    pub fn loadArg(self: *CallableInfo, _n: u32, _arg: gi_repository.ArgInfo) void {
-        const cFn = @extern(*const fn (*CallableInfo, u32, gi_repository.ArgInfo) callconv(.C) void, .{ .name = "gi_callable_info_load_arg" });
+    pub fn loadArg(self: *CallableInfo, _n: u32, _arg: *gi_repository.ArgInfo) void {
+        const cFn = @extern(*const fn (*CallableInfo, u32, *gi_repository.ArgInfo) callconv(.C) void, .{ .name = "gi_callable_info_load_arg" });
         const ret = cFn(self, _n, _arg);
         return ret;
     }
     /// method [load_return_type](https://docs.gtk.org/girepository/method.CallableInfo.load_return_type.html)
-    pub fn loadReturnType(self: *CallableInfo, _type: gi_repository.TypeInfo) void {
-        const cFn = @extern(*const fn (*CallableInfo, gi_repository.TypeInfo) callconv(.C) void, .{ .name = "gi_callable_info_load_return_type" });
+    pub fn loadReturnType(self: *CallableInfo, _type: *gi_repository.TypeInfo) void {
+        const cFn = @extern(*const fn (*CallableInfo, *gi_repository.TypeInfo) callconv(.C) void, .{ .name = "gi_callable_info_load_return_type" });
         const ret = cFn(self, _type);
         return ret;
     }
@@ -325,22 +341,34 @@ pub const CallableInfo = opaque {
         const ret = cFn(self);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.CallableInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_callable_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.CallableInfoExt;
 };
 /// Class [CallbackInfo](https://docs.gtk.org/girepository/class.CallbackInfo.html)
 pub const CallbackInfo = opaque {
     pub const Parent = gi_repository.CallableInfo;
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.CallbackInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_callback_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.CallbackInfoExt;
 };
 /// Class [ConstantInfo](https://docs.gtk.org/girepository/class.ConstantInfo.html)
 pub const ConstantInfo = opaque {
@@ -351,12 +379,20 @@ pub const ConstantInfo = opaque {
         const ret = cFn(self);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.ConstantInfoExt;
+    pub const format = ManualExt.format;
+    pub const getValue = ManualExt.getValue;
+    pub const freeValue = ManualExt.freeValue;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_constant_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.ConstantInfoExt;
 };
 /// Enum [Direction](https://docs.gtk.org/girepository/enum.Direction.html)
 pub const Direction = enum(u32) {
@@ -403,12 +439,19 @@ pub const EnumInfo = opaque {
         const ret = cFn(self, _n);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.EnumInfoExt;
+    pub const format = ManualExt.format;
+    pub const value_iter = ManualExt.value_iter;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_enum_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.EnumInfoExt;
 };
 /// Class [FieldInfo](https://docs.gtk.org/girepository/class.FieldInfo.html)
 pub const FieldInfo = opaque {
@@ -437,30 +480,40 @@ pub const FieldInfo = opaque {
         const ret = cFn(self);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.FieldInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_field_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.FieldInfoExt;
 };
 /// Flags [FieldInfoFlags](https://docs.gtk.org/girepository/flags.FieldInfoFlags.html)
 pub const FieldInfoFlags = packed struct(u32) {
     readable: bool = false,
     writable: bool = false,
     _: u30 = 0,
-    pub const readable: @This() = @bitCast(1);
-    pub const writable: @This() = @bitCast(2);
 };
 /// Class [FlagsInfo](https://docs.gtk.org/girepository/class.FlagsInfo.html)
 pub const FlagsInfo = opaque {
     pub const Parent = gi_repository.EnumInfo;
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.FlagsInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_flags_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.FlagsInfoExt;
 };
 /// Class [FunctionInfo](https://docs.gtk.org/girepository/class.FunctionInfo.html)
 pub const FunctionInfo = opaque {
@@ -489,12 +542,18 @@ pub const FunctionInfo = opaque {
         const ret = cFn(self);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.FunctionInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_function_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.FunctionInfoExt;
 };
 /// Flags [FunctionInfoFlags](https://docs.gtk.org/girepository/flags.FunctionInfoFlags.html)
 pub const FunctionInfoFlags = packed struct(u32) {
@@ -504,11 +563,6 @@ pub const FunctionInfoFlags = packed struct(u32) {
     is_setter: bool = false,
     wraps_vfunc: bool = false,
     _: u27 = 0,
-    pub const is_method: @This() = @bitCast(1);
-    pub const is_constructor: @This() = @bitCast(2);
-    pub const is_getter: @This() = @bitCast(4);
-    pub const is_setter: @This() = @bitCast(8);
-    pub const wraps_vfunc: @This() = @bitCast(16);
 };
 /// Class [InterfaceInfo](https://docs.gtk.org/girepository/class.InterfaceInfo.html)
 pub const InterfaceInfo = opaque {
@@ -609,12 +663,18 @@ pub const InterfaceInfo = opaque {
         const ret = cFn(self, _n);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.InterfaceInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_interface_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.InterfaceInfoExt;
 };
 /// Error [InvokeError](https://docs.gtk.org/girepository/error.InvokeError.html)
 pub const InvokeError = enum(u32) {
@@ -815,12 +875,18 @@ pub const ObjectInfo = opaque {
         const ret = cFn(self, _n);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.ObjectInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_object_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.ObjectInfoExt;
 };
 /// Class [PropertyInfo](https://docs.gtk.org/girepository/class.PropertyInfo.html)
 pub const PropertyInfo = opaque {
@@ -855,12 +921,18 @@ pub const PropertyInfo = opaque {
         const ret = cFn(self);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.PropertyInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_property_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.PropertyInfoExt;
 };
 /// Class [RegisteredTypeInfo](https://docs.gtk.org/girepository/class.RegisteredTypeInfo.html)
 pub const RegisteredTypeInfo = opaque {
@@ -889,12 +961,18 @@ pub const RegisteredTypeInfo = opaque {
         const ret = cFn(self);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.RegisteredTypeInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_registered_type_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.RegisteredTypeInfoExt;
 };
 /// Class [Repository](https://docs.gtk.org/girepository/class.Repository.html)
 pub const Repository = opaque {
@@ -1029,7 +1107,7 @@ pub const Repository = opaque {
         const _n_interfaces_out = &n_interfaces_out_out;
         var interfaces_out_out: [*]*gi_repository.InterfaceInfo = undefined;
         const _interfaces_out = &interfaces_out_out;
-        const cFn = @extern(*const fn (*Repository, core.Type, u64, ?[*]*gi_repository.InterfaceInfo) callconv(.C) void, .{ .name = "gi_repository_get_object_gtype_interfaces" });
+        const cFn = @extern(*const fn (*Repository, core.Type, *u64, *[*]*gi_repository.InterfaceInfo) callconv(.C) void, .{ .name = "gi_repository_get_object_gtype_interfaces" });
         const ret = cFn(self, _gtype, _n_interfaces_out, _interfaces_out);
         return .{ .ret = ret, .interfaces_out = interfaces_out_out[0..@intCast(n_interfaces_out_out)] };
     }
@@ -1118,7 +1196,14 @@ pub const Repository = opaque {
         }
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.RepositoryExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_repository_get_type" });
         return cFn();
@@ -1138,8 +1223,6 @@ pub const RepositoryError = enum(u32) {
 pub const RepositoryLoadFlags = packed struct(u32) {
     lazy: bool = false,
     _: u31 = 0,
-    pub const none: @This() = @bitCast(0);
-    pub const lazy: @This() = @bitCast(1);
 };
 /// Enum [ScopeType](https://docs.gtk.org/girepository/enum.ScopeType.html)
 pub const ScopeType = enum(u32) {
@@ -1170,12 +1253,18 @@ pub const SignalInfo = opaque {
         const ret = cFn(self);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.SignalInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_signal_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.SignalInfoExt;
 };
 /// Class [StructInfo](https://docs.gtk.org/girepository/class.StructInfo.html)
 pub const StructInfo = opaque {
@@ -1252,12 +1341,18 @@ pub const StructInfo = opaque {
         const ret = cFn(self);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.StructInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_struct_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.StructInfoExt;
 };
 /// const [TYPE_TAG_N_TYPES](https://docs.gtk.org/girepository/const.TYPE_TAG_N_TYPES.html)
 pub const TYPE_TAG_N_TYPES = 22;
@@ -1273,9 +1368,9 @@ pub const TypeInfo = extern struct {
     padding: [6]?*anyopaque,
     pub const Parent = gi_repository.BaseInfo;
     /// method [argument_from_hash_pointer](https://docs.gtk.org/girepository/method.TypeInfo.argument_from_hash_pointer.html)
-    pub fn argumentFromHashPointer(self: *TypeInfo, _hash_pointer: ?*anyopaque, _arg: gi_repository.Argument) void {
-        const cFn = @extern(*const fn (*TypeInfo, ?*anyopaque, gi_repository.Argument) callconv(.C) void, .{ .name = "gi_type_info_argument_from_hash_pointer" });
-        const ret = cFn(self, _hash_pointer, _arg);
+    pub fn argumentFromHashPointer(self: *TypeInfo, _hash_pointer: ?*anyopaque, _arg: *gi_repository.Argument) void {
+        const cFn = @extern(*const fn (*TypeInfo, ?*anyopaque, *gi_repository.Argument) callconv(.C) void, .{ .name = "gi_type_info_argument_from_hash_pointer" });
+        const ret = cFn(self, @ptrCast(_hash_pointer), _arg);
         return ret;
     }
     /// method [get_array_fixed_size](https://docs.gtk.org/girepository/method.TypeInfo.get_array_fixed_size.html)
@@ -1344,12 +1439,18 @@ pub const TypeInfo = extern struct {
         const ret = cFn(self);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.TypeInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_type_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.TypeInfoExt;
 };
 /// Enum [TypeTag](https://docs.gtk.org/girepository/enum.TypeTag.html)
 pub const TypeTag = enum(u32) {
@@ -1408,8 +1509,8 @@ pub const Typelib = opaque {
     } {
         var symbol_out: ?*anyopaque = undefined;
         const _symbol = &symbol_out;
-        const cFn = @extern(*const fn (*Typelib, [*:0]const u8, ?*anyopaque) callconv(.C) bool, .{ .name = "gi_typelib_symbol" });
-        const ret = cFn(self, _symbol_name, _symbol);
+        const cFn = @extern(*const fn (*Typelib, [*:0]const u8, *anyopaque) callconv(.C) bool, .{ .name = "gi_typelib_symbol" });
+        const ret = cFn(self, _symbol_name, @ptrCast(_symbol));
         return .{ .ret = ret, .symbol = symbol_out };
     }
     /// method [unref](https://docs.gtk.org/girepository/method.Typelib.unref.html)
@@ -1507,22 +1608,34 @@ pub const UnionInfo = opaque {
         const ret = cFn(self);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.UnionInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_union_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.UnionInfoExt;
 };
 /// Class [UnresolvedInfo](https://docs.gtk.org/girepository/class.UnresolvedInfo.html)
 pub const UnresolvedInfo = opaque {
     pub const Parent = gi_repository.BaseInfo;
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.UnresolvedInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_unresolved_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.UnresolvedInfoExt;
 };
 /// Class [VFuncInfo](https://docs.gtk.org/girepository/class.VFuncInfo.html)
 pub const VFuncInfo = opaque {
@@ -1562,12 +1675,18 @@ pub const VFuncInfo = opaque {
         const ret = cFn(self);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.VFuncInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_vfunc_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.VFuncInfoExt;
 };
 /// Flags [VFuncInfoFlags](https://docs.gtk.org/girepository/flags.VFuncInfoFlags.html)
 pub const VFuncInfoFlags = packed struct(u32) {
@@ -1575,9 +1694,6 @@ pub const VFuncInfoFlags = packed struct(u32) {
     override: bool = false,
     not_override: bool = false,
     _: u29 = 0,
-    pub const chain_up: @This() = @bitCast(1);
-    pub const override: @This() = @bitCast(2);
-    pub const not_override: @This() = @bitCast(4);
 };
 /// Class [ValueInfo](https://docs.gtk.org/girepository/class.ValueInfo.html)
 pub const ValueInfo = opaque {
@@ -1588,12 +1704,18 @@ pub const ValueInfo = opaque {
         const ret = cFn(self);
         return ret;
     }
-    pub usingnamespace core.Extend(@This());
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
+    const ManualExt = ext.ValueInfoExt;
+    pub const format = ManualExt.format;
     pub fn gType() core.Type {
         const cFn = @extern(*const fn () callconv(.C) core.Type, .{ .name = "gi_value_info_get_type" });
         return cFn();
     }
-    pub usingnamespace ext.ValueInfoExt;
 };
 /// func [invoke_error_quark](https://docs.gtk.org/girepository/func.invoke_error_quark.html)
 pub fn invokeErrorQuark() u32 {
@@ -1602,9 +1724,9 @@ pub fn invokeErrorQuark() u32 {
     return ret;
 }
 /// func [type_tag_argument_from_hash_pointer](https://docs.gtk.org/girepository/func.type_tag_argument_from_hash_pointer.html)
-pub fn typeTagArgumentFromHashPointer(_storage_type: gi_repository.TypeTag, _hash_pointer: ?*anyopaque, _arg: gi_repository.Argument) void {
-    const cFn = @extern(*const fn (gi_repository.TypeTag, ?*anyopaque, gi_repository.Argument) callconv(.C) void, .{ .name = "gi_type_tag_argument_from_hash_pointer" });
-    const ret = cFn(_storage_type, _hash_pointer, _arg);
+pub fn typeTagArgumentFromHashPointer(_storage_type: gi_repository.TypeTag, _hash_pointer: ?*anyopaque, _arg: *gi_repository.Argument) void {
+    const cFn = @extern(*const fn (gi_repository.TypeTag, ?*anyopaque, *gi_repository.Argument) callconv(.C) void, .{ .name = "gi_type_tag_argument_from_hash_pointer" });
+    const ret = cFn(_storage_type, @ptrCast(_hash_pointer), _arg);
     return ret;
 }
 /// func [type_tag_hash_pointer_from_argument](https://docs.gtk.org/girepository/func.type_tag_hash_pointer_from_argument.html)

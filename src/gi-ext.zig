@@ -256,7 +256,7 @@ pub const CallableInfoExt = struct {
             }
         }
 
-        var iter = self.args_iter();
+        var iter = args_iter(self);
         while (iter.next()) |arg| {
             if (first) {
                 first = false;
@@ -440,7 +440,7 @@ pub const EnumInfoExt = struct {
         const allocator = gpa.allocator();
         var values = std.AutoHashMap(i64, void).init(allocator);
         defer values.deinit();
-        var iter = self.value_iter();
+        var iter = value_iter(self);
         while (iter.next()) |value| {
             if (values.contains(value.getValue())) {
                 continue;
@@ -453,7 +453,7 @@ pub const EnumInfoExt = struct {
             }
             try writer.writeAll(",\n");
         }
-        iter = self.value_iter();
+        iter = value_iter(self);
         while (iter.next()) |value| {
             if (values.remove(value.getValue())) continue;
             // emit alias
@@ -467,13 +467,13 @@ pub const EnumInfoExt = struct {
         }
         if (emit_abi) {
             try writer.writeAll("};\n");
-            var m_iter = self.method_iter();
+            var m_iter = method_iter(self);
             while (m_iter.next()) |method| {
                 try writer.print("{b}", .{method});
             }
             return;
         }
-        var m_iter = self.method_iter();
+        var m_iter = method_iter(self);
         while (m_iter.next()) |method| {
             try writer.print("\n{}", .{method});
         }
@@ -519,7 +519,7 @@ pub const FlagsInfoExt = struct {
             }
             values.deinit();
         }
-        var iter = self.into(EnumInfo).value_iter();
+        var iter = EnumInfoExt.value_iter(self.into(EnumInfo));
         while (iter.next()) |value| {
             const _value = value.getValue();
             if (_value <= 0 or !std.math.isPowerOfTwo(_value)) {
@@ -548,7 +548,7 @@ pub const FlagsInfoExt = struct {
         if (padding_bits != 0) {
             try writer.print("_: u{d} = 0,\n", .{padding_bits});
         }
-        iter = self.into(EnumInfo).value_iter();
+        iter = EnumInfoExt.value_iter(self.into(EnumInfo));
         while (iter.next()) |value| {
             const _value = value.getValue();
             if (_value == 0 or (_value > 0 and std.math.isPowerOfTwo(_value))) {
@@ -565,13 +565,13 @@ pub const FlagsInfoExt = struct {
         }
         if (emit_abi) {
             try writer.writeAll("};\n");
-            var m_iter = self.into(EnumInfo).method_iter();
+            var m_iter = EnumInfoExt.method_iter(self.into(EnumInfo));
             while (m_iter.next()) |method| {
                 try writer.print("{b}", .{method});
             }
             return;
         }
-        var m_iter = self.into(EnumInfo).method_iter();
+        var m_iter = EnumInfoExt.method_iter(self.into(EnumInfo));
         while (m_iter.next()) |method| {
             try writer.print("\n{}", .{method});
         }
@@ -690,7 +690,7 @@ pub const FunctionInfoExt = struct {
         var fixed_buffer_allocator = std.heap.FixedBufferAllocator.init(buffer[0..]);
         const allocator = fixed_buffer_allocator.allocator();
         // obtain infomation about parameters
-        const args = self.into(CallableInfo).argsAlloc(allocator) catch @panic("Out of Memory");
+        const args = CallableInfoExt.argsAlloc(self.into(CallableInfo), allocator) catch @panic("Out of Memory");
         // initialize slice info and closure info
         var slice_info = allocator.alloc(SliceInfo, args.len) catch @panic("Out of Memory");
         @memset(slice_info[0..], .{});
@@ -972,7 +972,7 @@ pub const FunctionInfoExt = struct {
                         } else {
                             try writer.print("{m}", .{cb_return_type});
                         }
-                        var callback_args = interface.tryInto(CallableInfo).?.argsAlloc(allocator) catch @panic("Out of Memory");
+                        var callback_args = CallableInfoExt.argsAlloc(interface.tryInto(CallableInfo).?, allocator) catch @panic("Out of Memory");
                         if (callback_args.len > 0) {
                             for (callback_args[0 .. callback_args.len - 1]) |cb_arg| {
                                 try writer.writeAll(", ");
@@ -1142,7 +1142,7 @@ pub const InterfaceInfoExt = struct {
         }
 
         try root.generateDocs(.{ .interface = self }, writer);
-        var p_iter = self.property_iter();
+        var p_iter = property_iter(self);
         while (p_iter.next()) |property| {
             try writer.print("{}", .{property});
         }
@@ -1152,7 +1152,7 @@ pub const InterfaceInfoExt = struct {
         } else {
             try writer.print("pub const {s} = opaque {{\n", .{name});
         }
-        var pre_iter = self.prerequisite_iter();
+        var pre_iter = prerequisite_iter(self);
         if (pre_iter.capacity > 0) {
             var first = true;
             try writer.writeAll("pub const Prerequisites = [_]type{");
@@ -1166,31 +1166,37 @@ pub const InterfaceInfoExt = struct {
             }
             try writer.writeAll("};\n");
         }
-        var c_iter = self.constant_iter();
+        var c_iter = constant_iter(self);
         while (c_iter.next()) |constant| {
             try writer.print("{}", .{constant});
         }
         if (emit_abi) {
             try writer.writeAll("};\n");
-            var m_iter = self.method_iter();
+            var m_iter = method_iter(self);
             while (m_iter.next()) |method| {
                 try writer.print("{b}\n", .{method});
             }
             return;
         }
-        var m_iter = self.method_iter();
+        var m_iter = method_iter(self);
         while (m_iter.next()) |method| {
             try writer.print("{}", .{method});
         }
-        var v_iter = self.vfunc_iter();
+        var v_iter = vfunc_iter(self);
         while (v_iter.next()) |vfunc| {
             try writer.print("{}", .{vfunc});
         }
-        var s_iter = self.signal_iter();
+        var s_iter = signal_iter(self);
         while (s_iter.next()) |signal| {
             try writer.print("{}", .{signal});
         }
-        try writer.writeAll("pub usingnamespace core.Extend(@This());\n");
+        try writer.writeAll(
+            \\const Ext = core.Extend(@This());
+            \\pub const __call = Ext.__call;
+            \\pub const into = Ext.into;
+            \\pub const tryInto = Ext.tryInto;
+            \\
+        );
         try writer.print("{}", .{self.into(RegisteredTypeInfo)});
         try writer.writeAll("};\n");
     }
@@ -1237,20 +1243,22 @@ pub const ObjectInfoExt = struct {
         _ = options;
         const self: *ObjectInfo = @constCast(self_immut);
         var emit_abi = false;
+        var has_gi_ext = false;
         inline for (fmt) |ch| {
             switch (ch) {
                 'b' => emit_abi = true,
+                'e' => has_gi_ext = true,
                 else => @compileError(std.fmt.comptimePrint("Invalid format string '{c}' for type {s}", .{ ch, @typeName(@This()) })),
             }
         }
 
         try root.generateDocs(.{ .object = self }, writer);
-        var p_iter = self.property_iter();
+        var p_iter = property_iter(self);
         while (p_iter.next()) |property| {
             try writer.print("{}", .{property});
         }
         const name = self.into(BaseInfo).getName().?;
-        var iter = self.field_iter();
+        var iter = field_iter(self);
         try writer.print("pub const {s} = ", .{name});
         if (self.into(BaseInfo).isDeprecated()) {
             try writer.writeAll("if (config.disable_deprecated) core.Deprecated else ");
@@ -1260,7 +1268,7 @@ pub const ObjectInfoExt = struct {
             try writer.print("{}", .{field});
         }
         try BitField._end(writer);
-        var i_iter = self.interface_iter();
+        var i_iter = interface_iter(self);
         if (i_iter.capacity > 0) {
             var first = true;
             try writer.writeAll("pub const Interfaces = [_]type{");
@@ -1280,31 +1288,46 @@ pub const ObjectInfoExt = struct {
         if (self.getClassStruct()) |_class| {
             try writer.print("pub const Class = {s}.{s};\n", .{ _class.into(BaseInfo).namespace_string(), _class.into(BaseInfo).getName().? });
         }
-        var c_iter = self.constant_iter();
+        var c_iter = constant_iter(self);
         while (c_iter.next()) |constant| {
             try writer.print("{}", .{constant});
         }
         if (emit_abi) {
             try writer.writeAll("};\n");
-            var m_iter = self.method_iter();
+            var m_iter = method_iter(self);
             while (m_iter.next()) |method| {
                 try writer.print("{b}", .{method});
             }
             return;
         }
-        var m_iter = self.method_iter();
+        var m_iter = method_iter(self);
         while (m_iter.next()) |method| {
             try writer.print("{}", .{method});
         }
-        var v_iter = self.vfunc_iter();
+        var v_iter = vfunc_iter(self);
         while (v_iter.next()) |vfunc| {
             try writer.print("{}", .{vfunc});
         }
-        var s_iter = self.signal_iter();
+        var s_iter = signal_iter(self);
         while (s_iter.next()) |signal| {
             try writer.print("{}", .{signal});
         }
-        try writer.writeAll("pub usingnamespace core.Extend(@This());\n");
+        try writer.writeAll(
+            \\const Ext = core.Extend(@This());
+            \\pub const __call = Ext.__call;
+            \\pub const into = Ext.into;
+            \\pub const tryInto = Ext.tryInto;
+            \\pub const property = Ext.property;
+            \\pub const signalConnect = Ext.signalConnect;
+            \\
+        );
+        if (has_gi_ext) {
+            try writer.print(
+                \\const ManualExt = ext.{s}Ext;
+                \\pub const format = ManualExt.format;
+                \\
+            , .{name});
+        }
         try writer.print("{}", .{self.into(RegisteredTypeInfo)});
         try writer.writeAll("};\n");
     }
@@ -1404,7 +1427,7 @@ pub const SignalInfoExt = struct {
             try writer.print("pub const connect{c}{s} = if (config.disable_deprecated) core.Deprecated else struct {{\n", .{ std.ascii.toUpper(name.slice()[0]), name.slice()[1..] });
         }
         try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name.slice()[0]), name.slice()[1..], container_name });
-        try writer.print("return self.connect(\"{s}\", handler, args, flags, &.{{", .{raw_name});
+        try writer.print("return self.signalConnect(\"{s}\", handler, args, flags, &.{{", .{raw_name});
         const return_type = self.into(CallableInfo).getReturnType();
         var interface_returned = false;
         if (return_type.getInterface()) |child_type| {
@@ -1419,7 +1442,7 @@ pub const SignalInfoExt = struct {
             try writer.print("{m}", .{return_type});
         }
         try writer.print(", *{s}", .{container_name});
-        var iter = self.into(CallableInfo).args_iter();
+        var iter = CallableInfoExt.args_iter(self.into(CallableInfo));
         while (iter.next()) |arg| {
             try writer.print(", {tp}", .{arg});
         }
@@ -1461,20 +1484,20 @@ pub const StructInfoExt = struct {
             try writer.writeAll("if (config.disable_deprecated) core.Deprecated else ");
         }
         try writer.print("{s}{{\n", .{if (self.getSize() == 0) "opaque" else "extern struct"});
-        var iter = self.field_iter();
+        var iter = field_iter(self);
         while (iter.next()) |field| {
             try writer.print("{}", .{field});
         }
         try BitField._end(writer);
         if (emit_abi) {
             try writer.writeAll("};\n");
-            var m_iter = self.method_iter();
+            var m_iter = method_iter(self);
             while (m_iter.next()) |method| {
                 try writer.print("{b}", .{method});
             }
             return;
         }
-        var m_iter = self.method_iter();
+        var m_iter = method_iter(self);
         while (m_iter.next()) |method| {
             try writer.print("{}", .{method});
         }
@@ -1713,19 +1736,19 @@ pub const UnionInfoExt = struct {
             try writer.writeAll("if (config.disable_deprecated) core.Deprecated else ");
         }
         try writer.writeAll("extern union{\n");
-        var iter = self.field_iter();
+        var iter = field_iter(self);
         while (iter.next()) |field| {
             try writer.print("{}", .{field});
         }
         if (emit_abi) {
             try writer.writeAll("};\n");
-            var m_iter = self.method_iter();
+            var m_iter = method_iter(self);
             while (m_iter.next()) |method| {
                 try writer.print("{b}", .{method});
             }
             return;
         }
-        var m_iter = self.method_iter();
+        var m_iter = method_iter(self);
         while (m_iter.next()) |method| {
             try writer.print("{}", .{method});
         }

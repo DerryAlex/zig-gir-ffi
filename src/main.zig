@@ -20,6 +20,7 @@ pub fn main() !void {
         \\--pkg-name <str>           Generated package name (default: $gi-namespace)
         \\--pkg-version <str>        Generated package version (default: $gi-version)
         \\--emit-abi                 Output ABI description
+        \\--gi-ext                   Enable manual extensions for gi
         \\
     , .{ config.gi_namespace, config.outputdir }));
     var diag = clap.Diagnostic{};
@@ -67,6 +68,7 @@ pub fn main() !void {
         pkg_version = p;
     }
     const emit_abi = res.args.@"emit-abi" != 0;
+    const has_gi_ext = res.args.@"gi-ext" != 0;
 
     // Load GIR
     const repository = gi.Repository.new();
@@ -131,6 +133,7 @@ pub fn main() !void {
         .version = String.new_from("{s}", .{pkg_version}),
         .extra_files = manual_files.items,
         .emit_abi = emit_abi,
+        .has_gi_ext = has_gi_ext,
     });
 }
 
@@ -139,6 +142,7 @@ const PkgConfig = struct {
     version: String,
     extra_files: [][]const u8,
     emit_abi: bool,
+    has_gi_ext: bool,
 };
 
 pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository, output_dir: std.fs.Dir, pkg_config: PkgConfig) !void {
@@ -201,6 +205,12 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
                 \\pub const core = @import("core.zig");
                 \\
             );
+            if (std.mem.eql(u8, "Gtk", namespace.slice())) {
+                try writer.writeAll(
+                    \\pub const template = @import("template.zig");
+                    \\
+                );
+            }
             try writer.writeAll(
                 \\const std = @import("std");
                 \\
@@ -264,6 +274,8 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
                     .object => {
                         if (pkg_config.emit_abi) {
                             try writer.print("{b}", .{info.tryInto(gi.ObjectInfo).?});
+                        } else if (pkg_config.has_gi_ext) {
+                            try writer.print("{e}", .{info.tryInto(gi.ObjectInfo).?});
                         } else {
                             try writer.print("{}", .{info.tryInto(gi.ObjectInfo).?});
                         }
