@@ -9,6 +9,8 @@ pub const PartialEq = extern struct {
     eq_fn: ?*const fn (self: *PartialEq, rhs: *PartialEq) bool = null,
     ne_fn: ?*const fn (self: *PartialEq, rhs: *PartialEq) bool = &defaultNe,
 
+    pub usingnamespace core.Extend(PartialEq);
+
     pub fn eq(self: *PartialEq, rhs: *PartialEq) bool {
         const interface = core.typeInstanceGetInterface(PartialEq, self);
         const eq_fn = interface.eq_fn.?;
@@ -23,18 +25,6 @@ pub const PartialEq = extern struct {
 
     fn defaultNe(self: *PartialEq, rhs: *PartialEq) bool {
         return !self.eq(rhs);
-    }
-
-    pub fn into(self: *PartialEq, comptime T: type) *T {
-        return core.upCast(T, self);
-    }
-
-    pub fn tryInto(self: *PartialEq, comptime T: type) ?*T {
-        return core.downCast(T, self);
-    }
-
-    pub fn __method__(self: *PartialEq) core.MethodMixin(PartialEq) {
-        return .{ .self = self };
     }
 
     pub fn gType() core.Type {

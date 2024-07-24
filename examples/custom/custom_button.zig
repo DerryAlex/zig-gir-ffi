@@ -70,7 +70,7 @@ pub const CustomButtonClass = extern struct {
             var self = arg_object.tryInto(CustomButton).?;
             const p_class: *gobject.ObjectClass = @ptrCast(parent_class);
             p_class.constructed.?(arg_object);
-            _ = self.__method__().invoke("bindProperty", .{ "number", self.into(Object), "label", .{ .sync_create = true } });
+            _ = self.__call("bindProperty", .{ "number", self.into(Object), "label", .{ .sync_create = true } });
         }
     };
 
@@ -94,6 +94,7 @@ pub const CustomButton = extern struct {
     pub const Parent = Button;
     pub const Private = CustomButtonPrivate;
     pub const Class = CustomButtonClass;
+    pub usingnamespace core.Extend(CustomButton);
 
     pub fn new() *CustomButton {
         return core.newObject(CustomButton, .{});
@@ -117,31 +118,11 @@ pub const CustomButton = extern struct {
             var params = [_]Value{instance};
             _ = gobject.signalEmitv(&params, _signals[@intFromEnum(Signals.ZeroReached)], 0, null);
         }
-        self.__method__().invoke("notifyByPspec", .{_properties[@intFromEnum(Properties.Number)]});
+        self.__call("notifyByPspec", .{_properties[@intFromEnum(Properties.Number)]});
     }
 
     pub fn connectZeroReached(self: *CustomButton, comptime handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags) usize {
-        return self.__signal__().connect("zero-reached", handler, args, flags, &[_]type{ void, *CustomButton });
-    }
-
-    pub fn into(self: *CustomButton, comptime T: type) *T {
-        return core.upCast(T, self);
-    }
-
-    pub fn tryInto(self: *CustomButton, comptime T: type) ?*T {
-        return core.downCast(T, self);
-    }
-
-    pub fn __method__(self: *CustomButton) core.MethodMixin(CustomButton) {
-        return .{ .self = self };
-    }
-
-    pub fn __property__(self: *CustomButton) core.PropertyMixin(CustomButton) {
-        return .{ .self = self };
-    }
-
-    pub fn __signal__(self: *CustomButton) core.SignalMixin(CustomButton) {
-        return .{ .self = self };
+        return self.connect("zero-reached", handler, args, flags, &[_]type{ void, *CustomButton });
     }
 
     pub fn gType() core.Type {

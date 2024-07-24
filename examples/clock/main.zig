@@ -5,21 +5,21 @@ const gio = gtk.gio;
 
 pub fn main() u8 {
     var app = gtk.Application.new("org.example.clock", .{});
-    defer app.__method__().invoke("unref", .{});
-    _ = app.__method__().invoke("connectActivate", .{ buildUi, .{}, .{} });
-    return @intCast(app.__method__().invoke("run", .{std.os.argv}));
+    defer app.__call("unref", .{});
+    _ = app.__call("connectActivate", .{ buildUi, .{}, .{} });
+    return @intCast(app.__call("run", .{std.os.argv}));
 }
 
 pub fn buildUi(arg_app: *gio.Application) void {
     const app = arg_app.tryInto(gtk.Application).?;
     var window = gtk.ApplicationWindow.new(app);
-    window.__method__().invoke("setTitle", .{"Clock Example"});
-    window.__method__().invoke("setDefaultSize", .{ 260, 40 });
+    window.__call("setTitle", .{"Clock Example"});
+    window.__call("setDefaultSize", .{ 260, 40 });
     var label = gtk.Label.new(null);
     _ = tick(label);
     _ = glib.timeoutAddSeconds(glib.PRIORITY_DEFAULT, 1, tick, .{label});
-    window.__method__().invoke("setChild", .{label.into(gtk.Widget)});
-    window.__method__().invoke("present", .{});
+    window.__call("setChild", .{label.into(gtk.Widget)});
+    window.__call("present", .{});
 }
 
 pub fn tick(label: *gtk.Label) bool {

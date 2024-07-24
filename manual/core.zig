@@ -145,6 +145,57 @@ pub inline fn unsafeCast(comptime T: type, object: anytype) *T {
     return @ptrCast(@alignCast(object));
 }
 
+/// Inherits from Self.Parent
+pub fn Extend(comptime Self: type) type {
+    return struct {
+        /// Calls inherited method
+        pub fn __call(self: *Self, comptime method: []const u8, args: anytype) if (CallMethod(Self, method)) |R| R else @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(Self), method })) {
+            return callMethod(self, Self, method, args);
+        }
+
+        /// Converts to base type T
+        pub fn into(self: *Self, comptime T: type) *T {
+            return upCast(T, self);
+        }
+
+        /// Converts to derived type T
+        pub fn tryInto(self: *Self, comptime T: type) ?*T {
+            return downCast(T, self);
+        }
+
+        /// Gets a property of an object
+        pub fn get(self: *Self, comptime T: type, property_name: [*:0]const u8) Arg(T) {
+            var property = ZigValue.new(T);
+            defer property.unset();
+            self.into(gobject.Object).getProperty(property_name, &property);
+            return ZigValue.get(&property, T);
+        }
+
+        /// Sets a property on an object
+        pub fn set(self: *Self, comptime T: type, property_name: [*:0]const u8, value: if (isBasicType(T)) T else *T) void {
+            var property = ZigValue.new(T);
+            defer property.unset();
+            ZigValue.set(&property, T, value);
+            self.into(gobject.Object).setProperty(property_name, &property);
+        }
+
+        /// Connects a callback function to a signal for a particular object
+        pub fn connect(self: *Self, signal: [*:0]const u8, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags, comptime signature: []const type) usize {
+            var closure = zig_closure(handler, args, if (flags.swapped) signature[0..1] else signature);
+            const closure_new_fn = if (flags.swapped) cclosureNewSwap else cclosureNew;
+            const cclosure = closure_new_fn(closure.c_closure(), closure.c_data(), closure.c_destroy());
+            return gobject.signalConnectClosure(self.into(gobject.Object), signal, cclosure, flags.after);
+        }
+
+        /// Connects a notify signal for a property
+        pub fn connectNotify(self: *Self, property_name: [*:0]const u8, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags) usize {
+            var buf: [32]u8 = undefined;
+            const signal = std.fmt.bufPrintZ(buf[0..], "notify::{s}", .{property_name}) catch @panic("No Space Left");
+            return self.connect(signal, handler, args, flags, &.{ void, *Self, *gobject.ParamSpec });
+        }
+    };
+}
+
 /// Gets return type of `method`
 fn CallMethod(comptime T: type, comptime method: []const u8) ?type {
     if (comptime std.meta.hasFn(T, method)) {
@@ -201,59 +252,6 @@ fn callMethod(self: anytype, comptime Self: type, comptime method: []const u8, a
         }
     }
     @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(Self), method }));
-}
-
-pub fn MethodMixin(comptime Self: type) type {
-    return struct {
-        self: *Self,
-
-        pub fn invoke(this: @This(), comptime method: []const u8, args: anytype) if (CallMethod(Self, method)) |R| R else @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(Self), method })) {
-            const self = this.self;
-            return callMethod(self, Self, method, args);
-        }
-    };
-}
-
-pub fn PropertyMixin(comptime Self: type) type {
-    return struct {
-        self: *Self,
-
-        pub fn get(this: @This(), comptime T: type, property_name: [*:0]const u8) Arg(T) {
-            var self = this.self;
-            var property = ZigValue.new(T);
-            defer property.unset();
-            self.into(gobject.Object).getProperty(property_name, &property);
-            return ZigValue.get(&property, T);
-        }
-
-        pub fn set(this: @This(), comptime T: type, property_name: [*:0]const u8, value: if (isBasicType(T)) T else *T) void {
-            var self = this.self;
-            var property = ZigValue.new(T);
-            defer property.unset();
-            ZigValue.set(&property, T, value);
-            self.into(gobject.Object).setProperty(property_name, &property);
-        }
-    };
-}
-
-pub fn SignalMixin(comptime Self: type) type {
-    return struct {
-        self: *Self,
-
-        pub fn connect(this: @This(), signal: [*:0]const u8, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags, comptime signature: []const type) usize {
-            const self = this.self;
-            var closure = zig_closure(handler, args, if (flags.swapped) signature[0..1] else signature);
-            const closure_new_fn = if (flags.swapped) cclosureNewSwap else cclosureNew;
-            const cclosure = closure_new_fn(closure.c_closure(), closure.c_data(), closure.c_destroy());
-            return gobject.signalConnectClosure(self.into(gobject.Object), signal, cclosure, flags.after);
-        }
-
-        pub fn connectNotify(this: @This(), property_name: [*:0]const u8, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags) usize {
-            var buf: [32]u8 = undefined;
-            const signal = std.fmt.bufPrintZ(buf[0..], "notify::{s}", .{property_name}) catch @panic("No Space Left");
-            return this.connect(signal, handler, args, flags, &.{ void, *Self, *gobject.ParamSpec });
-        }
-    };
 }
 
 // OOP inheritance end

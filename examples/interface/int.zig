@@ -23,6 +23,7 @@ pub const TypedInt = extern struct {
     pub const Private = TypeIntPrivate;
     pub const Class = TypedIntClass;
     pub const Interfaces = [_]type{ PartialEq, PartialOrd };
+    pub usingnamespace core.Extend(TypedInt);
 
     pub fn new(value: i32) *TypedInt {
         var object = core.newObject(TypedInt, .{});
@@ -46,26 +47,6 @@ pub const TypedInt = extern struct {
             return if (lhs_value < rhs_value) .Lt else .Gt;
         }
     };
-
-    pub fn into(self: *TypedInt, comptime T: type) *T {
-        return core.upCast(T, self);
-    }
-
-    pub fn tryInto(self: *TypedInt, comptime T: type) ?*T {
-        return core.downCast(T, self);
-    }
-
-    pub fn __method__(self: *TypedInt) core.MethodMixin(TypedInt) {
-        return .{ .self = self };
-    }
-
-    pub fn __property__(self: *TypedInt) core.PropertyMixin(TypedInt) {
-        return .{ .self = self };
-    }
-
-    pub fn __signal__(self: *TypedInt) core.SignalMixin(TypedInt) {
-        return .{ .self = self };
-    }
 
     pub fn gType() core.Type {
         return core.registerType(TypedInt, "TypedInt", .{});
