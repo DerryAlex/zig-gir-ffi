@@ -32,5 +32,4 @@ You are suggested to read in the following order:
 
 ### TODOs
 
-- [ ] Override syntax
-- [ ] Ability to export C bindings and GIR files (unlikely to happen in near future unless someone in the community contributes)
+- [ ] Ability to export C bindings and GIR files (unlikely to happen in near future, contributions welcomed)
