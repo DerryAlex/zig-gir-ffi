@@ -108,10 +108,10 @@ pub fn build(b: *std.Build) !void {
     const options = b.addOptions();
     const version = b.option([]const u8, "version", "Version string") orelse get_version(b);
     options.addOption([]const u8, "version", version);
-    const namespace = b.option([]const u8, "gi-namespace", "GI namespace to use, e.g. \"Gtk\"") orelse "Gtk";
-    options.addOption([]const u8, "gi_namespace", namespace);
-    const namespace_version = b.option([]const u8, "gi-version", "Version of namespace, may be null for latest");
-    options.addOption(?[]const u8, "gi_version", namespace_version);
+    const namespace = b.option([]const []const u8, "gi-namespaces", "GI namespace to use, e.g. \"Gtk\"") orelse &[_][]const u8{"Gtk"};
+    options.addOption([]const []const u8, "gi_namespaces", namespace);
+    const namespace_version = b.option([]const []const u8, "gi-versions", "Version of namespace, may be null for latest");
+    options.addOption(?[]const []const u8, "gi_versions", namespace_version);
     const outputdir = b.option([]const u8, "outputdir", "Output directory") orelse "gi-output";
     options.addOption([]const u8, "outputdir", outputdir);
 
@@ -153,6 +153,15 @@ pub fn build(b: *std.Build) !void {
     } else {
         run_cmd.addArgs(&.{ "--outputdir", "gtk4" });
         run_cmd.addArgs(&.{ "--includedir", "lib/girepository-1.0" });
+        run_cmd.addArgs(&.{ "--gi-namespaces", "GLib" }); // load glib before glib_*
+        run_cmd.addArgs(&.{ "--gi-namespaces", "GLibUnix" });
+        run_cmd.addArgs(&.{ "--gi-namespaces", "Gio" }); // load gio before gio_*
+        run_cmd.addArgs(&.{ "--gi-namespaces", "GioUnix" });
+        run_cmd.addArgs(&.{ "--gi-namespaces", "Gdk" }); // load gdk before gdk_*
+        run_cmd.addArgs(&.{ "--gi-namespaces", "GdkWayland" });
+        run_cmd.addArgs(&.{ "--gi-namespaces", "GdkX11" });
+        run_cmd.addArgs(&.{ "--gi-namespaces", "GdkWin32" });
+        run_cmd.addArgs(&.{ "--gi-namespaces", "Gtk" });
         run_cmd.addArgs(&.{ "--pkg-version", version });
     }
 

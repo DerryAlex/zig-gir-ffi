@@ -11,18 +11,27 @@ pub fn main() !void {
 
     // Declare cli options
     const params = comptime clap.parseParamsComptime(std.fmt.comptimePrint(
-        \\-h, --help                 Display this help and exit
-        \\--version                  Display version
-        \\-N, --gi-namespace <str>   GI namespace to use (default: {s})
-        \\-V, --gi-version <str>     Version of namespace
-        \\--includedir <str>...      Include directories in GIR search path
-        \\--outputdir <str>          Output directory (default: {s})
-        \\--pkg-name <str>           Generated package name (default: $gi-namespace)
-        \\--pkg-version <str>        Generated package version (default: $gi-version)
-        \\--emit-abi                 Output ABI description
-        \\--gi-ext                   Enable manual extensions for gi
+        \\-h, --help                      Display this help and exit
+        \\--version                       Display version
+        \\-N, --gi-namespaces <str>...    GI namespace to use (default: {s})
+        \\-V, --gi-versions <str>...      Version of namespace
+        \\--includedir <str>...           Include directories in GIR search path
+        \\--outputdir <str>               Output directory (default: {s})
+        \\--pkg-name <str>                Generated package name (default: $gi-namespace[0])
+        \\--pkg-version <str>             Generated package version (default: $gi-version[0])
+        \\--emit-abi                      Output ABI description
+        \\--gi-ext                        Enable manual extensions for gi
         \\
-    , .{ config.gi_namespace, config.outputdir }));
+    , .{ blk: {
+        var string: []const u8 = "";
+        for (config.gi_namespaces, 0..) |namespace, idx| {
+            if (idx > 0) {
+                string = string ++ ", ";
+            }
+            string = string ++ namespace;
+        }
+        break :blk string;
+    }, config.outputdir }));
     var diag = clap.Diagnostic{};
     var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
         .diagnostic = &diag,
@@ -41,31 +50,31 @@ pub fn main() !void {
         try std.io.getStdOut().writeAll(config.version ++ "\n");
         return;
     }
-    var gi_namespace = config.gi_namespace;
-    var gi_version = config.gi_version;
-    if (res.args.@"gi-namespace") |n| {
-        gi_namespace = n;
-        gi_version = null;
+    var gi_namespaces = config.gi_namespaces;
+    var gi_versions = config.gi_versions;
+    if (res.args.@"gi-namespaces".len != 0) {
+        gi_namespaces = res.args.@"gi-namespaces";
+        gi_versions = null;
     }
-    if (res.args.@"gi-version") |v| {
-        if (res.args.@"gi-namespace" == null) {
-            try std.io.getStdErr().writeAll("GI namespace unspecified\n");
+    if (res.args.@"gi-versions".len != 0) {
+        if (res.args.@"gi-versions".len != res.args.@"gi-namespaces".len) {
+            std.log.err("Unmatched number of GI namespace and version", .{});
             return error.InvalidParameter;
         }
-        gi_version = v;
+        gi_versions = res.args.@"gi-versions";
     }
     const includedir = res.args.includedir;
     var outputdir = config.outputdir;
     if (res.args.outputdir) |o| {
         outputdir = o;
     }
-    var pkg_name = gi_namespace;
+    var pkg_name = String.new_from("{s}", .{gi_namespaces[0]}).to_snake();
     if (res.args.@"pkg-name") |p| {
-        pkg_name = p;
+        pkg_name = String.new_from("{s}", .{p});
     }
-    var pkg_version = gi_version orelse "0.0.0";
+    var pkg_version = String.new_from("{s}", .{if (gi_versions) |version| version[0] else "0.0.0"});
     if (res.args.@"pkg-version") |p| {
-        pkg_version = p;
+        pkg_version = String.new_from("{s}", .{p});
     }
     const emit_abi = res.args.@"emit-abi" != 0;
     const has_gi_ext = res.args.@"gi-ext" != 0;
@@ -76,12 +85,16 @@ pub fn main() !void {
         const _i = String.new_from("{s}", .{i});
         repository.prependSearchPath(_i.slice());
     }
-    {
-        const n = String.new_from("{s}", .{gi_namespace});
-        const v = String.new_from("{?s}", .{gi_version});
-        _ = repository.require(n.slice(), if (gi_version == null) null else v.slice(), .{}) catch |err| switch (err) {
+    for (gi_namespaces, 0..) |namespace, idx| {
+        const n = String.new_from("{s}", .{namespace});
+        const v = if (gi_versions) |versions| String.new_from("{s}", .{versions[idx]}) else String.new_from("null", .{});
+        _ = repository.require(
+            n.slice(),
+            if (gi_versions == null) null else v.slice(),
+            .{},
+        ) catch |err| switch (err) {
             error.GError => {
-                std.log.warn("{s}", .{gi.core.getError().message.?});
+                std.log.err("{s}", .{gi.core.getError().message.?});
                 return error.UnexpectedError;
             },
         };
@@ -129,8 +142,8 @@ pub fn main() !void {
     }
 
     try generateBindings(allocator, repository, output_dir, .{
-        .name = String.new_from("{s}", .{pkg_name}).to_snake(),
-        .version = String.new_from("{s}", .{pkg_version}),
+        .name = pkg_name,
+        .version = pkg_version,
         .extra_files = manual_files.items,
         .emit_abi = emit_abi,
         .has_gi_ext = has_gi_ext,
@@ -222,6 +235,12 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
             if (pkg_config.emit_abi) {
                 try writer.writeAll(
                     \\const c = @import("c.zig");
+                    \\
+                );
+            }
+            if (pkg_config.has_gi_ext) {
+                try writer.writeAll(
+                    \\const ext = @import("gi-ext.zig");
                     \\
                 );
             }
