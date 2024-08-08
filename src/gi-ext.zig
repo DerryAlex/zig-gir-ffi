@@ -221,20 +221,17 @@ pub const CallableInfoExt = struct {
     /// - e: print `(arg_names...: arg_types...) return_type`
     /// - o: print `(arg_types...) return_type`
     /// - c: addtionally print `callconv(.C)`
-    /// - v: `_error` instead of `&_error` (vfunc pass in `_error`)
     pub fn format(self_immut: *const CallableInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *CallableInfo = @constCast(self_immut);
         var type_annotation: enum { disable, enable, only } = .disable;
         var c_callconv = false;
-        var vfunc = false;
         var emit_abi = false;
         inline for (fmt) |ch| {
             switch (ch) {
                 'e' => type_annotation = .enable,
                 'o' => type_annotation = .only,
                 'c' => c_callconv = true,
-                'v' => vfunc = true,
                 'b' => emit_abi = true,
                 else => @compileError(std.fmt.comptimePrint("Invalid format string '{c}' for type {s}", .{ ch, @typeName(@This()) })),
             }
@@ -285,12 +282,7 @@ pub const CallableInfoExt = struct {
                 try writer.writeAll(", ");
             }
             switch (type_annotation) {
-                .disable => {
-                    if (!vfunc) {
-                        try writer.writeAll("&"); // method wrapper
-                    }
-                    try writer.writeAll("_error");
-                },
+                .disable => try writer.writeAll("_error"),
                 .enable => try writer.writeAll("_error: *?*core.Error"),
                 .only => try writer.writeAll("*?*core.Error"),
             }
@@ -857,6 +849,15 @@ pub const FunctionInfoExt = struct {
                 }
             }
 
+            if (throw_error) {
+                if (first) {
+                    first = false;
+                } else {
+                    try writer.writeAll(", ");
+                }
+                try writer.writeAll("_error: *?*core.Error");
+            }
+
             try writer.writeAll(") ");
 
             // return type
@@ -937,10 +938,6 @@ pub const FunctionInfoExt = struct {
 
         // function body
         try writer.writeAll(" {\n");
-        // prepare error
-        if (throw_error) {
-            try writer.writeAll("var _error: ?*core.Error = null;\n");
-        }
         // prepare input/inout
         for (args, 0..) |arg, idx| {
             if (arg.getDirection() == .out and !arg.isCallerAllocates()) continue;
@@ -1038,10 +1035,7 @@ pub const FunctionInfoExt = struct {
             try writer.writeAll("_ = ret;\n");
         }
         if (throw_error) {
-            try writer.writeAll("if (_error) |some| {\n");
-            try writer.writeAll("    core.setError(some);\n");
-            try writer.writeAll("    return error.GError;\n");
-            try writer.writeAll("}\n");
+            try writer.writeAll("if (_error.* != null) return error.GError;\n");
         }
         if (throw_bool) {
             try writer.writeAll("if (!ret) return null;\n");
@@ -1836,12 +1830,12 @@ pub const VFuncInfoExt = struct {
             try writer.print("pub const {s}V = if (config.disable_deprecated) core.Deprecated else struct {{\n", .{vfunc_name});
         }
         try writer.print("pub fn {s}V", .{vfunc_name});
-        try writer.print("{ev}", .{self.into(CallableInfo)});
+        try writer.print("{e}", .{self.into(CallableInfo)});
         try writer.writeAll(" {\n");
         try writer.print("const class: *{s} = @ptrCast(core.unsafeCast(gobject.TypeInstance, self).g_class.?);\n", .{class_name});
         try writer.print("const vFn = class.{s}.?;", .{raw_vfunc_name});
         try writer.writeAll("const ret = vFn");
-        try writer.print("{v}", .{self.into(CallableInfo)});
+        try writer.print("{}", .{self.into(CallableInfo)});
         try writer.writeAll(";\n");
         if (self.into(CallableInfo).skipReturn()) {
             try writer.writeAll("_ = ret;\n");

@@ -168,10 +168,10 @@ pub const ExampleAppWindow = extern struct {
         scrolled.setChild(view.into(Widget));
         _ = self.stack.addTitled(scrolled.into(Widget), basename, basename);
         var buffer = view.getBuffer();
-        const result = file.loadContents(null) catch {
-            var err = core.getError();
-            defer err.free();
-            std.log.warn("{s}", .{err.message.?});
+        var err: ?*core.Error = null;
+        const result = file.loadContents(null, &err) catch {
+            defer err.?.free();
+            std.log.warn("{s}", .{err.?.message.?});
             return;
         };
         defer glib.free(result.contents.ptr);

@@ -88,13 +88,15 @@ pub fn main() !void {
     for (gi_namespaces, 0..) |namespace, idx| {
         const n = String.new_from("{s}", .{namespace});
         const v = if (gi_versions) |versions| String.new_from("{s}", .{versions[idx]}) else String.new_from("null", .{});
+        var _err: ?*gi.core.Error = null;
         _ = repository.require(
             n.slice(),
             if (gi_versions == null) null else v.slice(),
             .{},
+            &_err,
         ) catch |err| switch (err) {
             error.GError => {
-                std.log.err("{s}", .{gi.core.getError().message.?});
+                std.log.err("{s}", .{_err.?.message.?});
                 return error.UnexpectedError;
             },
         };

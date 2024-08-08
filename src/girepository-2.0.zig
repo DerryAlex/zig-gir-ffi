@@ -1,8 +1,8 @@
 const gi_repository = @This();
 pub const core = @import("core_min.zig");
 const std = @import("std");
-const ext = @import("gi-ext.zig");
 const config = core.config;
+const ext = @import("gi-ext.zig");
 /// Class [ArgInfo](https://docs.gtk.org/girepository/class.ArgInfo.html)
 pub const ArgInfo = extern struct {
     parent: gi_repository.BaseInfoStack,
@@ -283,18 +283,14 @@ pub const CallableInfo = opaque {
         return ret;
     }
     /// method [invoke](https://docs.gtk.org/girepository/method.CallableInfo.invoke.html)
-    pub fn invoke(self: *CallableInfo, _function: ?*anyopaque, _in_argss: []gi_repository.Argument, _out_argss: []gi_repository.Argument, _return_value: *gi_repository.Argument) error{GError}!bool {
-        var _error: ?*core.Error = null;
+    pub fn invoke(self: *CallableInfo, _function: ?*anyopaque, _in_argss: []gi_repository.Argument, _out_argss: []gi_repository.Argument, _return_value: *gi_repository.Argument, _error: *?*core.Error) error{GError}!bool {
         const _in_args = _in_argss.ptr;
         const _n_in_args: u64 = @intCast(_in_argss.len);
         const _out_args = _out_argss.ptr;
         const _n_out_args: u64 = @intCast(_out_argss.len);
         const cFn = @extern(*const fn (*CallableInfo, ?*anyopaque, [*]gi_repository.Argument, u64, [*]gi_repository.Argument, u64, *gi_repository.Argument, *?*core.Error) callconv(.C) bool, .{ .name = "gi_callable_info_invoke" });
-        const ret = cFn(self, @ptrCast(_function), _in_args, _n_in_args, _out_args, _n_out_args, _return_value, &_error);
-        if (_error) |some| {
-            core.setError(some);
-            return error.GError;
-        }
+        const ret = cFn(self, @ptrCast(_function), _in_args, _n_in_args, _out_args, _n_out_args, _return_value, _error);
+        if (_error.* != null) return error.GError;
         return ret;
     }
     /// method [is_method](https://docs.gtk.org/girepository/method.CallableInfo.is_method.html)
@@ -984,14 +980,10 @@ pub const Repository = opaque {
         return ret;
     }
     /// type func [dump](https://docs.gtk.org/girepository/type_func.Repository.dump.html)
-    pub fn dump(_input_filename: [*:0]const u8, _output_filename: [*:0]const u8) error{GError}!bool {
-        var _error: ?*core.Error = null;
+    pub fn dump(_input_filename: [*:0]const u8, _output_filename: [*:0]const u8, _error: *?*core.Error) error{GError}!bool {
         const cFn = @extern(*const fn ([*:0]const u8, [*:0]const u8, *?*core.Error) callconv(.C) bool, .{ .name = "gi_repository_dump" });
-        const ret = cFn(_input_filename, _output_filename, &_error);
-        if (_error) |some| {
-            core.setError(some);
-            return error.GError;
-        }
+        const ret = cFn(_input_filename, _output_filename, _error);
+        if (_error.* != null) return error.GError;
         return ret;
     }
     /// type func [error_quark](https://docs.gtk.org/girepository/type_func.Repository.error_quark.html)
@@ -1151,14 +1143,10 @@ pub const Repository = opaque {
         return ret;
     }
     /// method [load_typelib](https://docs.gtk.org/girepository/method.Repository.load_typelib.html)
-    pub fn loadTypelib(self: *Repository, _typelib: *gi_repository.Typelib, _flags: gi_repository.RepositoryLoadFlags) error{GError}![*:0]u8 {
-        var _error: ?*core.Error = null;
+    pub fn loadTypelib(self: *Repository, _typelib: *gi_repository.Typelib, _flags: gi_repository.RepositoryLoadFlags, _error: *?*core.Error) error{GError}![*:0]u8 {
         const cFn = @extern(*const fn (*Repository, *gi_repository.Typelib, gi_repository.RepositoryLoadFlags, *?*core.Error) callconv(.C) [*:0]u8, .{ .name = "gi_repository_load_typelib" });
-        const ret = cFn(self, _typelib, _flags, &_error);
-        if (_error) |some| {
-            core.setError(some);
-            return error.GError;
-        }
+        const ret = cFn(self, _typelib, _flags, _error);
+        if (_error.* != null) return error.GError;
         return ret;
     }
     /// method [prepend_library_path](https://docs.gtk.org/girepository/method.Repository.prepend_library_path.html)
@@ -1174,25 +1162,17 @@ pub const Repository = opaque {
         return ret;
     }
     /// method [require](https://docs.gtk.org/girepository/method.Repository.require.html)
-    pub fn require(self: *Repository, _namespace_: [*:0]const u8, _version: ?[*:0]const u8, _flags: gi_repository.RepositoryLoadFlags) error{GError}!*gi_repository.Typelib {
-        var _error: ?*core.Error = null;
+    pub fn require(self: *Repository, _namespace_: [*:0]const u8, _version: ?[*:0]const u8, _flags: gi_repository.RepositoryLoadFlags, _error: *?*core.Error) error{GError}!*gi_repository.Typelib {
         const cFn = @extern(*const fn (*Repository, [*:0]const u8, ?[*:0]const u8, gi_repository.RepositoryLoadFlags, *?*core.Error) callconv(.C) *gi_repository.Typelib, .{ .name = "gi_repository_require" });
-        const ret = cFn(self, _namespace_, _version, _flags, &_error);
-        if (_error) |some| {
-            core.setError(some);
-            return error.GError;
-        }
+        const ret = cFn(self, _namespace_, _version, _flags, _error);
+        if (_error.* != null) return error.GError;
         return ret;
     }
     /// method [require_private](https://docs.gtk.org/girepository/method.Repository.require_private.html)
-    pub fn requirePrivate(self: *Repository, _typelib_dir: [*:0]const u8, _namespace_: [*:0]const u8, _version: ?[*:0]const u8, _flags: gi_repository.RepositoryLoadFlags) error{GError}!*gi_repository.Typelib {
-        var _error: ?*core.Error = null;
+    pub fn requirePrivate(self: *Repository, _typelib_dir: [*:0]const u8, _namespace_: [*:0]const u8, _version: ?[*:0]const u8, _flags: gi_repository.RepositoryLoadFlags, _error: *?*core.Error) error{GError}!*gi_repository.Typelib {
         const cFn = @extern(*const fn (*Repository, [*:0]const u8, [*:0]const u8, ?[*:0]const u8, gi_repository.RepositoryLoadFlags, *?*core.Error) callconv(.C) *gi_repository.Typelib, .{ .name = "gi_repository_require_private" });
-        const ret = cFn(self, _typelib_dir, _namespace_, _version, _flags, &_error);
-        if (_error) |some| {
-            core.setError(some);
-            return error.GError;
-        }
+        const ret = cFn(self, _typelib_dir, _namespace_, _version, _flags, _error);
+        if (_error.* != null) return error.GError;
         return ret;
     }
     const Ext = core.Extend(@This());
@@ -1479,14 +1459,10 @@ pub const TypeTag = enum(u32) {
 /// Struct [Typelib](https://docs.gtk.org/girepository/struct.Typelib.html)
 pub const Typelib = opaque {
     /// ctor [new_from_bytes](https://docs.gtk.org/girepository/ctor.Typelib.new_from_bytes.html)
-    pub fn newFromBytes(_bytes: *core.Bytes) error{GError}!*Typelib {
-        var _error: ?*core.Error = null;
+    pub fn newFromBytes(_bytes: *core.Bytes, _error: *?*core.Error) error{GError}!*Typelib {
         const cFn = @extern(*const fn (*core.Bytes, *?*core.Error) callconv(.C) *Typelib, .{ .name = "gi_typelib_new_from_bytes" });
-        const ret = cFn(_bytes, &_error);
-        if (_error) |some| {
-            core.setError(some);
-            return error.GError;
-        }
+        const ret = cFn(_bytes, _error);
+        if (_error.* != null) return error.GError;
         return ret;
     }
     /// method [get_namespace](https://docs.gtk.org/girepository/method.Typelib.get_namespace.html)
@@ -1640,14 +1616,10 @@ pub const UnresolvedInfo = opaque {
 pub const VFuncInfo = opaque {
     pub const Parent = gi_repository.CallableInfo;
     /// method [get_address](https://docs.gtk.org/girepository/method.VFuncInfo.get_address.html)
-    pub fn getAddress(self: *VFuncInfo, _implementor_gtype: core.Type) error{GError}!?*anyopaque {
-        var _error: ?*core.Error = null;
+    pub fn getAddress(self: *VFuncInfo, _implementor_gtype: core.Type, _error: *?*core.Error) error{GError}!?*anyopaque {
         const cFn = @extern(*const fn (*VFuncInfo, core.Type, *?*core.Error) callconv(.C) ?*anyopaque, .{ .name = "gi_vfunc_info_get_address" });
-        const ret = cFn(self, _implementor_gtype, &_error);
-        if (_error) |some| {
-            core.setError(some);
-            return error.GError;
-        }
+        const ret = cFn(self, _implementor_gtype, _error);
+        if (_error.* != null) return error.GError;
         return ret;
     }
     /// method [get_flags](https://docs.gtk.org/girepository/method.VFuncInfo.get_flags.html)

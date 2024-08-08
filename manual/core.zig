@@ -70,26 +70,6 @@ pub const SList = glib.SList;
 // type end
 // --------
 
-// -----------
-// error begin
-
-var err: ?*glib.Error = null;
-
-/// Sets information about an error.GError that has occurred
-pub fn setError(_err: *glib.Error) void {
-    if (err != null) unreachable;
-    err = _err;
-}
-
-/// Gets information about an error.GError that has occurred
-pub fn getError() *glib.Error {
-    defer err = null;
-    return err.?;
-}
-
-// error end
-// ---------
-
 // ---------------------
 // OOP inheritance begin
 

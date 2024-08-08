@@ -33,26 +33,6 @@ pub const Type = enum(usize) {
 // type end
 // --------
 
-// -----------
-// error begin
-
-var err: ?*Error = null;
-
-/// Set information about an error.GError that has occurred
-pub fn setError(_err: *Error) void {
-    if (err != null) unreachable;
-    err = _err;
-}
-
-/// Get information about an error.GError that has occurred
-pub fn getError() *Error {
-    defer err = null;
-    return err.?;
-}
-
-// error end
-// ---------
-
 // ---------------------
 // OOP inheritance begin
 
