@@ -59,7 +59,13 @@ pub const CustomButton = extern struct {
     pub const Parent = Button;
     pub const Private = CustomButtonPrivate;
     pub const Class = CustomButtonClass;
-    pub usingnamespace core.Extend(CustomButton);
+
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
 
     pub const Override = struct {
         pub fn set_property(arg_object: *Object, arg_property_id: u32, arg_value: *Value, _: *ParamSpec) callconv(.C) void {

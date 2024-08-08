@@ -9,7 +9,10 @@ pub const PartialEq = extern struct {
     eq_fn: ?*const fn (self: *PartialEq, rhs: *PartialEq) bool = null,
     ne_fn: ?*const fn (self: *PartialEq, rhs: *PartialEq) bool = &defaultNe,
 
-    pub usingnamespace core.Extend(PartialEq);
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
 
     pub fn eq(self: *PartialEq, rhs: *PartialEq) bool {
         const interface = core.typeInstanceGetInterface(PartialEq, self);

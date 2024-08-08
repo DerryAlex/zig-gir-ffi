@@ -32,7 +32,13 @@ pub const ExampleApp = extern struct {
 
     pub const Parent = Application;
     pub const Class = ExampleAppClass;
-    pub usingnamespace core.Extend(ExampleApp);
+
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
 
     pub const Override = struct {
         pub fn activate(arg_app: *GApplication) callconv(.C) void {

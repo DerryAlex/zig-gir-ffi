@@ -118,7 +118,13 @@ pub const ExampleAppWindow = extern struct {
 
     pub const Parent = ApplicationWindow;
     pub const Class = ExampleAppWindowClass;
-    pub usingnamespace core.Extend(ExampleAppWindow);
+
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
 
     pub const Override = struct {
         pub fn dispose(arg_object: *Object) callconv(.C) void {

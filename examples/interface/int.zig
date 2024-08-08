@@ -23,7 +23,13 @@ pub const TypedInt = extern struct {
     pub const Private = TypeIntPrivate;
     pub const Class = TypedIntClass;
     pub const Interfaces = [_]type{ PartialEq, PartialOrd };
-    pub usingnamespace core.Extend(TypedInt);
+
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
 
     pub const Override = struct {
         pub fn eq_fn(self: *PartialEq, rhs: *PartialEq) bool {

@@ -14,7 +14,11 @@ pub const PartialOrd = extern struct {
     ge_fn: ?*const fn (self: *PartialOrd, rhs: *PartialOrd) bool = &defaultGe,
 
     pub const Prerequisites = [_]type{PartialEq};
-    pub usingnamespace core.Extend(PartialOrd);
+
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
 
     pub const Order = enum { Lt, Eq, Gt };
 

@@ -46,7 +46,13 @@ pub const ExampleAppPrefs = extern struct {
     pub const Parent = Dialog;
     pub const Private = ExampleAppPrefsPrivate;
     pub const Class = ExampleAppPrefsClass;
-    pub usingnamespace core.Extend(ExampleAppPrefs);
+
+    const Ext = core.Extend(@This());
+    pub const __call = Ext.__call;
+    pub const into = Ext.into;
+    pub const tryInto = Ext.tryInto;
+    pub const property = Ext.property;
+    pub const signalConnect = Ext.signalConnect;
 
     pub const Override = struct {
         pub fn dispose(arg_object: *Object) callconv(.C) void {
