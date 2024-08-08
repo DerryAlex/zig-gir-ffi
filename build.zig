@@ -162,6 +162,7 @@ pub fn build(b: *std.Build) !void {
         run_cmd.addArgs(&.{ "--gi-namespaces", "GdkX11" });
         run_cmd.addArgs(&.{ "--gi-namespaces", "GdkWin32" });
         run_cmd.addArgs(&.{ "--gi-namespaces", "Gtk" });
+        run_cmd.addArgs(&.{ "--pkg-name", "gtk" });
         run_cmd.addArgs(&.{ "--pkg-version", version });
     }
 
