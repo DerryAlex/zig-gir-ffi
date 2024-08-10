@@ -1,7 +1,7 @@
 const std = @import("std");
 const meta = std.meta;
 const assert = std.debug.assert;
-const gtk = @import("gtk.zig");
+const gtk = @import("gtk");
 const core = gtk.core;
 const WidgetClass = gtk.WidgetClass;
 

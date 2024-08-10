@@ -1,5 +1,5 @@
-const glib = @import("glib.zig");
-const gobject = @import("gobject.zig");
+const glib = @import("glib");
+const gobject = @import("gobject");
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -149,16 +149,16 @@ pub fn Extend(comptime Self: type) type {
                 property_name: [*:0]const u8,
 
                 pub fn get(self: @This()) Arg(T) {
-                    var property_value = ZigValue.new(T);
+                    var property_value = Value.new(T);
                     defer property_value.unset();
                     self.object.getProperty(self.property_name, &property_value);
-                    return ZigValue.get(&property_value, T);
+                    return Value.get(&property_value, T);
                 }
 
                 pub fn set(self: @This(), value: Arg(T)) void {
-                    var property_value = ZigValue.new(T);
+                    var property_value = Value.new(T);
                     defer property_value.unset();
-                    ZigValue.set(&property_value, T, value);
+                    Value.set(&property_value, T, value);
                     self.object.setProperty(self.property_name, &property_value);
                 }
             };
@@ -272,7 +272,7 @@ fn Arg(comptime T: type) type {
 }
 
 /// An opaque structure used to hold different types of values
-const ZigValue = struct {
+const Value = struct {
     const Self = gobject.Value;
 
     const Int = @Type(@typeInfo(c_int));
@@ -565,8 +565,8 @@ pub fn newObject(comptime T: type, properties: anytype) *T {
             }
             break :blk field.type;
         };
-        values[idx] = ZigValue.new(V);
-        ZigValue.set(&values[idx], V, @field(properties, field.name));
+        values[idx] = Value.new(V);
+        Value.set(&values[idx], V, @field(properties, field.name));
     }
     defer for (&values) |*value| value.unset();
     return unsafeCast(T, objectNewWithProperties(T.gType(), if (n_props != 0) names[0..] else null, if (n_props != 0) values[0..] else null));
@@ -595,7 +595,7 @@ pub fn newSignal(comptime Object: type, comptime signal_name: [:0]const u8, sign
     const class_closure = gobject.signalTypeCclosureNew(Object.gType(), @offsetOf(Class, &field_name));
     const signal_field_type = std.meta.FieldType(Class, std.meta.stringToEnum(std.meta.FieldEnum(Class), &field_name).?);
     const signal_info = @typeInfo(std.meta.Child(std.meta.Child(signal_field_type))).Fn; // ?*const fn(args...) return_type
-    const return_type = ZigValue.new(signal_info.return_type.?).g_type;
+    const return_type = Value.new(signal_info.return_type.?).g_type;
     var param_types: [signal_info.params.len - 1]Type = undefined;
     inline for (signal_info.params[1..], &param_types) |param, *ty| {
         var is_gtyped = false;
@@ -607,7 +607,7 @@ pub fn newSignal(comptime Object: type, comptime signal_name: [:0]const u8, sign
         if (is_gtyped) {
             ty.* = std.meta.Child(param.type.?).gType();
         } else {
-            ty.* = ZigValue.new(param.type.?).g_type;
+            ty.* = Value.new(param.type.?).g_type;
         }
     }
     return signalNewv(signal_name.ptr, Object.gType(), signal_flags, class_closure, accumulator, accu_data, null, return_type, param_types[0..]);
