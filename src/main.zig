@@ -438,19 +438,27 @@ pub const Info = union(enum) {
 };
 
 pub fn generateDocs(info: Info, writer: std.io.AnyWriter) anyerror!void {
-    const data = std.StaticStringMap([]const u8).initComptime(.{
-        .{ "Gtk", "https://docs.gtk.org/gtk4" },
-        .{ "Gsk", "https://docs.gtk.org/gsk4" },
-        .{ "Gdk", "https://docs.gtk.org/gdk4" },
-        .{ "Pango", "https://docs.gtk.org/Pango" },
-        .{ "GdkPixbuf", "https://docs.gtk.org/gdk-pixbuf" },
+    const urlmap = std.StaticStringMap([]const u8).initComptime(.{
+        .{ "GIRepository", "https://docs.gtk.org/girepository" },
         .{ "GLib", "https://docs.gtk.org/glib" },
+        .{ "GLibUnix", "https://docs.gtk.org/glib-unix" },
+        .{ "GLibWin32", "https://docs.gtk.org/glib-win32" },
+        .{ "GModule", "https://docs.gtk.org/gmodule" },
         .{ "GObject", "https://docs.gtk.org/gobject" },
         .{ "Gio", "https://docs.gtk.org/gio" },
-        .{ "GIRepository", "https://docs.gtk.org/girepository" },
+        .{ "GioUnix", "https://docs.gtk.org/gio-unix" },
+        .{ "GioWin32", "https://docs.gtk.org/gio-win32" },
+        .{ "Gdk", "https://docs.gtk.org/gdk4" },
+        .{ "GdkWayland", "https://docs.gtk.org/gdk4-wayland" },
+        .{ "GdkX11", "https://docs.gtk.org/gdk4-x11" },
+        .{ "Gsk", "https://docs.gtk.org/gsk4" },
+        .{ "GdkPixbuf", "https://docs.gtk.org/gdk-pixbuf" },
+        .{ "Gtk", "https://docs.gtk.org/gtk4" },
+        .{ "Pango", "https://docs.gtk.org/Pango" },
+        .{ "PangoCairo", "https://docs.gtk.org/PangoCairo" },
     });
     const namespace = info.getNamespace().?;
-    if (data.get(namespace)) |prefix| {
+    if (urlmap.get(namespace)) |prefix| {
         if (info.isDeprecated()) {
             try writer.writeAll("/// Deprecated:\n");
         }
