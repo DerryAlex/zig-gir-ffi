@@ -36,3 +36,24 @@ jobs:
         with:
           add-paths: test/abi/c_*.zig
           commit-message: Update c.zig
+  
+  build-win:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: mingw-w64-ucrt-x86_64-gtk4
+      
+      - uses: mlugg/setup-zig@v1.2.0
+
+      - name: Generate c.zig
+        run: cd test/abi && ./ci.bat && cd ../..
+      
+      - uses: peter-evans/create-pull-request@v6
+        with:
+          add-paths: test/abi/c_*.zig
+          commit-message: Update c.zig
