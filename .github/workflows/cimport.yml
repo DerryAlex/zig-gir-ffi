@@ -48,6 +48,7 @@ jobs:
           msystem: UCRT64
           install: >-
             mingw-w64-ucrt-x86_64-headers
+            mingw-w64-ucrt-x86_64-winpthreads
             mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-gtk4
             mingw-w64-clang-x86_64-zig
