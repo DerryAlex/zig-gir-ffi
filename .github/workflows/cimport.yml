@@ -46,7 +46,9 @@ jobs:
       - uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
-          install: mingw-w64-ucrt-x86_64-gtk4
+          install: >-
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-pkgconf
       
       - uses: mlugg/setup-zig@v1.2.0
 
