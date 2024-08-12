@@ -155,8 +155,10 @@ pub fn build(b: *std.Build) !void {
         run_cmd.addArgs(&.{ "--includedir", "lib/girepository-1.0" });
         run_cmd.addArgs(&.{ "--gi-namespaces", "GLib" }); // load glib before glib_*
         run_cmd.addArgs(&.{ "--gi-namespaces", "GLibUnix" });
+        run_cmd.addArgs(&.{ "--gi-namespaces", "GLibWin32" });
         run_cmd.addArgs(&.{ "--gi-namespaces", "Gio" }); // load gio before gio_*
         run_cmd.addArgs(&.{ "--gi-namespaces", "GioUnix" });
+        run_cmd.addArgs(&.{ "--gi-namespaces", "GioWin32" });
         run_cmd.addArgs(&.{ "--gi-namespaces", "Gdk" }); // load gdk before gdk_*
         run_cmd.addArgs(&.{ "--gi-namespaces", "GdkWayland" });
         run_cmd.addArgs(&.{ "--gi-namespaces", "GdkX11" });
