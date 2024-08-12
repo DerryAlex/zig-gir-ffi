@@ -49,8 +49,7 @@ jobs:
           install: >-
             mingw-w64-ucrt-x86_64-gtk4
             mingw-w64-ucrt-x86_64-pkgconf
-      
-      - uses: mlugg/setup-zig@v1.2.0
+            mingw-w64-clang-x86_64-zig
 
       - name: Generate c.zig
         run: cd test/abi && ./ci.bat && cd ../..
