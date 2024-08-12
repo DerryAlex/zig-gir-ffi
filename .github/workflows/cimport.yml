@@ -29,6 +29,9 @@ jobs:
 
       - uses: mlugg/setup-zig@v1.2.0
 
+      - name: Setup msys2
+        run: cd test/abi && ./setup_msys2.sh && cd ../..
+
       - name: Generate c.zig
         run: cd test/abi && ./ci.sh && cd ../..
 
