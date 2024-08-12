@@ -7,7 +7,7 @@ on:
   # Triggers the workflow on push or pull request events but only for the "master" branch
   push:
     branches: [ "master" ]
-    paths: [ "test/abi/ci.sh", "test/abi/ci.bat", "test/abi/c_linux.h", "test/abi/c_win.h", "test/abi/c_linux.patch", "test/abi/c_win.patch", ".github/workflows/cimport.yml" ]
+    paths: [ "test/abi/ci.sh", "test/abi/c_linux.h", "test/abi/c_win.h", "test/abi/c_linux.patch", "test/abi/c_win.patch", ".github/workflows/cimport.yml" ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -32,30 +32,6 @@ jobs:
       - name: Generate c.zig
         run: cd test/abi && ./ci.sh && cd ../..
 
-      - uses: peter-evans/create-pull-request@v6
-        with:
-          add-paths: test/abi/c_*.zig
-          commit-message: Update c.zig
-  
-  build-win:
-    runs-on: windows-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          install: >-
-            mingw-w64-ucrt-x86_64-headers
-            mingw-w64-ucrt-x86_64-winpthreads
-            mingw-w64-ucrt-x86_64-pkgconf
-            mingw-w64-ucrt-x86_64-gtk4
-            mingw-w64-clang-x86_64-zig
-
-      - name: Generate c.zig
-        run: cd test/abi && ./ci.bat && cd ../..
-      
       - uses: peter-evans/create-pull-request@v6
         with:
           add-paths: test/abi/c_*.zig

@@ -4,3 +4,4 @@ zig-out
 *.zig
 *.zon
 !c_*.zig
+ucrt64/
