@@ -179,6 +179,17 @@ pub fn build(b: *std.Build) !void {
     } else {
         run_abi_cmd.addArgs(&.{ "--outputdir", "test/abi" });
         run_abi_cmd.addArgs(&.{ "--includedir", "lib/girepository-1.0" });
+        run_abi_cmd.addArgs(&.{ "--gi-namespaces", "GLib" }); // load glib before glib_*
+        run_abi_cmd.addArgs(&.{ "--gi-namespaces", "GLibUnix" });
+        run_abi_cmd.addArgs(&.{ "--gi-namespaces", "GLibWin32" });
+        run_abi_cmd.addArgs(&.{ "--gi-namespaces", "Gio" }); // load gio before gio_*
+        run_abi_cmd.addArgs(&.{ "--gi-namespaces", "GioUnix" });
+        run_abi_cmd.addArgs(&.{ "--gi-namespaces", "GioWin32" });
+        run_abi_cmd.addArgs(&.{ "--gi-namespaces", "Gdk" }); // load gdk before gdk_*
+        run_abi_cmd.addArgs(&.{ "--gi-namespaces", "GdkWayland" });
+        run_abi_cmd.addArgs(&.{ "--gi-namespaces", "GdkX11" });
+        run_abi_cmd.addArgs(&.{ "--gi-namespaces", "GdkWin32" });
+        run_abi_cmd.addArgs(&.{ "--gi-namespaces", "Gtk" });
         run_abi_cmd.addArgs(&.{"--emit-abi"});
     }
 

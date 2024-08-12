@@ -88,17 +88,15 @@ pub fn main() !void {
     for (gi_namespaces, 0..) |namespace, idx| {
         const n = String.new_from("{s}", .{namespace});
         const v = if (gi_versions) |versions| String.new_from("{s}", .{versions[idx]}) else String.new_from("null", .{});
-        var _err: ?*gi.core.Error = null;
+        var err: ?*gi.core.Error = null;
         _ = repository.require(
             n.slice(),
             if (gi_versions == null) null else v.slice(),
             .{},
-            &_err,
-        ) catch |err| switch (err) {
-            error.GError => {
-                std.log.err("{s}", .{_err.?.message.?});
-                return error.UnexpectedError;
-            },
+            &err,
+        ) catch {
+            std.log.err("{s}", .{err.?.message.?});
+            return error.UnexpectedError;
         };
     }
 
@@ -211,16 +209,30 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
             const dependencies = repository.getDependencies(namespace.slice());
             for (dependencies.ret[0..dependencies.n_dependencies_out]) |dependencyZ| {
                 const dependency = String.new_from("{s}", .{std.mem.sliceTo(dependencyZ, '-')}).to_snake();
-                try writer.print(
-                    \\pub const {s} = @import("{s}");
-                    \\
-                , .{ dependency, dependency });
+                if (!pkg_config.emit_abi) {
+                    try writer.print(
+                        \\pub const {s} = @import("{s}");
+                        \\
+                    , .{ dependency, dependency });
+                } else {
+                    try writer.print(
+                        \\pub const {s} = @import("{s}.zig");
+                        \\
+                    , .{ dependency, dependency });
+                }
             }
-            try writer.writeAll(
-                \\pub const core = @import("core");
-                \\
-            );
-            if (std.mem.eql(u8, "Gtk", namespace.slice())) {
+            if (!pkg_config.emit_abi) {
+                try writer.writeAll(
+                    \\pub const core = @import("core");
+                    \\
+                );
+            } else {
+                try writer.writeAll(
+                    \\pub const core = @import("core.zig");
+                    \\
+                );
+            }
+            if (std.mem.eql(u8, "Gtk", namespace.slice()) and !pkg_config.emit_abi) {
                 try writer.writeAll(
                     \\pub const template = @import("template");
                     \\
@@ -236,7 +248,7 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
             );
             if (pkg_config.emit_abi) {
                 try writer.writeAll(
-                    \\const c = @import("c.zig");
+                    \\const c = @import("c");
                     \\
                 );
             }
