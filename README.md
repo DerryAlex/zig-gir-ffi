@@ -2,14 +2,6 @@
 
 GObject Introspection for zig. Generated [GTK4 binding](https://github.com/DerryAlex/zig-gir-ffi/releases) can be downloaded.
 
-###### Zig compatibility
-
-Before zig reaches 1.0,
-
-1. Be compatible with zig stable, say 0.x
-
-2. Try to be compatible with zig master, or 0.(x+1)+dev
-
 > **Warning**
 > Only pre-releases targeting zig 0.x and 0.(x-1) are guarenteed to be kept.
 

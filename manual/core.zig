@@ -184,7 +184,7 @@ pub fn Extend(comptime Self: type) type {
 /// Gets return type of `method`
 fn CallMethod(comptime T: type, comptime method: []const u8) ?type {
     if (comptime std.meta.hasFn(T, method)) {
-        const method_info = @typeInfo(@TypeOf(@field(T, method))).Fn;
+        const method_info = @typeInfo(@TypeOf(@field(T, method))).@"fn";
         comptime std.debug.assert(method_info.params[0].is_generic or std.meta.Child(method_info.params[0].type.?) == T);
         return method_info.return_type.?;
     }
@@ -214,7 +214,7 @@ fn CallMethod(comptime T: type, comptime method: []const u8) ?type {
 fn callMethod(self: anytype, comptime Self: type, comptime method: []const u8, args: anytype) if (CallMethod(Self, method)) |R| R else @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(Self), method })) {
     if (std.meta.hasFn(Self, method)) {
         const method_fn = @field(Self, method);
-        const method_info = @typeInfo(@TypeOf(method_fn)).Fn;
+        const method_info = @typeInfo(@TypeOf(method_fn)).@"fn";
         return @call(.auto, method_fn, .{if (comptime method_info.params[0].is_generic) self else self.into(Self)} ++ args);
     }
     if (comptime @hasDecl(Self, "Prerequisites")) {
@@ -259,10 +259,10 @@ fn isBasicType(comptime T: type) bool {
     if (T == u64) return true;
     if (T == f32) return true;
     if (T == f64) return true;
-    if (@typeInfo(T) == .Enum) return true; // Enum or Type
-    if (@typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .@"packed") return true; // Flags
+    if (@typeInfo(T) == .@"enum") return true; // Enum or Type
+    if (@typeInfo(T) == .@"struct" and @typeInfo(T).@"struct".layout == .@"packed") return true; // Flags
     if (T == [*:0]const u8) return true; // String
-    if (@typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) return true; // Pointer
+    if (@typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .One) return true; // Pointer
     return false;
 }
 
@@ -309,7 +309,7 @@ const Value = struct {
             _ = value.init(.double);
         } else if (comptime T == [*:0]const u8) {
             _ = value.init(.string);
-        } else if (comptime @typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) {
+        } else if (comptime @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .One) {
             _ = value.init(.pointer);
         } else if (comptime T == glib.Variant) {
             _ = value.init(.variant);
@@ -338,15 +338,15 @@ const Value = struct {
         if (comptime T == f32) return self.getFloat();
         if (comptime T == f64) return self.getDouble();
         if (comptime T == Type) return self.getGtype();
-        if (comptime @typeInfo(T) == .Enum) {
-            comptime std.debug.assert(@typeInfo(T).Enum.is_exhaustive);
+        if (comptime @typeInfo(T) == .@"enum") {
+            comptime std.debug.assert(@typeInfo(T).@"enum".is_exhaustive);
             return @enumFromInt(self.getEnum());
         }
-        if (comptime @typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .@"packed") {
+        if (comptime @typeInfo(T) == .@"struct" and @typeInfo(T).@"struct".layout == .@"packed") {
             return @bitCast(self.getFlags());
         }
         if (comptime T == [*:0]const u8) return self.getString();
-        if (comptime @typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) return @ptrCast(self.getPointer());
+        if (comptime @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .One) return @ptrCast(self.getPointer());
         if (comptime T == glib.Variant) return self.getVariant().?;
         if (comptime T == gobject.ParamSpec) return self.getParam();
         if (comptime @hasDecl(T, "__call")) return downCast(T, self.getObject()).?;
@@ -381,14 +381,14 @@ const Value = struct {
             self.setDouble(arg_value);
         } else if (comptime T == Type) {
             self.setGtype(arg_value);
-        } else if (comptime @typeInfo(T) == .Enum) {
-            comptime std.debug.assert(@typeInfo(T).Enum.is_exhaustive);
+        } else if (comptime @typeInfo(T) == .@"enum") {
+            comptime std.debug.assert(@typeInfo(T).@"enum".is_exhaustive);
             self.setEnum(@intFromEnum(arg_value));
-        } else if (comptime @typeInfo(T) == .Struct and @typeInfo(T).Struct.layout == .@"packed") {
+        } else if (comptime @typeInfo(T) == .@"struct" and @typeInfo(T).@"struct".layout == .@"packed") {
             self.setFlags(@bitCast(arg_value));
         } else if (comptime T == [*:0]const u8) {
             self.setString(arg_value);
-        } else if (comptime @typeInfo(T) == .Pointer and @typeInfo(T).Pointer.size == .One) {
+        } else if (comptime @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .One) {
             self.setPointer(arg_value);
         } else if (comptime T == glib.Variant) {
             self.setVariant(arg_value);
@@ -430,16 +430,16 @@ const NopClosure = struct {
 
 /// A closure represents a callback supplied by the programmer
 pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature: []const type) type {
-    comptime std.debug.assert(@typeInfo(Args) == .Struct and @typeInfo(Args).Struct.is_tuple);
-    comptime std.debug.assert(@typeInfo(FnPtr) == .Pointer and @typeInfo(FnPtr).Pointer.size == .One);
+    comptime std.debug.assert(@typeInfo(Args) == .@"struct" and @typeInfo(Args).@"struct".is_tuple);
+    comptime std.debug.assert(@typeInfo(FnPtr) == .pointer and @typeInfo(FnPtr).pointer.size == .One);
     if (std.meta.Child(FnPtr) == void) {
         return NopClosure;
     }
-    comptime std.debug.assert(@typeInfo(std.meta.Child(FnPtr)) == .Fn);
+    comptime std.debug.assert(@typeInfo(std.meta.Child(FnPtr)) == .@"fn");
     comptime std.debug.assert(signature.len >= 1);
 
-    const n_arg = @typeInfo(Args).Struct.fields.len;
-    const n_param = @typeInfo(std.meta.Child(FnPtr)).Fn.params.len;
+    const n_arg = @typeInfo(Args).@"struct".fields.len;
+    const n_param = @typeInfo(std.meta.Child(FnPtr)).@"fn".params.len;
 
     return struct {
         handler: FnPtr,
@@ -551,16 +551,16 @@ fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?
 /// Creates a new instance of an Object subtype and sets its properties using the provided map
 pub fn newObject(comptime T: type, properties: anytype) *T {
     const info = @typeInfo(@TypeOf(properties));
-    comptime std.debug.assert(info == .Struct);
-    const n_props = info.Struct.fields.len;
+    comptime std.debug.assert(info == .@"struct");
+    const n_props = info.@"struct".fields.len;
     var names: [n_props][*:0]const u8 = undefined;
     var values: [n_props]gobject.Value = undefined;
-    inline for (info.Struct.fields, 0..) |field, idx| {
+    inline for (info.@"struct".fields, 0..) |field, idx| {
         names[idx] = field.name;
         const V = blk: {
-            if (@typeInfo(field.type) == .Pointer and @typeInfo(field.type).Pointer.size == .One) {
-                const pointer_child = @typeInfo(field.type).Pointer.child;
-                if (@typeInfo(pointer_child) == .Array and @typeInfo(pointer_child).Array.child == u8 and std.meta.sentinel(pointer_child) == @as(u8, 0)) break :blk [*:0]const u8;
+            if (@typeInfo(field.type) == .pointer and @typeInfo(field.type).pointer.size == .One) {
+                const pointer_child = @typeInfo(field.type).pointer.child;
+                if (@typeInfo(pointer_child) == .array and @typeInfo(pointer_child).array.child == u8 and std.meta.sentinel(pointer_child) == @as(u8, 0)) break :blk [*:0]const u8;
                 if (comptime !isBasicType(pointer_child)) break :blk pointer_child;
             }
             break :blk field.type;
@@ -594,7 +594,7 @@ pub fn newSignal(comptime Object: type, comptime signal_name: [:0]const u8, sign
     }
     const class_closure = gobject.signalTypeCclosureNew(Object.gType(), @offsetOf(Class, &field_name));
     const signal_field_type = std.meta.FieldType(Class, std.meta.stringToEnum(std.meta.FieldEnum(Class), &field_name).?);
-    const signal_info = @typeInfo(std.meta.Child(std.meta.Child(signal_field_type))).Fn; // ?*const fn(args...) return_type
+    const signal_info = @typeInfo(std.meta.Child(std.meta.Child(signal_field_type))).@"fn"; // ?*const fn(args...) return_type
     const return_type = Value.new(signal_info.return_type.?).g_type;
     var param_types: [signal_info.params.len - 1]Type = undefined;
     inline for (signal_info.params[1..], &param_types) |param, *ty| {
@@ -633,7 +633,7 @@ pub fn typeTag(comptime Object: type) *TypeTag {
 
 /// Initializes all fields of the struct with their default value.
 fn init(comptime T: type, value: *T) void {
-    const info = @typeInfo(T).Struct;
+    const info = @typeInfo(T).@"struct";
     inline for (info.fields) |field| {
         if (field.default_value) |default_value_ptr| {
             const default_value = @as(*align(1) const field.type, @ptrCast(default_value_ptr)).*;
@@ -833,58 +833,58 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
     var typeinfo_u = @typeInfo(U);
     var typeinfo_v = @typeInfo(V);
 
-    if (typeinfo_u == .Opaque or typeinfo_v == .Opaque) return true;
-    if (typeinfo_u == .Struct and @sizeOf(U) == 0 and @hasField(U, "skip_zig_test")) return true;
-    if (typeinfo_v == .Struct and @sizeOf(V) == 0 and @hasField(V, "skip_zig_test")) return true;
+    if (typeinfo_u == .@"opaque" or typeinfo_v == .@"opaque") return true;
+    if (typeinfo_u == .@"struct" and @sizeOf(U) == 0 and @hasField(U, "skip_zig_test")) return true;
+    if (typeinfo_v == .@"struct" and @sizeOf(V) == 0 and @hasField(V, "skip_zig_test")) return true;
 
-    if (typeinfo_u == .NoReturn) {
+    if (typeinfo_u == .noreturn) {
         typeinfo_u = @typeInfo(void);
     }
-    if (typeinfo_v == .NoReturn) {
+    if (typeinfo_v == .noreturn) {
         typeinfo_v = @typeInfo(void);
     }
 
-    if (typeinfo_u == .Optional and @typeInfo(typeinfo_u.Optional.child) == .Pointer) {
-        typeinfo_u = @typeInfo(typeinfo_u.Optional.child);
+    if (typeinfo_u == .optional and @typeInfo(typeinfo_u.optional.child) == .pointer) {
+        typeinfo_u = @typeInfo(typeinfo_u.optional.child);
     }
-    if (typeinfo_v == .Optional and @typeInfo(typeinfo_v.Optional.child) == .Pointer) {
-        typeinfo_v = @typeInfo(typeinfo_v.Optional.child);
-    }
-
-    if (typeinfo_u == .Pointer and typeinfo_u.Pointer.size == .One and @typeInfo(typeinfo_u.Pointer.child) == .Array) {
-        typeinfo_u = @typeInfo([*]@typeInfo(typeinfo_u.Pointer.child).Array.child);
-    }
-    if (typeinfo_v == .Pointer and typeinfo_v.Pointer.size == .One and @typeInfo(typeinfo_v.Pointer.child) == .Array) {
-        typeinfo_v = @typeInfo([*]@typeInfo(typeinfo_v.Pointer.child).Array.child);
+    if (typeinfo_v == .optional and @typeInfo(typeinfo_v.optional.child) == .pointer) {
+        typeinfo_v = @typeInfo(typeinfo_v.optional.child);
     }
 
-    if (typeinfo_u == .Enum) {
-        typeinfo_u = @typeInfo(typeinfo_u.Enum.tag_type);
+    if (typeinfo_u == .pointer and typeinfo_u.pointer.size == .One and @typeInfo(typeinfo_u.pointer.child) == .array) {
+        typeinfo_u = @typeInfo([*]@typeInfo(typeinfo_u.pointer.child).array.child);
     }
-    if (typeinfo_v == .Enum) {
-        typeinfo_v = @typeInfo(typeinfo_v.Enum.tag_type);
-    }
-    if (typeinfo_u == .Struct and typeinfo_u.Struct.layout == .@"packed") {
-        typeinfo_u = @typeInfo(typeinfo_u.Struct.backing_integer.?);
-    }
-    if (typeinfo_v == .Struct and typeinfo_v.Struct.layout == .@"packed") {
-        typeinfo_v = @typeInfo(typeinfo_v.Struct.backing_integer.?);
+    if (typeinfo_v == .pointer and typeinfo_v.pointer.size == .One and @typeInfo(typeinfo_v.pointer.child) == .array) {
+        typeinfo_v = @typeInfo([*]@typeInfo(typeinfo_v.pointer.child).array.child);
     }
 
-    if (typeinfo_u == .Bool) {
+    if (typeinfo_u == .@"enum") {
+        typeinfo_u = @typeInfo(typeinfo_u.@"enum".tag_type);
+    }
+    if (typeinfo_v == .@"enum") {
+        typeinfo_v = @typeInfo(typeinfo_v.@"enum".tag_type);
+    }
+    if (typeinfo_u == .@"struct" and typeinfo_u.@"struct".layout == .@"packed") {
+        typeinfo_u = @typeInfo(typeinfo_u.@"struct".backing_integer.?);
+    }
+    if (typeinfo_v == .@"struct" and typeinfo_v.@"struct".layout == .@"packed") {
+        typeinfo_v = @typeInfo(typeinfo_v.@"struct".backing_integer.?);
+    }
+
+    if (typeinfo_u == .bool) {
         typeinfo_u = @typeInfo(c_int);
     }
-    if (typeinfo_v == .Bool) {
+    if (typeinfo_v == .bool) {
         typeinfo_v = @typeInfo(c_int);
     }
 
     if (@as(std.builtin.TypeId, typeinfo_u) != @as(std.builtin.TypeId, typeinfo_v)) return false;
 
     switch (typeinfo_u) {
-        .Type, .Void, .Bool, .ComptimeFloat, .ComptimeInt => return true,
-        .Int => {
-            const intinfo_u = typeinfo_u.Int;
-            const intinfo_v = typeinfo_v.Int;
+        .type, .void, .bool, .comptime_float, .comptime_int => return true,
+        .int => {
+            const intinfo_u = typeinfo_u.int;
+            const intinfo_v = typeinfo_v.int;
             if (intinfo_u.bits != intinfo_v.bits) return false;
             if (intinfo_u.signedness != intinfo_v.signedness) {
                 // char and flags may be translated as unsigned
@@ -892,14 +892,14 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
             }
             return true;
         },
-        .Float => return typeinfo_u.Float.bits == typeinfo_v.Float.bits,
-        .Pointer => {
-            const pointerinfo_u = typeinfo_u.Pointer;
-            const pointerinfo_v = typeinfo_v.Pointer;
+        .float => return typeinfo_u.float.bits == typeinfo_v.float.bits,
+        .pointer => {
+            const pointerinfo_u = typeinfo_u.pointer;
+            const pointerinfo_v = typeinfo_v.pointer;
             if (pointerinfo_u.size != .C and pointerinfo_v.size != .C) {
                 var has_anyopaque = false;
-                if (pointerinfo_u.size == .One and @typeInfo(pointerinfo_u.child) == .Opaque) has_anyopaque = true;
-                if (pointerinfo_v.size == .One and @typeInfo(pointerinfo_v.child) == .Opaque) has_anyopaque = true;
+                if (pointerinfo_u.size == .One and @typeInfo(pointerinfo_u.child) == .@"opaque") has_anyopaque = true;
+                if (pointerinfo_v.size == .One and @typeInfo(pointerinfo_v.child) == .@"opaque") has_anyopaque = true;
                 if (!has_anyopaque) {
                     if (pointerinfo_u.size != pointerinfo_v.size) return false;
                     if ((pointerinfo_u.sentinel == null) != (pointerinfo_v.sentinel == null)) return false;
@@ -909,18 +909,18 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
             }
             return isAbiCompatitable(pointerinfo_u.child, pointerinfo_v.child);
         },
-        .Array => {
-            const arrayinfo_u = typeinfo_u.Array;
-            const arrayinfo_v = typeinfo_v.Array;
+        .array => {
+            const arrayinfo_u = typeinfo_u.array;
+            const arrayinfo_v = typeinfo_v.array;
             return arrayinfo_u.len == arrayinfo_v.len and isAbiCompatitable(arrayinfo_u.child, arrayinfo_v.child);
         },
-        .Struct => return typeinfo_u.Struct.layout == typeinfo_v.Struct.layout and @sizeOf(U) == @sizeOf(V),
-        .Optional => return isAbiCompatitable(typeinfo_u.Optional.child, typeinfo_v.Optional.child),
-        .Enum => return U == V,
-        .Union => return typeinfo_u.Union.layout == typeinfo_v.Union.layout and @sizeOf(U) == @sizeOf(V),
-        .Fn => {
-            const fninfo_u = typeinfo_u.Fn;
-            const fninfo_v = typeinfo_v.Fn;
+        .@"struct" => return typeinfo_u.@"struct".layout == typeinfo_v.@"struct".layout and @sizeOf(U) == @sizeOf(V),
+        .optional => return isAbiCompatitable(typeinfo_u.optional.child, typeinfo_v.optional.child),
+        .@"enum" => return U == V,
+        .@"union" => return typeinfo_u.@"union".layout == typeinfo_v.@"union".layout and @sizeOf(U) == @sizeOf(V),
+        .@"fn" => {
+            const fninfo_u = typeinfo_u.@"fn";
+            const fninfo_v = typeinfo_v.@"fn";
             if (fninfo_u.calling_convention != fninfo_v.calling_convention) return false;
             if (fninfo_u.params.len != fninfo_v.params.len) return false;
             inline for (0..fninfo_u.params.len) |idx| {
@@ -933,12 +933,12 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
             } else {
                 var return_info_u = @typeInfo(return_type_u);
                 var return_info_v = @typeInfo(return_type_v);
-                if (return_info_u == .Optional and @typeInfo(return_info_u.Optional.child) == .Pointer) return_info_u = @typeInfo(return_info_u.Optional.child);
-                if (return_info_v == .Optional and @typeInfo(return_info_v.Optional.child) == .Pointer) return_info_v = @typeInfo(return_info_v.Optional.child);
-                if (return_info_u == .Pointer and return_info_v == .Pointer) {
-                    const UObj = return_info_u.Pointer.child;
-                    const VObj = return_info_v.Pointer.child;
-                    if (@typeInfo(UObj) == .Struct and @typeInfo(VObj) == .Struct) {
+                if (return_info_u == .optional and @typeInfo(return_info_u.optional.child) == .pointer) return_info_u = @typeInfo(return_info_u.optional.child);
+                if (return_info_v == .optional and @typeInfo(return_info_v.optional.child) == .pointer) return_info_v = @typeInfo(return_info_v.optional.child);
+                if (return_info_u == .pointer and return_info_v == .pointer) {
+                    const UObj = return_info_u.pointer.child;
+                    const VObj = return_info_v.pointer.child;
+                    if (@typeInfo(UObj) == .@"struct" and @typeInfo(VObj) == .@"struct") {
                         if (isA(gobject.Object)(UObj)) {
                             var flag = false;
                             comptime {

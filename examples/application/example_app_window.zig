@@ -50,10 +50,10 @@ pub const CstrContext = struct {
 pub const ExampleAppWindowClass = extern struct {
     parent_class: ApplicationWindowClass,
 
-    pub var parent_class: ?*ApplicationWindowClass = null;
+    pub var parent_class_ptr: ?*ApplicationWindowClass = null;
 
     pub fn init(class: *ExampleAppWindowClass) void {
-        parent_class = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
+        parent_class_ptr = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
         var widget_class: *WidgetClass = @ptrCast(class);
         widget_class.setTemplateFromResource("/org/gtk/exampleapp/window.ui");
         template.bindChild(widget_class, ExampleAppWindow, &[_]template.BindingZ{
@@ -131,7 +131,7 @@ pub const ExampleAppWindow = extern struct {
             var self = arg_object.tryInto(ExampleAppWindow).?;
             self.settings.__call("unref", .{});
             self.__call("disposeTemplate", .{ExampleAppWindow.gType()});
-            const p_class: *ObjectClass = @ptrCast(Class.parent_class.?);
+            const p_class: *ObjectClass = @ptrCast(Class.parent_class_ptr.?);
             p_class.dispose.?(arg_object);
         }
     };

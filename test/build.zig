@@ -11,6 +11,7 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = b.path("test_abi.zig"),
         .optimize = optimize,
         .target = target,
+        .filters = &.{ "g_", "gi_", "gtk_", "gsk_", "gdk_", "pango_", "cairo_" },
     });
     const os_tag = target.result.os.tag;
     if (os_tag == .linux) {

@@ -20,10 +20,10 @@ const GApplicationClass = gio.ApplicationClass;
 pub const ExampleAppClass = extern struct {
     parent_class: ApplicationClass,
 
-    pub var parent_class: ?*ApplicationClass = null;
+    pub var parent_class_ptr: ?*ApplicationClass = null;
 
     pub fn init(class: *ExampleAppClass) void {
-        parent_class = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
+        parent_class_ptr = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
     }
 };
 
@@ -70,7 +70,7 @@ pub const ExampleApp = extern struct {
             self.__call("addAction", .{action_quit.into(Action)});
             var quit_accels = [_:null]?[*:0]const u8{"<Ctrl>Q"};
             self.__call("setAccelsForAction", .{ "app.quit", &quit_accels });
-            const p_class: *GApplicationClass = @ptrCast(Class.parent_class.?);
+            const p_class: *GApplicationClass = @ptrCast(Class.parent_class_ptr.?);
             p_class.startup.?(arg_app);
         }
     };

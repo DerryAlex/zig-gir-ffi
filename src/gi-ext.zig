@@ -690,7 +690,13 @@ pub const FunctionInfoExt = struct {
         @memset(closure_info[0..], .{});
 
         // print function name
-        const func_name = self.into(BaseInfo).name_string().to_camel();
+        var func_name = self.into(BaseInfo).name_string().to_camel();
+        {
+            // PATCH: duplicate name
+            if (std.mem.eql(u8, "g_hook_destroy", std.mem.span(self.getSymbol()))) {
+                func_name = String.new_from("{s}", .{"destroyID"});
+            }
+        }
         try root.generateDocs(.{ .function = self }, writer);
         if (self.into(BaseInfo).isDeprecated()) {
             try writer.print("pub const {s} = if (config.disable_deprecated) core.Deprecated else struct {{", .{func_name.to_identifier()});

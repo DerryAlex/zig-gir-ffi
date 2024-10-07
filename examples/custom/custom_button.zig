@@ -23,15 +23,15 @@ pub const CustomButtonClass = extern struct {
     parent_class: ButtonClass,
     zero_reached: ?*const fn (self: *CustomButton) callconv(.C) void,
 
-    pub var parent_class: ?*ButtonClass = null;
+    pub var parent_class_ptr: ?*ButtonClass = null;
 
     pub fn init(class: *CustomButtonClass) void {
-        parent_class = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
+        parent_class_ptr = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
     }
 
     pub fn properties() []*ParamSpec {
         @memcpy(_properties[1..], &[_]*ParamSpec{
-            gobject.paramSpecInt("number", null, null, 0, 10, 10, .{ .readable = true, .writable = true }),
+            gobject.paramSpecInt("number", null, null, 0, 10, 10, .readwrite),
         });
         return _properties[0..];
     }
@@ -88,7 +88,7 @@ pub const CustomButton = extern struct {
 
         pub fn constructed(arg_object: *Object) callconv(.C) void {
             var self = arg_object.tryInto(CustomButton).?;
-            const p_class: *gobject.ObjectClass = @ptrCast(Class.parent_class);
+            const p_class: *gobject.ObjectClass = @ptrCast(Class.parent_class_ptr);
             p_class.constructed.?(arg_object);
             _ = self.__call("bindProperty", .{ "number", self.into(Object), "label", .{ .sync_create = true } });
         }

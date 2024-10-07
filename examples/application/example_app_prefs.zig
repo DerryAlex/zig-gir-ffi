@@ -20,10 +20,10 @@ const Window = gtk.Window;
 const ExampleAppPrefsClass = extern struct {
     parent_class: DialogClass,
 
-    pub var parent_class: ?*DialogClass = null;
+    pub var parent_class_ptr: ?*DialogClass = null;
 
     pub fn init(class: *ExampleAppPrefsClass) void {
-        parent_class = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
+        parent_class_ptr = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
         var widget_class: *WidgetClass = @ptrCast(class);
         widget_class.setTemplateFromResource("/org/gtk/exampleapp/prefs.ui");
         template.bindChild(widget_class, ExampleAppPrefs, null, &[_]template.BindingZ{
@@ -59,7 +59,7 @@ pub const ExampleAppPrefs = extern struct {
             var self = arg_object.tryInto(ExampleAppPrefs).?;
             self.private.settings.__call("unref", .{});
             self.__call("disposeTemplate", .{ExampleAppPrefs.gType()});
-            const p_class: *ObjectClass = @ptrCast(Class.parent_class.?);
+            const p_class: *ObjectClass = @ptrCast(Class.parent_class_ptr.?);
             p_class.dispose.?(arg_object);
         }
     };
