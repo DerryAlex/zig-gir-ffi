@@ -17,7 +17,7 @@ jobs:
   # This workflow contains a single job called "build"
   build:
     # The type of runner that the job will run on
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -29,6 +29,7 @@ jobs:
           sudo sed -Ei 's/^# deb-src /deb-src /' /etc/apt/sources.list
           sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
           sudo apt-get update
+          sudo apt install gir1.2-girepository-3.0-dev
           sudo apt-get build-dep gobject-introspection
       
       - name: Generate typelibs

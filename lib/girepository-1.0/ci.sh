@@ -12,9 +12,8 @@ cd ../..
 
 git clone https://github.com/gtk-rs/gir-files.git && cd gir-files
 git checkout ${gir_version}
-# download GIRepository-3.0.gir
-wget -qO- http://security.ubuntu.com/ubuntu/pool/main/g/glib2.0/gir1.2-girepository-3.0-dev_2.80.0-6ubuntu3.1_amd64.deb | \
-    dpkg --fsys-tarfile - | tar -xO "./usr/share/gir-1.0/GIRepository-3.0.gir" > GIRepository-3.0.gir
+# fetch GIRepository-3.0.gir
+cp /usr/share/gir-1.0/GIRepository-3.0.gir .
 # TODO: remove this
 # download GLibWin32 GioWin32
 GLIB_VERSION=$(wget -qO- "https://packages.msys2.org/api/search?query=glib2" | jq -r ".results.exact.version")
