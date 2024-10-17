@@ -1,6 +1,7 @@
 #!/usr/bin/bash
 
-gir_version="0.20.0"
+# gir_version="0.20.0"
+gir_version="e247600"
 
 apt-get source gobject-introspection
 cd $(ls -F | grep 'gobject-introspection' | grep '/$')
@@ -14,13 +15,6 @@ git clone https://github.com/gtk-rs/gir-files.git && cd gir-files
 git checkout ${gir_version}
 # fetch GIRepository-3.0.gir
 cp /usr/share/gir-1.0/GIRepository-3.0.gir .
-# TODO: remove this
-# download GLibWin32 GioWin32
-GLIB_VERSION=$(wget -qO- "https://packages.msys2.org/api/search?query=glib2" | jq -r ".results.exact.version")
-wget -qO- "https://mirror.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-glib2-$GLIB_VERSION-any.pkg.tar.zst" | \
-    zstdcat - | tar -x "ucrt64/share/gir-1.0/GLibWin32-2.0.gir" -x "ucrt64/share/gir-1.0/GioWin32-2.0.gir"
-mv ucrt64/share/gir-1.0/*.gir .
-rm -r ucrt64
 # utf8
 sed -i 's/type name="utf8" c:type="gchar"/type name="gchar" c:type="gchar"/g' GLib-2.0.gir
 sed -i 's/type name="utf8" c:type="char"/type name="gchar" c:type="char"/g' HarfBuzz-0.0.gir

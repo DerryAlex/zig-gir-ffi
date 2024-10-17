@@ -11,6 +11,9 @@ wget -qO- "https://mirror.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-glib2-$GL
 PANGO_VERSION=$(wget -qO- "https://packages.msys2.org/api/search?query=pango" | jq -r ".results.exact.version")
 wget -qO- "https://mirror.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-pango-$PANGO_VERSION-any.pkg.tar.zst" | \
     zstdcat - | tar -x ucrt64
+CAIRO_VERSION=$(wget -qO- "https://packages.msys2.org/api/search?query=cairo" | jq -r ".results.exact.version")
+wget -qO- "https://mirror.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-cairo-$CAIRO_VERSION-any.pkg.tar.zst" | \
+    zstdcat - | tar -x ucrt64
 GTK_VERSION=$(wget -qO- "https://packages.msys2.org/api/search?query=gtk4" | jq -r ".results.exact.version")
 wget -qO- "https://mirror.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-gtk4-$GTK_VERSION-any.pkg.tar.zst" | \
     zstdcat - | tar -x ucrt64
