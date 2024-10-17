@@ -27,9 +27,9 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo sed -Ei 's/^# deb-src /deb-src /' /etc/apt/sources.list
-          sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
+          # sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
           sudo apt-get update
-          sudo apt install gir1.2-girepository-3.0-dev
+          sudo apt-get install gir1.2-girepository-3.0-dev
           sudo apt-get build-dep gobject-introspection
       
       - name: Generate typelibs
