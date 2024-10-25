@@ -1,4 +1,19 @@
 const std = @import("std");
+const builtin = @import("builtin");
+const root = @import("root");
+
+pub const Configs = struct {
+    disable_deprecated: bool = true,
+};
+pub const config: Configs = if (@hasDecl(root, "gi_configs")) root.gi_configs else .{};
+
+/// Deprecated
+pub const Deprecated = if (builtin.is_test)
+    struct {
+        skip_zig_test: void = {},
+    }
+else
+    @compileError("deprecated");
 
 // ----------
 // type begin
@@ -29,6 +44,9 @@ pub const Type = enum(usize) {
     variant = 84,
     _,
 };
+
+/// UCS-4
+pub const Unichar = u32;
 
 // type end
 // --------
@@ -102,6 +120,16 @@ pub fn Extend(comptime Self: type) type {
 // ----------
 // GLib begin
 
+pub const Array = extern struct {
+    data: ?[*:0]const u8,
+    len: u32,
+};
+
+pub const ByteArray = extern struct {
+    data: ?*u8,
+    len: u32,
+};
+
 pub const Bytes = opaque {};
 
 pub const Data = opaque {};
@@ -112,10 +140,17 @@ pub const Error = extern struct {
     message: ?[*:0]const u8,
 };
 
+pub const HashTable = opaque {};
+
 pub const List = extern struct {
     data: ?*anyopaque,
     next: ?*List,
     prev: ?*List,
+};
+
+pub const PtrArray = extern struct {
+    pdata: ?*anyopaque,
+    len: u32,
 };
 
 pub const SList = extern struct {

@@ -126,6 +126,7 @@ pub fn main() !void {
     var manual_dir_walker = try manual_dir.walk(allocator);
     defer manual_dir_walker.deinit();
     while (try manual_dir_walker.next()) |e| {
+        if (emit_abi) break;
         switch (e.kind) {
             .file => {
                 const filename = try allocator.dupe(u8, e.basename);
@@ -249,6 +250,9 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
             if (pkg_config.emit_abi) {
                 try writer.writeAll(
                     \\const c = @import("c");
+                    \\const testing = @import("testing.zig");
+                    \\const expect = testing.expect;
+                    \\const isAbiCompatitable = testing.isAbiCompatitable;
                     \\
                 );
             }
@@ -396,50 +400,6 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
             try build_zig.writer().print("    {s}.addImport(\"core\", core);\n", .{mod});
         }
     }
-
-    // try build_zig.writer().writeAll(
-    //     \\    const target = b.standardTargetOptions(.{});
-    //     \\    const optimize = b.standardOptimizeOption(.{});
-    //     \\    const test_step = b.step("test", "Run the tests");
-    //     \\
-    // );
-    // for (loaded_namespaces.ret[0..loaded_namespaces.n_namespaces_out]) |namespaceZ| {
-    //     const namespace = String.new_from("{s}", .{namespaceZ});
-    //     try build_zig.writer().print(
-    //         \\    const test_{s} = b.addTest(.{{
-    //         \\        .name = "{s}",
-    //         \\        .root_source_file = b.path("{s}.zig"),
-    //         \\        .target = target,
-    //         \\        .optimize = optimize,
-    //         \\    }});
-    //         \\
-    //     , .{ namespace.to_snake(), namespace.to_snake(), namespace.to_snake() });
-
-    //     try build_zig.writer().writeAll("    inline for ([_]*std.Build.Module{ core");
-    //     const dependencies = repository.getDependencies(namespace.slice());
-    //     for (dependencies.ret[0..dependencies.n_dependencies_out]) |dependencyZ| {
-    //         const dependency = String.new_from("{s}", .{std.mem.sliceTo(dependencyZ, '-')}).to_snake();
-    //         try build_zig.writer().print(", {s}", .{dependency});
-    //     }
-    //     try build_zig.writer().writeAll(
-    //         \\ }, [_][]const u8{ "core"
-    //     );
-    //     for (dependencies.ret[0..dependencies.n_dependencies_out]) |dependencyZ| {
-    //         const dependency = String.new_from("{s}", .{std.mem.sliceTo(dependencyZ, '-')}).to_snake();
-    //         try build_zig.writer().print(", \"{s}\"", .{dependency});
-    //     }
-    //     try build_zig.writer().writeAll(" }) |dep_mod, dep_name| {\n");
-    //     try build_zig.writer().print("        test_{s}.root_module.addImport(dep_name, dep_mod);\n", .{namespace.to_snake()});
-    //     try build_zig.writer().writeAll("    }\n");
-
-    //     try build_zig.writer().print(
-    //         \\    test_{s}.linkLibC();
-    //         \\    test_{s}.linkSystemLibrary("gtk4");
-    //         \\    const run_test_{s} = b.addRunArtifact(test_{s});
-    //         \\    test_step.dependOn(&run_test_{s}.step);
-    //         \\
-    //     , .{ namespace.to_snake(), namespace.to_snake(), namespace.to_snake(), namespace.to_snake(), namespace.to_snake() });
-    // }
 
     try build_zig.writer().writeAll(
         \\}
