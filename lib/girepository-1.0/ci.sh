@@ -21,7 +21,10 @@ sed -i 's/type name="utf8" c:type="char"/type name="gchar" c:type="char"/g' Harf
 # introspectable="0"
 sed -i 's/field name="priority" introspectable="0"/field name="priority"/g' GLib-2.0.gir
 sed -i 's/enumeration name="ThreadPriority" introspectable="0" deprecated="1"/enumeration name="ThreadPriority"/g' GLib-2.0.gir
-# misc
+# Win32
+sed -i 's/type name="GLib.Win32/type name="GLibWin32./g' GLibWin32-2.0.gir
+sed -i 's/type name="Gio.Win32/type name="GioWin32./g' GioWin32-2.0.gir
+# gconstpointer
 sed -i 's/gconstpointer/gpointer/g' Pango-1.0.gir
 for gir in $(ls *.gir)
 do

@@ -828,6 +828,16 @@ pub fn typeInstanceGetInterface(comptime Interface: type, self: *Interface) *Int
 // ---------------
 // ABI check begin
 
+fn isHandle(T: std.builtin.Type) bool {
+    if (T != .pointer) return false;
+    const child = @typeInfo(T.pointer.child);
+    if (child != .@"struct") return false;
+    const fields = child.@"struct".fields;
+    if (fields.len != 1) return false;
+    if (@typeInfo(fields[0].type) != .int) return false;
+    return true;
+}
+
 /// For internal use only
 pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
     var typeinfo_u = @typeInfo(U);
@@ -877,6 +887,9 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
     if (typeinfo_v == .bool) {
         typeinfo_v = @typeInfo(c_int);
     }
+
+    if (isHandle(typeinfo_u) and typeinfo_v == .int) return true;
+    if (isHandle(typeinfo_v) and typeinfo_u == .int) return true;
 
     if (@as(std.builtin.TypeId, typeinfo_u) != @as(std.builtin.TypeId, typeinfo_v)) return false;
 
