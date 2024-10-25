@@ -152,6 +152,10 @@ pub const ArgInfoExt = struct {
                     try writer.writeAll("*const [*:0]const u8");
                     return;
                 }
+                if (std.mem.eql(u8, "g_log_writer_default_set_debug_domains", func_symbol) and std.mem.eql(u8, "domains", arg_name)) {
+                    try writer.writeAll("*const [*:0]const u8");
+                    return;
+                }
                 // PATCH: out buf
                 if (std.mem.eql(u8, "g_base64_decode_inplace", func_symbol) and std.mem.eql(u8, "text", arg_name)) {
                     try writer.writeAll("[*]u8");
