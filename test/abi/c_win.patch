@@ -1,6 +1,6 @@
 --- a/c_win.zig
 +++ b/c_win.zig
-@@ -19148,5 +19148,8 @@
+@@ -19148,5 +19148,9 @@
      _: u30,
  };
 -pub const struct__PangoGlyphVisAttr = opaque {};
@@ -11,7 +11,7 @@
 +};
  pub const PangoGlyphVisAttr = struct__PangoGlyphVisAttr;
  pub const struct__PangoGlyphInfo = extern struct {
-@@ -29185,5 +29188,5 @@
+@@ -29185,5 +29189,5 @@
  pub extern fn gsk_text_node_has_color_glyphs(node: ?*const GskRenderNode) gboolean;
  pub extern fn gsk_text_node_get_num_glyphs(node: ?*const GskRenderNode) guint;
 -pub extern fn gsk_text_node_get_glyphs(node: ?*const GskRenderNode, n_glyphs: [*c]guint) ?*const PangoGlyphInfo;

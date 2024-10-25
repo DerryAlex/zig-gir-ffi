@@ -1,6 +1,6 @@
 --- a/c_linux.zig
 +++ b/c_linux.zig
-@@ -19456,5 +19456,8 @@
+@@ -19456,5 +19456,9 @@
      _: u30,
  };
 -pub const struct__PangoGlyphVisAttr = opaque {};
@@ -11,7 +11,7 @@
 +};
  pub const PangoGlyphVisAttr = struct__PangoGlyphVisAttr;
  pub const struct__PangoGlyphInfo = extern struct {
-@@ -28908,5 +28911,5 @@
+@@ -28908,5 +28913,5 @@
  pub extern fn gsk_text_node_has_color_glyphs(node: ?*const GskRenderNode) gboolean;
  pub extern fn gsk_text_node_get_num_glyphs(node: ?*const GskRenderNode) guint;
 -pub extern fn gsk_text_node_get_glyphs(node: ?*const GskRenderNode, n_glyphs: [*c]guint) ?*const PangoGlyphInfo;

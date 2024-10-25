@@ -5,7 +5,7 @@ gir_version="e45712216c81cc5e03ac1e5a6846ef9bcf0ef642"
 
 apt-get source glib2.0
 cd $(ls -F | grep 'glib2.0' | grep '/$')
-patch girepository/girnode.c ../girnode.patch
+patch girepository/girnode.c ../girnode.patch || (cat girepository/girnode.c.rej && exit 1)
 meson setup build && cd build
 meson compile
 export PATH=$(pwd)/girepository/compiler:$(pwd)/girepository/decompiler:$(pwd)/girepository/inspector:${PATH}
