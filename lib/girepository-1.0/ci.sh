@@ -1,14 +1,14 @@
 #!/usr/bin/bash
 
 # gir_version="0.20.0"
-gir_version="e247600"
+gir_version="e45712216c81cc5e03ac1e5a6846ef9bcf0ef642"
 
-apt-get source gobject-introspection
-cd $(ls -F | grep 'gobject-introspection' | grep '/$')
+apt-get source glib2.0
+cd $(ls -F | grep 'glib2.0' | grep '/$')
 patch girepository/girnode.c ../girnode.patch
 meson setup build && cd build
 meson compile
-export PATH=$(pwd)/tools:${PATH}
+export PATH=$(pwd)/girepository/compiler:$(pwd)/girepository/decompiler:$(pwd)/girepository/inspector:${PATH}
 cd ../..
 
 git clone https://github.com/gtk-rs/gir-files.git && cd gir-files
@@ -26,6 +26,6 @@ sed -i 's/gconstpointer/gpointer/g' Pango-1.0.gir
 for gir in $(ls *.gir)
 do
     typelib=$(echo ${gir} | sed 's/.gir/.typelib/')
-    g-ir-compiler ${gir} -o ../${typelib} --includedir .
+    gi-compile-repository ${gir} -o ../${typelib} --includedir .
 done
 cd ..
