@@ -20,8 +20,6 @@ pub fn build(b: *std.Build) !void {
     if (os_tag == .windows) {
         test_abi.root_module.addAnonymousImport("c", .{ .root_source_file = b.path("abi/c_win.zig") });
     }
-    test_abi.linkLibC();
-    test_abi.linkSystemLibrary("gtk4");
 
     const run_test_abi = b.addRunArtifact(test_abi);
 

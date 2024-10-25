@@ -1,6 +1,6 @@
 .{
     .name = "gi",
-    .version = "0.10.2",
+    .version = "0.10.3",
     .minimum_zig_version = "0.13.0",
     .dependencies = .{
         .clap = .{
