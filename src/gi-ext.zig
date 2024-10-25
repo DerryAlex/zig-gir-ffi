@@ -174,6 +174,15 @@ pub const ArgInfoExt = struct {
                     try writer.writeAll("[*]*gobject.Object");
                     return;
                 }
+                // PATCH: text list
+                if (std.mem.eql(u8, "gdk_x11_display_text_property_to_text_list", func_symbol) and std.mem.eql(u8, "list", arg_name)) {
+                    try writer.writeAll("*?[*:null]?[*:0]u8");
+                    return;
+                }
+                if (std.mem.eql(u8, "gdk_x11_free_text_list", func_symbol) and std.mem.eql(u8, "list", arg_name)) {
+                    try writer.writeAll("[*:null]?[*:0]u8");
+                    return;
+                }
             }
         }
         if ((self.getDirection() != .in and !(self.isCallerAllocates() and arg_type.getTag() == .array and arg_type.getArrayType() == .c)) or option_signal_param) {

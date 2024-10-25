@@ -11,13 +11,7 @@ fn isHandle(T: std.builtin.Type) bool {
     return fields[0].type == c_int;
 }
 
-pub fn expect(ok: bool) !void {
-    if (true) {
-        try std.testing.expect(ok);
-    } else {
-        comptime std.debug.assert(ok);
-    }
-}
+pub const expect = std.testing.expect;
 
 pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
     var typeinfo_u = @typeInfo(U);
