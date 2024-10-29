@@ -108,7 +108,7 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
         .@"fn" => {
             const fninfo_u = typeinfo_u.@"fn";
             const fninfo_v = typeinfo_v.@"fn";
-            if (fninfo_u.calling_convention != fninfo_v.calling_convention) return false;
+            // if (fninfo_u.calling_convention != fninfo_v.calling_convention) return false;
             if (fninfo_u.params.len != fninfo_v.params.len) return false;
             inline for (0..fninfo_u.params.len) |idx| {
                 if (!isAbiCompatitable(fninfo_u.params[idx].type.?, fninfo_v.params[idx].type.?)) return false;

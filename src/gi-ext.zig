@@ -1650,11 +1650,13 @@ pub const TypeInfoExt = struct {
                                         if (interface.getType() == .@"struct" and interface.tryInto(StructInfo).?.getSize() == 0) {
                                             try writer.print("[*:null]?*{n}", .{child_type});
                                         } else {
-                                            try writer.print("[*:std.mem.zeroes({n})]{n}", .{ child_type, child_type });
+                                            // https://github.com/ziglang/zig/pull/21509
+                                            try writer.print("[*]{n}", .{child_type});
                                         }
                                     },
                                     else => {
-                                        try writer.print("[*:std.mem.zeroes({n})]{n}", .{ child_type, child_type });
+                                        // https://github.com/ziglang/zig/pull/21509
+                                        try writer.print("[*]{n}", .{child_type});
                                     },
                                 }
                             }
