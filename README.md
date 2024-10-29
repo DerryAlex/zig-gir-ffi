@@ -27,7 +27,7 @@ zig build run -- --help
 *Note*: This project relies on `field_info_get_size` to work properly.
 Due to an [issue](https://gitlab.gnome.org/GNOME/gobject-introspection/-/issues/5) in gobject-introspection, a patched version of `g-ir-compiler` (or `gi-compile-repository`) may be required.
 As bitfields are not commonly found in GIR files, users can use typelibs from their package manager (e.g., `apt`, `msys2`) without recompiling.
-For notable exceptions (`glib`, `gobject` and `pango`), this project ships patched typelibs, which can be enabled by `--includedir lib/girepository-1.0` option.
+For notable exceptions (`glib`, `gobject` and `pango`), this project ships patched typelibs (for LP64 model), which can be enabled by `--includedir lib/girepository-1.0` option.
 For example, `zig build run -- -N Adw --includedir lib/girepository-1.0` should work perfectly if you have installed `gir1.2-adw-1` package or its equivalent.
 
 ## Usage of Bindings

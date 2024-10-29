@@ -15,6 +15,6 @@
  pub extern fn gsk_text_node_has_color_glyphs(node: ?*const GskRenderNode) gboolean;
  pub extern fn gsk_text_node_get_num_glyphs(node: ?*const GskRenderNode) guint;
 -pub extern fn gsk_text_node_get_glyphs(node: ?*const GskRenderNode, n_glyphs: [*c]guint) ?*const PangoGlyphInfo;
-+pub extern fn gsk_text_node_get_glyphs(node: ?*const GskRenderNode, n_glyphs: [*c]guint) [*]const PangoGlyphInfo;
++pub extern fn gsk_text_node_get_glyphs(node: ?*const GskRenderNode, n_glyphs: [*c]guint) [*c]const PangoGlyphInfo;
  pub extern fn gsk_text_node_get_color(node: ?*const GskRenderNode) [*c]const GdkRGBA;
  pub extern fn gsk_text_node_get_offset(node: ?*const GskRenderNode) [*c]const graphene_point_t;
