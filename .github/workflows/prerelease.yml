@@ -1,6 +1,6 @@
 # This is a basic workflow to help you get started with Actions
 
-name: CI
+name: build
 
 # Controls when the workflow will run
 on:
@@ -27,7 +27,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install libgirepository-2.0-0
+          sudo apt-get install pkg-config libgirepository-2.0-0
 
       - uses: mlugg/setup-zig@v1.2.1
         with:
