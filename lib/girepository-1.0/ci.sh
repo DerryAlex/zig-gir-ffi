@@ -1,7 +1,6 @@
 #!/usr/bin/bash
 
-# gir_version="0.20.0"
-gir_version="e45712216c81cc5e03ac1e5a6846ef9bcf0ef642"
+gir_version="0.20.1"
 
 apt-get source glib2.0
 cd $(ls -F | grep 'glib2.0' | grep '/$')

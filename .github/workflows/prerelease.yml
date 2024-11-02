@@ -7,7 +7,7 @@ on:
   # Triggers the workflow on push or pull request events but only for the "master" branch
   push:
     branches: [ "master" ]
-    paths: [ "lib/girepository-1.0/ci.sh", "lib/girepository-1.0/girnode.patch", ".github/workflows/typelib.yml" ]
+    paths: [ "src/*", ".github/workflows/prerelease.yml" ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -26,17 +26,17 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          sudo sed -Ei 's/^# deb-src /deb-src /' /etc/apt/sources.list
-          sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
           sudo apt-get update
-          sudo apt-get install gir1.2-girepository-3.0-dev
-          sudo apt-get build-dep libglib2.0-dev-bin
-      
-      - name: Generate typelibs
-        run: |
-          cd lib/girepository-1.0/ && ./ci.sh && cd ../..
+          sudo apt-get install libgirepository-2.0-0
 
-      - uses: peter-evans/create-pull-request@v7
+      - uses: mlugg/setup-zig@v1.2.1
         with:
-          add-paths: lib/girepository-1.0/*.typelib
-          commit-message: Update typelibs
+          version: master
+      
+      - name: Generate bindings
+        run: |
+          zig build dist
+
+      - uses: actions/upload-artifact@v4.4.3
+        with:
+          path: gtk4.tar.gz
