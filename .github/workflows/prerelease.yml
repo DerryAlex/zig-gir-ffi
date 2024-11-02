@@ -7,7 +7,7 @@ on:
   # Triggers the workflow on push or pull request events but only for the "master" branch
   push:
     branches: [ "master" ]
-    paths: [ "src/*", ".github/workflows/prerelease.yml" ]
+    paths: [ "src/*", "build.zig", ".github/workflows/prerelease.yml" ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -27,7 +27,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install libgirepository-2.0-dev
+          sudo apt-get install libgirepository-2.0-dev gir1.2-gtk-4.0
 
       - uses: mlugg/setup-zig@v1.2.1
         with:

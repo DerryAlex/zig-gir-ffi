@@ -152,17 +152,18 @@ pub fn build(b: *std.Build) !void {
         run_cmd.addArgs(args);
     } else {
         run_cmd.addArgs(&.{ "--outputdir", "gtk4" });
-        run_cmd.addArgs(&.{ "--includedir", "lib/girepository-1.0" });
-        run_cmd.addArgs(&.{ "--gi-namespaces", "GLib" }); // load glib before glib_*
-        run_cmd.addArgs(&.{ "--gi-namespaces", "GLibUnix" });
-        run_cmd.addArgs(&.{ "--gi-namespaces", "GLibWin32" });
-        run_cmd.addArgs(&.{ "--gi-namespaces", "Gio" }); // load gio before gio_*
-        run_cmd.addArgs(&.{ "--gi-namespaces", "GioUnix" });
-        run_cmd.addArgs(&.{ "--gi-namespaces", "GioWin32" });
-        run_cmd.addArgs(&.{ "--gi-namespaces", "Gdk" }); // load gdk before gdk_*
-        run_cmd.addArgs(&.{ "--gi-namespaces", "GdkWayland" });
-        run_cmd.addArgs(&.{ "--gi-namespaces", "GdkX11" });
-        run_cmd.addArgs(&.{ "--gi-namespaces", "GdkWin32" });
+        // wrong magic number on CI ???
+        // run_cmd.addArgs(&.{ "--includedir", "lib/girepository-1.0" });
+        // run_cmd.addArgs(&.{ "--gi-namespaces", "GLib" }); // load glib before glib_*
+        // run_cmd.addArgs(&.{ "--gi-namespaces", "GLibUnix" });
+        // run_cmd.addArgs(&.{ "--gi-namespaces", "GLibWin32" });
+        // run_cmd.addArgs(&.{ "--gi-namespaces", "Gio" }); // load gio before gio_*
+        // run_cmd.addArgs(&.{ "--gi-namespaces", "GioUnix" });
+        // run_cmd.addArgs(&.{ "--gi-namespaces", "GioWin32" });
+        // run_cmd.addArgs(&.{ "--gi-namespaces", "Gdk" }); // load gdk before gdk_*
+        // run_cmd.addArgs(&.{ "--gi-namespaces", "GdkWayland" });
+        // run_cmd.addArgs(&.{ "--gi-namespaces", "GdkX11" });
+        // run_cmd.addArgs(&.{ "--gi-namespaces", "GdkWin32" });
         run_cmd.addArgs(&.{ "--gi-namespaces", "Gtk" });
         run_cmd.addArgs(&.{ "--pkg-name", "gtk" });
         run_cmd.addArgs(&.{ "--pkg-version", version });
