@@ -30,8 +30,7 @@ jobs:
           sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
           sudo apt-get update
           sudo apt-get install gir1.2-girepository-3.0-dev
-          # sudo apt-get build-dep libglib2.0-dev-bin
-          sudo apt-get build-dep gobject-introspection
+          sudo apt-get build-dep libglib2.0-dev-bin
       
       - name: Generate typelibs
         run: |
