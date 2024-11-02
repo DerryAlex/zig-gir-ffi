@@ -7,6 +7,6 @@
 -    blob->bits = 0;
 +    blob->bits = field->bits;
 +    blob->reserved2 = 0;
-     if (field->offset_state == 0)
+     if (field->offset_state == GI_IR_OFFSETS_COMPUTED)
        blob->struct_offset = field->offset;
      else
