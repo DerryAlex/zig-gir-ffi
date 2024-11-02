@@ -228,7 +228,7 @@ pub const TypeInstance = extern struct {
 };
 
 pub fn typeCheckInstanceIsA(_instance: *TypeInstance, _iface_type: Type) bool {
-    const cFn = @extern(*const fn (*TypeInstance, Type) callconv(.C) bool, .{ .name = "g_type_check_instance_is_a" });
+    const cFn = @extern(*const fn (*TypeInstance, Type) callconv(.c) bool, .{ .name = "g_type_check_instance_is_a" });
     const ret = cFn(_instance, _iface_type);
     return ret;
 }

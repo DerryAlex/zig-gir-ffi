@@ -55,7 +55,7 @@ pub const ExampleAppPrefs = extern struct {
     pub const signalConnect = Ext.signalConnect;
 
     pub const Override = struct {
-        pub fn dispose(arg_object: *Object) callconv(.C) void {
+        pub fn dispose(arg_object: *Object) callconv(.c) void {
             var self = arg_object.tryInto(ExampleAppPrefs).?;
             self.private.settings.__call("unref", .{});
             self.__call("disposeTemplate", .{ExampleAppPrefs.gType()});

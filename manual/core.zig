@@ -414,9 +414,9 @@ const NopClosure = struct {
     pub fn new(_: anytype, _: anytype) !*Self {
         return undefined;
     }
-    pub fn invoke() callconv(.C) void {}
+    pub fn invoke() callconv(.c) void {}
     pub fn setOnce(_: *Self) void {}
-    pub fn deinit(_: *Self) callconv(.C) void {}
+    pub fn deinit(_: *Self) callconv(.c) void {}
     pub inline fn c_closure(_: *Self) ?*anyopaque {
         return null;
     }
@@ -459,7 +459,7 @@ pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature:
         }
 
         /// Invokes the closure, i.e. executes the callback represented by the closure
-        pub fn invoke(...) callconv(.C) signature[0] {
+        pub fn invoke(...) callconv(.c) signature[0] {
             var va_list = @cVaStart();
             var args: std.meta.Tuple(signature[1..]) = undefined;
             inline for (1..signature.len) |i| {
@@ -490,7 +490,7 @@ pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature:
         }
 
         /// Free its memory
-        pub fn deinit(self: *Self) callconv(.C) void {
+        pub fn deinit(self: *Self) callconv(.c) void {
             std.heap.c_allocator.destroy(self);
         }
 
@@ -519,14 +519,14 @@ pub fn zig_closure(handler: anytype, args: anytype, comptime signature: []const 
 /// Creates a new closure which invokes `callback_func` with `user_data` as the last parameter.
 /// `destroy_data` will be called as a finalize notifier on the GClosure.
 fn cclosureNew(callback_func: gobject.Callback, user_data: ?*anyopaque, destroy_data: gobject.ClosureNotify) *gobject.Closure {
-    const g_cclosure_new = @extern(*const fn (gobject.Callback, ?*anyopaque, gobject.ClosureNotify) callconv(.C) *gobject.Closure, .{ .name = "g_cclosure_new" });
+    const g_cclosure_new = @extern(*const fn (gobject.Callback, ?*anyopaque, gobject.ClosureNotify) callconv(.c) *gobject.Closure, .{ .name = "g_cclosure_new" });
     return g_cclosure_new(callback_func, user_data, destroy_data);
 }
 
 /// Creates a new closure which invokes `callback_func` with `user_data` as the first parameter.
 /// `destroy_data` will be called as a finalize notifier on the GClosure.
 fn cclosureNewSwap(callback_func: gobject.Callback, user_data: ?*anyopaque, destroy_data: gobject.ClosureNotify) *gobject.Closure {
-    const g_cclosure_new_swap = @extern(*const fn (gobject.Callback, ?*anyopaque, gobject.ClosureNotify) callconv(.C) *gobject.Closure, .{ .name = "g_cclosure_new_swap" });
+    const g_cclosure_new_swap = @extern(*const fn (gobject.Callback, ?*anyopaque, gobject.ClosureNotify) callconv(.c) *gobject.Closure, .{ .name = "g_cclosure_new_swap" });
     return g_cclosure_new_swap(callback_func, user_data, destroy_data);
 }
 
@@ -544,7 +544,7 @@ fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?
     } else {
         std.debug.assert(values == null);
     }
-    const g_object_new_with_properties = @extern(*const fn (Type, c_uint, ?[*][*:0]const u8, ?[*]gobject.Value) callconv(.C) *gobject.Object, .{ .name = "g_object_new_with_properties" });
+    const g_object_new_with_properties = @extern(*const fn (Type, c_uint, ?[*][*:0]const u8, ?[*]gobject.Value) callconv(.c) *gobject.Object, .{ .name = "g_object_new_with_properties" });
     return g_object_new_with_properties(object_type, if (names) |some| @intCast(some.len) else 0, if (names) |some| some.ptr else null, if (values) |some| some.ptr else null);
 }
 
@@ -575,7 +575,7 @@ pub fn newObject(comptime T: type, properties: anytype) *T {
 /// Creates a new signal. (This is usually done in the class initializer.)
 fn signalNewv(signal_name: [*:0]const u8, itype: Type, signal_flags: gobject.SignalFlags, class_closure: ?*gobject.Closure, accumulator: anytype, accu_data: anytype, c_marshaller: ?gobject.ClosureMarshal, return_type: Type, param_types: ?[]Type) u32 {
     var accumulator_closure = zig_closure(accumulator, accu_data, &.{ bool, *gobject.SignalInvocationHint, *gobject.Value, *gobject.Value });
-    const g_signal_newv = @extern(*const fn ([*:0]const u8, Type, gobject.SignalFlags, ?*gobject.Closure, ?gobject.SignalAccumulator, ?*anyopaque, ?gobject.ClosureMarshal, Type, c_uint, ?[*]Type) callconv(.C) c_uint, .{ .name = "g_signal_newv" });
+    const g_signal_newv = @extern(*const fn ([*:0]const u8, Type, gobject.SignalFlags, ?*gobject.Closure, ?gobject.SignalAccumulator, ?*anyopaque, ?gobject.ClosureMarshal, Type, c_uint, ?[*]Type) callconv(.c) c_uint, .{ .name = "g_signal_newv" });
     return g_signal_newv(signal_name, itype, signal_flags, class_closure, @ptrCast(accumulator_closure.c_closure()), accumulator_closure.c_data(), c_marshaller, return_type, if (param_types) |some| @intCast(some.len) else 0, if (param_types) |some| some.ptr else null);
 }
 
@@ -649,7 +649,7 @@ pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: gobject.T
     }
     const Class: type = Object.Class;
     const class_init = struct {
-        fn trampoline(class: *Class) callconv(.C) void {
+        fn trampoline(class: *Class) callconv(.c) void {
             if (typeTag(Object).private_offset != 0) {
                 _ = gobject.typeClassAdjustPrivateOffset(class, &typeTag(Object).private_offset);
             }
@@ -669,7 +669,7 @@ pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: gobject.T
         }
     }.trampoline;
     const instance_init = struct {
-        fn trampoline(self: *Object) callconv(.C) void {
+        fn trampoline(self: *Object) callconv(.c) void {
             if (comptime @hasDecl(Object, "Private")) {
                 self.private = @ptrFromInt(@as(usize, @bitCast(@as(isize, @bitCast(@intFromPtr(self))) + typeTag(Object).private_offset)));
                 init(Object.Private, self.private);
@@ -720,7 +720,7 @@ fn classOverride(comptime Class: type, comptime Override: type, class: *Class) v
 
 fn interfaceOverride(comptime Interface: type, comptime Override: type, type_id: Type) void {
     const interface_init = struct {
-        pub fn trampoline(interface: *Interface) callconv(.C) void {
+        pub fn trampoline(interface: *Interface) callconv(.c) void {
             inline for (comptime std.meta.declarations(Override)) |decl| {
                 if (@hasField(Interface, decl.name)) {
                     @field(interface, decl.name) = @field(Override, decl.name);
@@ -780,7 +780,7 @@ fn checkOverride(comptime Object: type, comptime Override: type) void {
 /// Registers a new static type
 pub fn registerInterface(comptime Interface: type, name: [*:0]const u8) Type {
     const class_init = struct {
-        pub fn trampoline(self: *Interface) callconv(.C) void {
+        pub fn trampoline(self: *Interface) callconv(.c) void {
             if (comptime @hasDecl(Interface, "properties")) {
                 for (Interface.properties()) |property| {
                     gobject.Object.interfaceInstallProperty(@ptrCast(self), property);

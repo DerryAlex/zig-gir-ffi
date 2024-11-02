@@ -41,13 +41,13 @@ pub const ExampleApp = extern struct {
     pub const signalConnect = Ext.signalConnect;
 
     pub const Override = struct {
-        pub fn activate(arg_app: *GApplication) callconv(.C) void {
+        pub fn activate(arg_app: *GApplication) callconv(.c) void {
             const self = arg_app.tryInto(ExampleApp).?;
             var win = ExampleAppWindow.new(self);
             win.__call("present", .{});
         }
 
-        pub fn open(arg_app: *GApplication, arg_files: [*]*File, arg_n_files: i32, arg_hint: [*:0]const u8) callconv(.C) void {
+        pub fn open(arg_app: *GApplication, arg_files: [*]*File, arg_n_files: i32, arg_hint: [*:0]const u8) callconv(.c) void {
             var self = arg_app.tryInto(ExampleApp).?;
             _ = arg_hint;
             const windows = self.__call("getWindows", .{});
@@ -58,7 +58,7 @@ pub const ExampleApp = extern struct {
             win.__call("present", .{});
         }
 
-        pub fn startup(arg_app: *GApplication) callconv(.C) void {
+        pub fn startup(arg_app: *GApplication) callconv(.c) void {
             var self = arg_app.tryInto(ExampleApp).?;
             var action_preferences = SimpleAction.new("preferences", null);
             defer action_preferences.__call("unref", .{});

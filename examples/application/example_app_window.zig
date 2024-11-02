@@ -79,7 +79,7 @@ pub const ExampleAppWindowClass = extern struct {
         });
     }
 
-    pub fn searchTextChanged(entry: *Entry, self: *ExampleAppWindow) callconv(.C) void {
+    pub fn searchTextChanged(entry: *Entry, self: *ExampleAppWindow) callconv(.c) void {
         const text = entry.__call("getText", .{});
         if (text[0] == 0) return;
         var tab = self.stack.getVisibleChild().?.tryInto(ScrolledWindow).?;
@@ -95,7 +95,7 @@ pub const ExampleAppWindowClass = extern struct {
         }
     }
 
-    pub fn visibleChildChanged(stack: *Stack, _: *ParamSpec, self: *ExampleAppWindow) callconv(.C) void {
+    pub fn visibleChildChanged(stack: *Stack, _: *ParamSpec, self: *ExampleAppWindow) callconv(.c) void {
         if (stack.__call("inDestruction", .{})) return;
         self.searchbar.setSearchMode(false);
         self.updateWords();
@@ -127,7 +127,7 @@ pub const ExampleAppWindow = extern struct {
     pub const signalConnect = Ext.signalConnect;
 
     pub const Override = struct {
-        pub fn dispose(arg_object: *Object) callconv(.C) void {
+        pub fn dispose(arg_object: *Object) callconv(.c) void {
             var self = arg_object.tryInto(ExampleAppWindow).?;
             self.settings.__call("unref", .{});
             self.__call("disposeTemplate", .{ExampleAppWindow.gType()});

@@ -233,7 +233,7 @@ pub const CallableInfoExt = struct {
     /// Specifiers:
     /// - e: print `(arg_names...: arg_types...) return_type`
     /// - o: print `(arg_types...) return_type`
-    /// - c: addtionally print `callconv(.C)`
+    /// - c: addtionally print `callconv(.c)`
     pub fn format(self_immut: *const CallableInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *CallableInfo = @constCast(self_immut);
@@ -303,7 +303,7 @@ pub const CallableInfoExt = struct {
         try writer.writeAll(") ");
         if (type_annotation != .disable) {
             if (c_callconv) {
-                try writer.writeAll("callconv(.C) ");
+                try writer.writeAll("callconv(.c) ");
             }
             if (self.skipReturn() and !emit_abi) {
                 try writer.writeAll("void");
@@ -334,7 +334,7 @@ pub const CallableInfoExt = struct {
 };
 
 pub const CallbackInfoExt = struct {
-    /// Print `*const fn(arg_names...: arg_types...) callconv(.C) return_type`
+    /// Print `*const fn(arg_names...: arg_types...) callconv(.c) return_type`
     pub fn format(self_immut: *CallbackInfo, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: std.io.AnyWriter) anyerror!void {
         _ = options;
         const self: *CallbackInfo = @constCast(self_immut);
@@ -350,12 +350,12 @@ pub const CallbackInfoExt = struct {
 
 pub const ConstantInfoExt = struct {
     pub fn freeValue(self: *ConstantInfo, value: *gi.Argument) void {
-        const cFn = @extern(*const fn (*BaseInfo, *gi.Argument) callconv(.C) void, .{ .name = "gi_constant_info_free_value" });
+        const cFn = @extern(*const fn (*BaseInfo, *gi.Argument) callconv(.c) void, .{ .name = "gi_constant_info_free_value" });
         _ = cFn(self.into(BaseInfo), value);
     }
 
     pub fn getValue(self: *ConstantInfo, value: *gi.Argument) c_int {
-        const cFn = @extern(*const fn (*BaseInfo, *gi.Argument) callconv(.C) c_int, .{ .name = "gi_constant_info_get_value" });
+        const cFn = @extern(*const fn (*BaseInfo, *gi.Argument) callconv(.c) c_int, .{ .name = "gi_constant_info_get_value" });
         const ret = cFn(self.into(BaseInfo), value);
         return ret;
     }
@@ -724,7 +724,7 @@ pub const FunctionInfoExt = struct {
                     \\(_texts: []u8) []u8 {
                     \\    const _text = _texts.ptr;
                     \\    var _out_len: u64 = @intCast(_texts.len);
-                    \\    const cFn = @extern(*const fn ([*]u8, *u64) callconv(.C) [*]u8, .{ .name = "g_base64_decode_inplace" });
+                    \\    const cFn = @extern(*const fn ([*]u8, *u64) callconv(.c) [*]u8, .{ .name = "g_base64_decode_inplace" });
                     \\    const ret = cFn(_text, &_out_len);
                     \\    return ret[0.._out_len];
                     \\}
@@ -736,7 +736,7 @@ pub const FunctionInfoExt = struct {
             if (std.mem.eql(u8, "g_base64_encode_close", func_symbol)) {
                 try writer.writeAll(
                     \\(_break_lines: bool, _out: [*]u8, _state: *i32, _save: *i32) u64 {
-                    \\    const cFn = @extern(*const fn (bool, [*]u8, *i32, *i32) callconv(.C) u64, .{ .name = "g_base64_encode_close" });
+                    \\    const cFn = @extern(*const fn (bool, [*]u8, *i32, *i32) callconv(.c) u64, .{ .name = "g_base64_encode_close" });
                     \\    const ret = cFn(_break_lines, _out, _state, _save);
                     \\    return ret;
                     \\}
@@ -749,7 +749,7 @@ pub const FunctionInfoExt = struct {
                     \\(_ins: []u8, _break_lines: bool, _out: [*]u8, _state: *i32, _save: *i32) u64 {
                     \\    const _in = _ins.ptr;
                     \\    const _len: u64 = @intCast(_ins.len);
-                    \\    const cFn = @extern(*const fn ([*]u8, u64, bool, [*]u8, *i32, *i32) callconv(.C) u64, .{ .name = "g_base64_encode_step" });
+                    \\    const cFn = @extern(*const fn ([*]u8, u64, bool, [*]u8, *i32, *i32) callconv(.c) u64, .{ .name = "g_base64_encode_step" });
                     \\    const ret = cFn(_in, _len, _break_lines, _out, _state, _save);
                     \\    return ret;
                     \\}
@@ -763,7 +763,7 @@ pub const FunctionInfoExt = struct {
                     \\(self: *ListStore, _position: u32, _n_removals: u32, _additionss: []*gobject.Object) void {
                     \\    const _additions = _additionss.ptr;
                     \\    const _n_additions: u32 = @intCast(_additionss.len);
-                    \\    const cFn = @extern(*const fn (*ListStore, u32, u32, [*]*gobject.Object, u32) callconv(.C) void, .{ .name = "g_list_store_splice" });
+                    \\    const cFn = @extern(*const fn (*ListStore, u32, u32, [*]*gobject.Object, u32) callconv(.c) void, .{ .name = "g_list_store_splice" });
                     \\    const ret = cFn(self, _position, _n_removals, _additions, _n_additions);
                     \\    return ret;
                     \\}
@@ -1426,7 +1426,7 @@ pub const RegisteredTypeInfoExt = struct {
                     }
                 }
             } else {
-                try writer.print("const cFn = @extern(*const fn () callconv(.C) core.Type, .{{ .name = \"{s}\" }});\n", .{init_fn});
+                try writer.print("const cFn = @extern(*const fn () callconv(.c) core.Type, .{{ .name = \"{s}\" }});\n", .{init_fn});
                 try writer.writeAll("return cFn();\n");
             }
             try writer.writeAll("}\n");
