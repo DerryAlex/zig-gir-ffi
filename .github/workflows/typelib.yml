@@ -34,7 +34,7 @@ jobs:
       
       - name: Generate typelibs
         run: |
-          cd lib/girepository-1.0/ && ./ci.sh && cd ../..
+          cd lib/girepository-1.0/ci/ && ./ci.sh && cd ../../..
 
       - uses: peter-evans/create-pull-request@v7
         with:
