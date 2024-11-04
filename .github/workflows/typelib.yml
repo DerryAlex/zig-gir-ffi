@@ -40,5 +40,5 @@ jobs:
 
       - uses: peter-evans/create-pull-request@v7
         with:
-          add-paths: [ lib/girepository-1.0/*.typelib, lib/girepository-1.0/x86_64-windows/*.typelib ]
+          add-paths: lib/girepository-1.0/*.typelib
           commit-message: Update typelibs
