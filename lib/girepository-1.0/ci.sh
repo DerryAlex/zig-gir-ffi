@@ -35,4 +35,9 @@ do
     gi-compile-repository ${gir} -o ../${typelib} --includedir .
 done
 
+# LLP64
+sed -i 's/glong/gint/g' GLib-2.0.gir
+sed -i 's/gulong/guint/g' GLib-2.0.gir
+gi-compile-repository GLib-2.0.gir -o ../x86_64-windows/GLib-2.0.typelib
+
 cd ..
