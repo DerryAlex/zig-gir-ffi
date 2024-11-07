@@ -153,6 +153,9 @@ pub fn build(b: *std.Build) !void {
     } else {
         run_cmd.addArgs(&.{ "--outputdir", "gtk4" });
         run_cmd.addArgs(&.{ "--includedir", "lib/girepository-1.0" });
+        if (target.result.os.tag == .windows) {
+            run_cmd.addArgs(&.{ "--includedir", "lib/girepository-1.0/x86_64-windows/" });
+        }
         run_cmd.addArgs(&.{ "--gi-namespaces", "GLib" }); // load glib before glib_*
         run_cmd.addArgs(&.{ "--gi-namespaces", "GLibUnix" });
         run_cmd.addArgs(&.{ "--gi-namespaces", "GLibWin32" });
@@ -179,6 +182,9 @@ pub fn build(b: *std.Build) !void {
     } else {
         run_abi_cmd.addArgs(&.{ "--outputdir", "test/abi" });
         run_abi_cmd.addArgs(&.{ "--includedir", "lib/girepository-1.0" });
+        if (target.result.os.tag == .windows) {
+            run_abi_cmd.addArgs(&.{ "--includedir", "lib/girepository-1.0/x86_64-windows/" });
+        }
         run_abi_cmd.addArgs(&.{ "--gi-namespaces", "GLib" }); // load glib before glib_*
         run_abi_cmd.addArgs(&.{ "--gi-namespaces", "GLibUnix" });
         run_abi_cmd.addArgs(&.{ "--gi-namespaces", "GLibWin32" });
