@@ -1,0 +1,49 @@
+# This is a basic workflow to help you get started with Actions
+
+name: build
+
+# Controls when the workflow will run
+on:
+  # This can be used to automatically publish nightlies at UTC nighttime
+  schedule:
+    - cron: '0 2 * * *' # run at 2 AM UTC
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  nightly:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-24.04
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install libgirepository-2.0-dev gir1.2-gtk-4.0
+
+      - uses: mlugg/setup-zig@v1.2.1
+        with:
+          version: master
+      
+      - name: Generate bindings
+        run: |
+          zig build dist
+      
+      - uses: WebFreak001/deploy-nightly@v3.1.0
+        with:
+          upload_url: https://uploads.github.com/repos/DerryAlex/zig-gir-ffi/releases/169735412/assets # find out this value by opening https://api.github.com/repos/<owner>/<repo>/releases in your browser and copy the full "upload_url" value including the {?name,label} part
+          release_id: 169735412 # same as above (id can just be taken out the upload_url, it's used to find old releases)
+          asset_path: gtk4.tar.gz # path to archive to upload
+          asset_name: nightly-$$ # name to upload the release as, use $$ to insert date (YYYYMMDD) and 6 letter commit hash
+          asset_content_type: application/gzip # required by GitHub API
+          max_releases: 1 # optional, if there are more releases than this matching the asset_name, the oldest ones are going to be deleted
+          ignore_hash: true # optional, if there is already a release associated with the repo's current commit, should we go ahead and upload the asset anyway.
