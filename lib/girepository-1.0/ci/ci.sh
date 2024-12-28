@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-gir_version="0.20.1"
+gir_version="0.20.3"
 
 apt-get source glib2.0
 cd $(ls -F | grep 'glib2.0' | grep '/$')
@@ -12,9 +12,6 @@ cd ../..
 
 git clone https://github.com/gtk-rs/gir-files.git && cd gir-files
 git checkout ${gir_version}
-
-# fetch GIRepository-3.0.gir
-cp /usr/share/gir-1.0/GIRepository-3.0.gir .
 
 # utf8
 sed -i 's/type name="utf8" c:type="gchar"/type name="gchar" c:type="gchar"/g' GLib-2.0.gir
