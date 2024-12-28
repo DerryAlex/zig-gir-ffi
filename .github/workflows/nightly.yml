@@ -5,8 +5,8 @@ name: nightly
 # Controls when the workflow will run
 on:
   # This can be used to automatically publish nightlies at UTC nighttime
-  schedule:
-    - cron: '0 2 * * *' # run at 2 AM UTC
+  # schedule:
+  #   - cron: '0 2 * * *' # run at 2 AM UTC
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -45,6 +45,7 @@ jobs:
           tag_name: nightly
           name: 'Nightly $$'
           prerelease: true
-          body: 'This is a nightly release. Use it with caution.'
+          body: |
+            This is a nightly release. **Use it with caution**.
           files: |
             ./gtk4.tar.gz
