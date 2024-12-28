@@ -1,0 +1,11 @@
+*.typelib
+!*Unix*.typelib
+!*X11*.typelib
+!*xlib*.typelib
+!*Wayland*.typelib
+!*Win32*.typelib
+!*win32*.typelib
+!*Macos*.typelib
+!GLib*.typelib
+!GObject*.typelib
+!Pango*.typelib
