@@ -1,6 +1,6 @@
 # This is a basic workflow to help you get started with Actions
 
-name: build
+name: nightly
 
 # Controls when the workflow will run
 on:
@@ -43,7 +43,6 @@ jobs:
           upload_url: https://uploads.github.com/repos/DerryAlex/zig-gir-ffi/releases/169735412/assets # find out this value by opening https://api.github.com/repos/<owner>/<repo>/releases in your browser and copy the full "upload_url" value including the {?name,label} part
           release_id: 169735412 # same as above (id can just be taken out the upload_url, it's used to find old releases)
           asset_path: gtk4.tar.gz # path to archive to upload
-          asset_name: nightly-$$ # name to upload the release as, use $$ to insert date (YYYYMMDD) and 6 letter commit hash
+          asset_name: nightly # name to upload the release as, use $$ to insert date (YYYYMMDD) and 6 letter commit hash
           asset_content_type: application/gzip # required by GitHub API
           max_releases: 1 # optional, if there are more releases than this matching the asset_name, the oldest ones are going to be deleted
-          ignore_hash: true # optional, if there is already a release associated with the repo's current commit, should we go ahead and upload the asset anyway.
