@@ -13,16 +13,7 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .filters = &.{ "g_", "gi_", "gtk_", "gsk_", "gdk_", "pango_", "cairo_" },
     });
-    const os_tag = target.result.os.tag;
-    if (os_tag == .linux) {
-        test_abi.root_module.addAnonymousImport("c", .{ .root_source_file = b.path("abi/c_linux.zig") });
-    }
-    if (os_tag == .windows) {
-        test_abi.root_module.addAnonymousImport("c", .{ .root_source_file = b.path("abi/c_win.zig") });
-    }
-    if (os_tag == .macos) {
-        test_abi.root_module.addAnonymousImport("c", .{ .root_source_file = b.path("abi/c_macos.zig") });
-    }
+    test_abi.root_module.addAnonymousImport("c", .{ .root_source_file = b.path("abi/c.zig") });
 
     const run_test_abi = b.addRunArtifact(test_abi);
 

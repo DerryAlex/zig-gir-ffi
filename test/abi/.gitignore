@@ -3,6 +3,8 @@ zig-cache
 zig-out
 *.zig
 *.zon
+*.rej
+*.orig
 !core.zig
 !testing.zig
 ucrt64/
