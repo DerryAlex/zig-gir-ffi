@@ -166,6 +166,7 @@ pub fn build(b: *std.Build) !void {
         run_cmd.addArgs(&.{ "--gi-namespaces", "GdkWayland" });
         run_cmd.addArgs(&.{ "--gi-namespaces", "GdkX11" });
         run_cmd.addArgs(&.{ "--gi-namespaces", "GdkWin32" });
+        run_cmd.addArgs(&.{ "--gi-namespaces", "GdkMacos" });
         run_cmd.addArgs(&.{ "--gi-namespaces", "Gtk" });
         run_cmd.addArgs(&.{ "--pkg-name", "gtk" });
         run_cmd.addArgs(&.{ "--pkg-version", version });
@@ -195,6 +196,7 @@ pub fn build(b: *std.Build) !void {
         run_abi_cmd.addArgs(&.{ "--gi-namespaces", "GdkWayland" });
         run_abi_cmd.addArgs(&.{ "--gi-namespaces", "GdkX11" });
         run_abi_cmd.addArgs(&.{ "--gi-namespaces", "GdkWin32" });
+        run_abi_cmd.addArgs(&.{ "--gi-namespaces", "GdkMacos" });
         run_abi_cmd.addArgs(&.{ "--gi-namespaces", "Gtk" });
         run_abi_cmd.addArgs(&.{"--emit-abi"});
     }
