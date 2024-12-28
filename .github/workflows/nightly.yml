@@ -38,11 +38,13 @@ jobs:
         run: |
           zig build dist
       
-      - uses: WebFreak001/deploy-nightly@v3.1.0
+      - uses: andelf/nightly-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: https://uploads.github.com/repos/DerryAlex/zig-gir-ffi/releases/169735412/assets # find out this value by opening https://api.github.com/repos/<owner>/<repo>/releases in your browser and copy the full "upload_url" value including the {?name,label} part
-          release_id: 169735412 # same as above (id can just be taken out the upload_url, it's used to find old releases)
-          asset_path: ./gtk4.tar.gz # path to archive to upload
-          asset_name: nightly # name to upload the release as, use $$ to insert date (YYYYMMDD) and 6 letter commit hash
-          asset_content_type: application/gzip # required by GitHub API
-          max_releases: 1 # optional, if there are more releases than this matching the asset_name, the oldest ones are going to be deleted
+          tag_name: nightly
+          name: 'Nightly $$'
+          prerelease: true
+          body: 'This is a nightly release. Use it with caution.'
+          files: |
+            ./gtk4.tar.gz
