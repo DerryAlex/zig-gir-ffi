@@ -38,12 +38,15 @@ jobs:
       - name: Generate bindings
         run: |
           zig build dist
-
-      - uses: actions/upload-artifact@v4.4.3
-        with:
-          path: gtk4.tar.gz
+      
+      - name: Set github env
+        run: |
+          echo "date=$(date -Idate)" >> $GITHUB_ENV
+          echo "zig_version=$(zig version)" >> $GITHUB_ENV
       
       - uses: softprops/action-gh-release@v2.0.9
         with:
-          draft: true
+          name: nightly
+          body: Automatically built on ${{ env.date }} targeting ${{ env.zig_version }}
+          prerelease: true
           files: gtk4.tar.gz
