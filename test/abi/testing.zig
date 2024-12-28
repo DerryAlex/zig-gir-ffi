@@ -109,8 +109,11 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
             const fninfo_u = typeinfo_u.@"fn";
             const fninfo_v = typeinfo_v.@"fn";
             // if (fninfo_u.calling_convention != fninfo_v.calling_convention) return false;
-            if (fninfo_u.params.len != fninfo_v.params.len) return false;
-            inline for (0..fninfo_u.params.len) |idx| {
+            if (!fninfo_u.is_var_args and !fninfo_v.is_var_args) {
+                if (fninfo_u.params.len != fninfo_v.params.len) return false;
+            }
+            const params_len = if (fninfo_u.params.len <= fninfo_v.params.len) fninfo_u.params.len else fninfo_v.params.len;
+            inline for (0..params_len) |idx| {
                 if (!isAbiCompatitable(fninfo_u.params[idx].type.?, fninfo_v.params[idx].type.?)) return false;
             }
             const return_type_u = fninfo_u.return_type.?;

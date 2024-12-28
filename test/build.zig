@@ -20,6 +20,9 @@ pub fn build(b: *std.Build) !void {
     if (os_tag == .windows) {
         test_abi.root_module.addAnonymousImport("c", .{ .root_source_file = b.path("abi/c_win.zig") });
     }
+    if (os_tag == .macos) {
+        test_abi.root_module.addAnonymousImport("c", .{ .root_source_file = b.path("abi/c_macos.zig") });
+    }
 
     const run_test_abi = b.addRunArtifact(test_abi);
 

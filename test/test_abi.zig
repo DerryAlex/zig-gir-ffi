@@ -16,6 +16,9 @@ test {
             std.testing.refAllDecls(@import("abi/gio_win32.zig"));
             std.testing.refAllDecls(@import("abi/gdk_win32.zig"));
         },
+        .macos => {
+            std.testing.refAllDecls(@import("abi/gdk_macos.zig"));
+        },
         else => {},
     }
 }
