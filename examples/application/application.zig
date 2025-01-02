@@ -11,5 +11,5 @@ pub const gi_configs: core.Configs = .{
 pub fn main() u8 {
     _ = glib.setenv("GSETTINGS_SCHEMA_DIR", ".", false);
     var app = ExampleApp.new();
-    return @intCast(app.__call("run", .{std.os.argv}));
+    return @intCast(app.__call("run", .{@as([][*:0]const u8, @ptrCast(std.os.argv))}));
 }

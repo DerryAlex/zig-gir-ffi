@@ -174,8 +174,7 @@ pub fn Extend(comptime Self: type) type {
         /// Connects a callback function to a signal for a particular object
         pub fn signalConnect(self: *Self, signal: [*:0]const u8, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags, comptime signature: []const type) usize {
             var closure = zig_closure(handler, args, if (flags.swapped) signature[0..1] else signature);
-            const closure_new_fn = if (flags.swapped) cclosureNewSwap else cclosureNew;
-            const cclosure = closure_new_fn(closure.c_closure(), closure.c_data(), closure.c_destroy());
+            const cclosure = if (!flags.swapped) closure.g_closure() else closure.g_closure_swapped();
             return gobject.signalConnectClosure(self.into(gobject.Object), signal, cclosure, flags.after);
         }
     };
@@ -507,6 +506,14 @@ pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature:
         /// The destroy function to be called when data is no longer used
         pub inline fn c_destroy(_: *Self) gobject.ClosureNotify {
             return @ptrCast(&deinit);
+        }
+
+        pub inline fn g_closure(self: *Self) *gobject.Closure {
+            return cclosureNew(self.c_closure(), self.c_data(), self.c_destroy());
+        }
+
+        pub inline fn g_closure_swapped(self: *Self) *gobject.Closure {
+            return cclosureNewSwap(self.c_closure(), self.c_data(), self.c_destroy());
         }
     };
 }
