@@ -20,6 +20,8 @@ jobs:
       is_active: ${{ steps.activity.outputs.is_active }}
 
     steps:
+      - uses: actions/checkout@v4
+      
       # copied from ruffle-rs/ruffle
       - name: Check for repo activity
         id: activity
