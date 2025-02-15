@@ -440,9 +440,7 @@ pub const EnumInfoExt = struct {
             else => unreachable,
         }
         try writer.writeAll("{\n");
-        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-        defer _ = gpa.deinit();
-        const allocator = gpa.allocator();
+        const allocator = std.heap.smp_allocator;
         var values = std.AutoHashMap(i64, void).init(allocator);
         defer values.deinit();
         var iter = value_iter(self);
@@ -513,9 +511,7 @@ pub const FlagsInfoExt = struct {
             else => unreachable,
         }
         try writer.writeAll("{\n");
-        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-        defer _ = gpa.deinit();
-        const allocator = gpa.allocator();
+        const allocator = std.heap.smp_allocator;
         var values = std.AutoHashMap(usize, []const u8).init(allocator);
         defer {
             var value_iter = values.valueIterator();
@@ -1295,6 +1291,9 @@ pub const ObjectInfoExt = struct {
                     first = false;
                 } else {
                     try writer.writeAll(", ");
+                }
+                if (interface.into(BaseInfo).isDeprecated()) {
+                    try writer.writeAll("if (config.disable_deprecated) opaque {} else ");
                 }
                 try writer.print("{s}.{s}", .{ interface.into(BaseInfo).namespace_string(), interface.into(BaseInfo).getName().? });
             }

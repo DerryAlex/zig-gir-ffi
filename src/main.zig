@@ -5,9 +5,7 @@ const gi = @import("girepository-2.0.zig");
 const String = @import("string.zig").String;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = std.heap.smp_allocator;
 
     // Declare cli options
     const params = comptime clap.parseParamsComptime(std.fmt.comptimePrint(

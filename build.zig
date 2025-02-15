@@ -1,6 +1,6 @@
 const std = @import("std");
 
-// TODO: https://github.com/ziglang/zig/issues/14531
+// TODO: https://github.com/ziglang/zig/issues/22775
 pub fn import_zon_version(b: *std.Build) std.SemanticVersion {
     const cwd = std.fs.cwd();
     const zon = cwd.openFile("build.zig.zon", .{}) catch @panic("File.OpenError");

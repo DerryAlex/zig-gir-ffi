@@ -261,7 +261,7 @@ fn isBasicType(comptime T: type) bool {
     if (@typeInfo(T) == .@"enum") return true; // Enum or Type
     if (@typeInfo(T) == .@"struct" and @typeInfo(T).@"struct".layout == .@"packed") return true; // Flags
     if (T == [*:0]const u8) return true; // String
-    if (@typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .One) return true; // Pointer
+    if (@typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .one) return true; // Pointer
     return false;
 }
 
@@ -308,7 +308,7 @@ const Value = struct {
             _ = value.init(.double);
         } else if (comptime T == [*:0]const u8) {
             _ = value.init(.string);
-        } else if (comptime @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .One) {
+        } else if (comptime @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .one) {
             _ = value.init(.pointer);
         } else if (comptime T == glib.Variant) {
             _ = value.init(.variant);
@@ -345,7 +345,7 @@ const Value = struct {
             return @bitCast(self.getFlags());
         }
         if (comptime T == [*:0]const u8) return self.getString();
-        if (comptime @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .One) return @ptrCast(self.getPointer());
+        if (comptime @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .one) return @ptrCast(self.getPointer());
         if (comptime T == glib.Variant) return self.getVariant().?;
         if (comptime T == gobject.ParamSpec) return self.getParam();
         if (comptime @hasDecl(T, "__call")) return downCast(T, self.getObject()).?;
@@ -387,7 +387,7 @@ const Value = struct {
             self.setFlags(@bitCast(arg_value));
         } else if (comptime T == [*:0]const u8) {
             self.setString(arg_value);
-        } else if (comptime @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .One) {
+        } else if (comptime @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .one) {
             self.setPointer(arg_value);
         } else if (comptime T == glib.Variant) {
             self.setVariant(arg_value);
@@ -430,7 +430,7 @@ const NopClosure = struct {
 /// A closure represents a callback supplied by the programmer
 pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature: []const type) type {
     comptime std.debug.assert(@typeInfo(Args) == .@"struct" and @typeInfo(Args).@"struct".is_tuple);
-    comptime std.debug.assert(@typeInfo(FnPtr) == .pointer and @typeInfo(FnPtr).pointer.size == .One);
+    comptime std.debug.assert(@typeInfo(FnPtr) == .pointer and @typeInfo(FnPtr).pointer.size == .one);
     if (std.meta.Child(FnPtr) == void) {
         return NopClosure;
     }
@@ -565,7 +565,7 @@ pub fn newObject(comptime T: type, properties: anytype) *T {
     inline for (info.@"struct".fields, 0..) |field, idx| {
         names[idx] = field.name;
         const V = blk: {
-            if (@typeInfo(field.type) == .pointer and @typeInfo(field.type).pointer.size == .One) {
+            if (@typeInfo(field.type) == .pointer and @typeInfo(field.type).pointer.size == .one) {
                 const pointer_child = @typeInfo(field.type).pointer.child;
                 if (@typeInfo(pointer_child) == .array and @typeInfo(pointer_child).array.child == u8 and std.meta.sentinel(pointer_child) == @as(u8, 0)) break :blk [*:0]const u8;
                 if (comptime !isBasicType(pointer_child)) break :blk pointer_child;
@@ -606,7 +606,7 @@ pub fn newSignal(comptime Object: type, comptime signal_name: [:0]const u8, sign
     var param_types: [signal_info.params.len - 1]Type = undefined;
     inline for (signal_info.params[1..], &param_types) |param, *ty| {
         var is_gtyped = false;
-        if (@typeInfo(param.type.?) == .Pointer and @typeInfo(param.type.?).Pointer.size == .One) {
+        if (@typeInfo(param.type.?) == .Pointer and @typeInfo(param.type.?).Pointer.size == .one) {
             if (std.meta.hasFn(std.meta.Child(param.type.?), "gType")) {
                 is_gtyped = true;
             }
@@ -642,7 +642,7 @@ pub fn typeTag(comptime Object: type) *TypeTag {
 fn init(comptime T: type, value: *T) void {
     const info = @typeInfo(T).@"struct";
     inline for (info.fields) |field| {
-        if (field.default_value) |default_value_ptr| {
+        if (field.default_value_ptr) |default_value_ptr| {
             const default_value = @as(*align(1) const field.type, @ptrCast(default_value_ptr)).*;
             @field(value, field.name) = default_value;
         }

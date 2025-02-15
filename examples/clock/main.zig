@@ -7,7 +7,7 @@ pub fn main() u8 {
     var app = gtk.Application.new("org.example.clock", .{});
     defer app.__call("unref", .{});
     _ = app.__call("connectActivate", .{ buildUi, .{}, .{} });
-    return @intCast(app.__call("run", .{std.os.argv}));
+    return @intCast(app.__call("run", .{@as([][*:0]const u8, @ptrCast(std.os.argv))}));
 }
 
 pub fn buildUi(arg_app: *gio.Application) void {

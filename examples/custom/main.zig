@@ -13,7 +13,7 @@ pub fn main() u8 {
     var app = Application.new("org.example.custom_button", .{});
     defer app.__call("unref", .{});
     _ = app.__call("connectActivate", .{ activate, .{}, .{} });
-    return @intCast(app.__call("run", .{std.os.argv}));
+    return @intCast(app.__call("run", .{@as([][*:0]const u8, @ptrCast(std.os.argv))}));
 }
 
 pub fn activate(arg_app: *GApplication) void {

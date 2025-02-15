@@ -90,7 +90,7 @@ pub const CustomButton = extern struct {
             var self = arg_object.tryInto(CustomButton).?;
             const p_class: *gobject.ObjectClass = @ptrCast(Class.parent_class_ptr);
             p_class.constructed.?(arg_object);
-            _ = self.__call("bindProperty", .{ "number", self.into(Object), "label", .{ .sync_create = true } });
+            _ = self.__call("bindProperty", .{ "number", self.into(Object), "label", gobject.BindingFlags{ .sync_create = true } });
         }
 
         pub fn clicked(arg_button: *Button) callconv(.c) void {
