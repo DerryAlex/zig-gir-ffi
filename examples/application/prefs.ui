@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
-  <template class="ExampleAppPrefs" parent="GtkDialog">
+  <template class="ExampleAppPrefs" parent="GtkWindow">
     <property name="title" translatable="yes">Preferences</property>
     <property name="resizable">0</property>
     <property name="modal">1</property>
-    <child internal-child="content_area">
+    <child>
       <object class="GtkBox" id="content_area">
         <child>
           <object class="GtkGrid" id="grid">

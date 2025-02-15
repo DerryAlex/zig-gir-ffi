@@ -208,11 +208,7 @@ pub const ExampleAppWindow = extern struct {
         var start: TextIter = undefined;
         var end: TextIter = undefined;
         buffer.getStartIter(&start);
-        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-        defer {
-            _ = gpa.deinit();
-        }
-        const allocator = gpa.allocator();
+        const allocator = std.heap.smp_allocator;
         var strings = std.HashMap([*:0]u8, void, CstrContext, std.hash_map.default_max_load_percentage).init(allocator);
         defer {
             var iter = strings.keyIterator();
