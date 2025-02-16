@@ -18,6 +18,10 @@ sed -i 's/type name="utf8" c:type="gchar"/type name="gchar" c:type="gchar"/g' GL
 # introspectable
 sed -i 's/field name="priority" introspectable="0"/field name="priority"/g' GLib-2.0.gir
 sed -i 's/enumeration name="ThreadPriority" introspectable="0" deprecated="1"/enumeration name="ThreadPriority"/g' GLib-2.0.gir
+sed -i 's/c:identifier="g_cclosure_new\(.*\)"\(.*\) introspectable="0"/c:identifier="g_cclosure_new\1"\2/g' GObject-2.0.gir
+sed -i 's/c:identifier="g_closure_\(.*\)"\(.*\) introspectable="0"/c:identifier="g_closure_\1"\2/g' GObject-2.0.gir
+sed -i 's/c:identifier="g_object_new_with_properties"\(.*\) introspectable="0"/c:identifier="g_object_new_with_properties"\1/g' GObject-2.0.gir
+sed -i 's/c:identifier="g_signal_newv"\(.*\) introspectable="0"/c:identifier="g_signal_newv"\1/g' GObject-2.0.gir
 # Win32
 sed -i 's/type name="GLib.Win32/type name="GLibWin32./g' GLibWin32-2.0.gir
 sed -i 's/type name="Gio.Win32/type name="GioWin32./g' GioWin32-2.0.gir
