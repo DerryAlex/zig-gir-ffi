@@ -177,7 +177,18 @@ pub fn Extend(comptime Self: type) type {
             const cclosure = if (!flags.swapped) closure.g_closure() else closure.g_closure_swapped();
             return gobject.signalConnectClosure(self.into(gobject.Object), signal, cclosure, flags.after);
         }
+
+        /// Returns the interface of a given instance
+        pub fn getInterface(self: *Self, comptime Interface: type) *Interface {
+            return typeInstanceGetInterface(Interface, upCast(Interface, self));
+        }
     };
+}
+
+/// Returns the interface of a given instance
+fn typeInstanceGetInterface(comptime Interface: type, self: *Interface) *Interface {
+    const class = unsafeCast(gobject.TypeInstance, self).g_class.?;
+    return unsafeCast(Interface, gobject.typeInterfacePeek(class, Interface.gType()));
 }
 
 /// Gets return type of `method`
@@ -509,11 +520,11 @@ pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature:
         }
 
         pub inline fn g_closure(self: *Self) *gobject.Closure {
-            return cclosureNew(self.c_closure(), self.c_data(), self.c_destroy());
+            return gobject.CClosure.new(self.c_closure(), self.c_data(), self.c_destroy());
         }
 
         pub inline fn g_closure_swapped(self: *Self) *gobject.Closure {
-            return cclosureNewSwap(self.c_closure(), self.c_data(), self.c_destroy());
+            return gobject.CClosure.newSwap(self.c_closure(), self.c_data(), self.c_destroy());
         }
     };
 }
@@ -523,37 +534,11 @@ pub fn zig_closure(handler: anytype, args: anytype, comptime signature: []const 
     return ZigClosure(@TypeOf(&handler), @TypeOf(args), signature).new(&handler, args) catch @panic("Out of Memory");
 }
 
-/// Creates a new closure which invokes `callback_func` with `user_data` as the last parameter.
-/// `destroy_data` will be called as a finalize notifier on the GClosure.
-fn cclosureNew(callback_func: gobject.Callback, user_data: ?*anyopaque, destroy_data: gobject.ClosureNotify) *gobject.Closure {
-    const g_cclosure_new = @extern(*const fn (gobject.Callback, ?*anyopaque, gobject.ClosureNotify) callconv(.c) *gobject.Closure, .{ .name = "g_cclosure_new" });
-    return g_cclosure_new(callback_func, user_data, destroy_data);
-}
-
-/// Creates a new closure which invokes `callback_func` with `user_data` as the first parameter.
-/// `destroy_data` will be called as a finalize notifier on the GClosure.
-fn cclosureNewSwap(callback_func: gobject.Callback, user_data: ?*anyopaque, destroy_data: gobject.ClosureNotify) *gobject.Closure {
-    const g_cclosure_new_swap = @extern(*const fn (gobject.Callback, ?*anyopaque, gobject.ClosureNotify) callconv(.c) *gobject.Closure, .{ .name = "g_cclosure_new_swap" });
-    return g_cclosure_new_swap(callback_func, user_data, destroy_data);
-}
-
 // closure end
 // -----------
 
 // --------------
 // subclass begin
-
-/// Creates a new instance of a GObject subtype and sets its properties using the provided arrays.
-/// Both arrays must have exactly `n_properties elements`, and the names and values correspond by index.
-fn objectNewWithProperties(object_type: Type, names: ?[][*:0]const u8, values: ?[]gobject.Value) *gobject.Object {
-    if (names) |_| {
-        std.debug.assert(names.?.len == values.?.len);
-    } else {
-        std.debug.assert(values == null);
-    }
-    const g_object_new_with_properties = @extern(*const fn (Type, c_uint, ?[*][*:0]const u8, ?[*]gobject.Value) callconv(.c) *gobject.Object, .{ .name = "g_object_new_with_properties" });
-    return g_object_new_with_properties(object_type, if (names) |some| @intCast(some.len) else 0, if (names) |some| some.ptr else null, if (values) |some| some.ptr else null);
-}
 
 /// Creates a new instance of an Object subtype and sets its properties using the provided map
 pub fn newObject(comptime T: type, properties: anytype) *T {
@@ -576,14 +561,7 @@ pub fn newObject(comptime T: type, properties: anytype) *T {
         Value.set(&values[idx], V, @field(properties, field.name));
     }
     defer for (&values) |*value| value.unset();
-    return unsafeCast(T, objectNewWithProperties(T.gType(), if (n_props != 0) names[0..] else null, if (n_props != 0) values[0..] else null));
-}
-
-/// Creates a new signal. (This is usually done in the class initializer.)
-fn signalNewv(signal_name: [*:0]const u8, itype: Type, signal_flags: gobject.SignalFlags, class_closure: ?*gobject.Closure, accumulator: anytype, accu_data: anytype, c_marshaller: ?gobject.ClosureMarshal, return_type: Type, param_types: ?[]Type) u32 {
-    var accumulator_closure = zig_closure(accumulator, accu_data, &.{ bool, *gobject.SignalInvocationHint, *gobject.Value, *gobject.Value });
-    const g_signal_newv = @extern(*const fn ([*:0]const u8, Type, gobject.SignalFlags, ?*gobject.Closure, ?gobject.SignalAccumulator, ?*anyopaque, ?gobject.ClosureMarshal, Type, c_uint, ?[*]Type) callconv(.c) c_uint, .{ .name = "g_signal_newv" });
-    return g_signal_newv(signal_name, itype, signal_flags, class_closure, @ptrCast(accumulator_closure.c_closure()), accumulator_closure.c_data(), c_marshaller, return_type, if (param_types) |some| @intCast(some.len) else 0, if (param_types) |some| some.ptr else null);
+    return unsafeCast(T, gobject.Object.newWithProperties(T.gType(), names[0..], values[0..]));
 }
 
 /// Creates a new signal
@@ -617,7 +595,7 @@ pub fn newSignal(comptime Object: type, comptime signal_name: [:0]const u8, sign
             ty.* = Value.new(param.type.?).g_type;
         }
     }
-    return signalNewv(signal_name.ptr, Object.gType(), signal_flags, class_closure, accumulator, accu_data, null, return_type, param_types[0..]);
+    return gobject.signalNewv(signal_name.ptr, Object.gType(), signal_flags, class_closure, accumulator, accu_data, null, return_type, param_types[0..]);
 }
 
 /// Type-specific data
@@ -821,12 +799,6 @@ pub fn registerInterface(comptime Interface: type, name: [*:0]const u8) Type {
         glib.onceInitLeave(&typeTag(Interface).type_id, @intFromEnum(type_id));
     }
     return typeTag(Interface).type_id;
-}
-
-/// Returns the interface of a given instance
-pub fn typeInstanceGetInterface(comptime Interface: type, self: *Interface) *Interface {
-    const class = unsafeCast(gobject.TypeInstance, self).g_class.?;
-    return unsafeCast(Interface, gobject.typeInterfacePeek(class, Interface.gType()));
 }
 
 // subclass end

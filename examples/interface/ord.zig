@@ -19,35 +19,36 @@ pub const PartialOrd = extern struct {
     pub const __call = Ext.__call;
     pub const into = Ext.into;
     pub const tryInto = Ext.tryInto;
+    pub const getInterface = Ext.getInterface;
 
     pub const Order = enum { Lt, Eq, Gt };
 
     pub fn cmp(self: *PartialOrd, rhs: *PartialOrd) Order {
-        const interface = core.typeInstanceGetInterface(PartialOrd, self);
+        const interface = self.getInterface(PartialOrd);
         const cmp_fn = interface.cmp_fn.?;
         return cmp_fn(self, rhs);
     }
 
     pub fn lt(self: *PartialOrd, rhs: *PartialOrd) bool {
-        const interface = core.typeInstanceGetInterface(PartialOrd, self);
+        const interface = self.getInterface(PartialOrd);
         const lt_fn = interface.lt_fn.?;
         return lt_fn(self, rhs);
     }
 
     pub fn le(self: *PartialOrd, rhs: *PartialOrd) bool {
-        const interface = core.typeInstanceGetInterface(PartialOrd, self);
+        const interface = self.getInterface(PartialOrd);
         const le_fn = interface.le_fn.?;
         return le_fn(self, rhs);
     }
 
     pub fn gt(self: *PartialOrd, rhs: *PartialOrd) bool {
-        const interface = core.typeInstanceGetInterface(PartialOrd, self);
+        const interface = self.getInterface(PartialOrd);
         const gt_fn = interface.gt_fn.?;
         return gt_fn(self, rhs);
     }
 
     pub fn ge(self: *PartialOrd, rhs: *PartialOrd) bool {
-        const interface = core.typeInstanceGetInterface(PartialOrd, self);
+        const interface = self.getInterface(PartialOrd);
         const ge_fn = interface.ge_fn.?;
         return ge_fn(self, rhs);
     }

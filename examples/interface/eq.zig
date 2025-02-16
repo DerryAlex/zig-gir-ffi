@@ -13,15 +13,16 @@ pub const PartialEq = extern struct {
     pub const __call = Ext.__call;
     pub const into = Ext.into;
     pub const tryInto = Ext.tryInto;
+    pub const getInterface = Ext.getInterface;
 
     pub fn eq(self: *PartialEq, rhs: *PartialEq) bool {
-        const interface = core.typeInstanceGetInterface(PartialEq, self);
+        const interface = self.getInterface(PartialEq);
         const eq_fn = interface.eq_fn.?;
         return eq_fn(self, rhs);
     }
 
     pub fn ne(self: *PartialEq, rhs: *PartialEq) bool {
-        const interface = core.typeInstanceGetInterface(PartialEq, self);
+        const interface = self.getInterface(PartialEq);
         const ne_fn = interface.ne_fn.?;
         return ne_fn(self, rhs);
     }
