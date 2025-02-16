@@ -273,9 +273,13 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
                         try generateDocs(.{ .callback = info.tryInto(gi.CallbackInfo).? }, writer);
                         try writer.print("pub const {s} = ", .{info.getName().?});
                         if (info.isDeprecated()) {
-                            try writer.writeAll("if (config.disable_deprecated) core.Deprecated else ");
+                            try writer.writeAll("core.deprecated(");
                         }
-                        try writer.print("{};\n", .{info.tryInto(gi.CallbackInfo).?});
+                        try writer.print("{}", .{info.tryInto(gi.CallbackInfo).?});
+                        if (info.isDeprecated()) {
+                            try writer.writeAll(")");
+                        }
+                        try writer.writeAll(";\n");
                     },
                     .constant => try writer.print("{}", .{info.tryInto(gi.ConstantInfo).?}),
                     .@"enum" => {
@@ -352,7 +356,11 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
         });
         defer allocator.free(fmt_result.stdout);
         defer allocator.free(fmt_result.stderr);
-        std.debug.assert(fmt_result.stderr.len == 0);
+        if (fmt_result.stderr.len != 0) {
+            std.log.err("Failed to run `zig fmt {s}`", .{filename_r});
+            std.log.debug("{s}", .{fmt_result.stderr});
+            @panic("");
+        }
 
         try build_zig.writer().print(
             \\    var {s} = b.addModule("{s}", .{{ .root_source_file = b.path("{s}") }});

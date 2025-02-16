@@ -5,18 +5,12 @@ const std = @import("std");
 const builtin = @import("builtin");
 const root = @import("root");
 
-pub const Configs = struct {
-    disable_deprecated: bool = true,
-};
-pub const config: Configs = if (@hasDecl(root, "gi_configs")) root.gi_configs else .{};
-
-/// Deprecated
-pub const Deprecated = if (builtin.is_test)
-    struct {
-        skip_zig_test: void = {},
+pub fn deprecated(value: anytype) @TypeOf(value) {
+    if (@TypeOf(value) == void) {
+        @compileError("deprecated");
     }
-else
-    @compileError("deprecated");
+    return value;
+}
 
 // ----------
 // type begin
