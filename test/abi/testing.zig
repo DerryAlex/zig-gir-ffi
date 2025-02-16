@@ -113,6 +113,7 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
                 if (fninfo_u.params.len != fninfo_v.params.len) return false;
             }
             const params_len = if (fninfo_u.params.len <= fninfo_v.params.len) fninfo_u.params.len else fninfo_v.params.len;
+            if (params_len == 0) return true; // cairo_image_surface_create
             inline for (0..params_len) |idx| {
                 if (!isAbiCompatitable(fninfo_u.params[idx].type.?, fninfo_v.params[idx].type.?)) return false;
             }

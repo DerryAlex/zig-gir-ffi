@@ -665,11 +665,6 @@ pub const FunctionInfoExt = struct {
             }
         }
 
-        // PATCH: skip cairo_image_surface_create
-        if (std.mem.eql(u8, "cairo_image_surface_create", std.mem.span(self.getSymbol()))) {
-            return;
-        }
-
         if (emit_abi) {
             if (self.into(BaseInfo).isDeprecated()) return;
             try writer.print(
