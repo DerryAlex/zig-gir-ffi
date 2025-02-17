@@ -125,7 +125,7 @@ pub const CustomButton = extern struct {
         self.__call("notifyByPspec", .{_properties[@intFromEnum(Properties.Number)]});
     }
 
-    pub fn connectZeroReached(self: *CustomButton, comptime handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags) usize {
+    pub fn connectZeroReached(self: *CustomButton, comptime handler: anytype, args: anytype, flags: gobject.ConnectFlags) usize {
         return self.signalConnect("zero-reached", handler, args, flags, &[_]type{ void, *CustomButton });
     }
 

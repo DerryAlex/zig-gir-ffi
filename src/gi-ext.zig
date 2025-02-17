@@ -987,7 +987,7 @@ pub const FunctionInfoExt = struct {
                 }
             }
             if (closure_info[idx].is_func) {
-                try writer.print("var closure_{s} = core.zig_closure({s}, {s}_args, &.{{", .{ arg_name, arg_name, arg_name });
+                try writer.print("var closure_{s} = core.ZigClosure.newWithContract({s}, {s}_args, &.{{", .{ arg_name, arg_name, arg_name });
                 const arg_type = arg.getTypeInfo();
                 if (arg_type.getInterface()) |interface| {
                     if (interface.getType() == .callback) {
@@ -1018,25 +1018,25 @@ pub const FunctionInfoExt = struct {
                 try writer.writeAll("});\n");
                 switch (closure_info[idx].scope) {
                     .call => {
-                        try writer.print("defer closure_{s}.deinit();\n", .{arg_name});
+                        // TODO: try writer.print("defer closure_{s}.deinit();\n", .{arg_name});
                     },
                     .@"async" => {
-                        try writer.print("closure_{s}.setOnce();\n", .{arg_name});
+                        // TODO: try writer.print("closure_{s}.setOnce();\n", .{arg_name});
                     },
                     .notified, .forever => {
                         //
                     },
                     else => unreachable,
                 }
-                try writer.print("const _{s}: {t} = @ptrCast(closure_{s}.c_closure());\n", .{ arg_name, arg, arg_name });
+                try writer.print("const _{s}: {t} = @ptrCast(closure_{s}.cCallback());\n", .{ arg_name, arg, arg_name });
             }
             if (closure_info[idx].is_data) {
                 const func_arg = args[closure_info[idx].closure_func];
-                try writer.print("const _{s}: {t} = @ptrCast(closure_{s}.c_data());\n", .{ arg_name, arg, func_arg.into(BaseInfo).getName().? });
+                try writer.print("const _{s}: {t} = @ptrCast(closure_{s}.cData());\n", .{ arg_name, arg, func_arg.into(BaseInfo).getName().? });
             }
             if (closure_info[idx].is_destroy) {
                 const func_arg = args[closure_info[idx].closure_func];
-                try writer.print("const _{s}: {t} = @ptrCast(closure_{s}.c_destroy());\n", .{ arg_name, arg, func_arg.into(BaseInfo).getName().? });
+                try writer.print("const _{s}: {t} = @ptrCast(closure_{s}.cDestroy());\n", .{ arg_name, arg, func_arg.into(BaseInfo).getName().? });
             }
         }
         // prepare output
@@ -1467,11 +1467,11 @@ pub const SignalInfoExt = struct {
         try root.generateDocs(.{ .signal = self }, writer);
         if (self.into(BaseInfo).isDeprecated()) {
             try writer.print("pub const connect{c}{s} = core.deprecated(__deprecated__connect{c}{s});\n", .{ std.ascii.toUpper(name.slice()[0]), name.slice()[1..], std.ascii.toUpper(name.slice()[0]), name.slice()[1..] });
-            try writer.print("fn __deprecated__connect{c}{s}(self: *{s}, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name.slice()[0]), name.slice()[1..], container_name });
+            try writer.print("fn __deprecated__connect{c}{s}(self: *{s}, callback_func: anytype, user_data: anytype, flags: gobject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name.slice()[0]), name.slice()[1..], container_name });
         } else {
-            try writer.print("pub fn connect{c}{s}(self: *{s}, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name.slice()[0]), name.slice()[1..], container_name });
+            try writer.print("pub fn connect{c}{s}(self: *{s}, callback_func: anytype, user_data: anytype, flags: gobject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name.slice()[0]), name.slice()[1..], container_name });
         }
-        try writer.print("return self.signalConnect(\"{s}\", handler, args, flags, &.{{", .{raw_name});
+        try writer.print("return self.signalConnect(\"{s}\", callback_func, user_data, flags, &.{{", .{raw_name});
         const return_type = self.into(CallableInfo).getReturnType();
         var interface_returned = false;
         if (return_type.getInterface()) |child_type| {

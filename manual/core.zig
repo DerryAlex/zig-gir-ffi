@@ -2,8 +2,6 @@ const glib = @import("glib");
 const gobject = @import("gobject");
 
 const std = @import("std");
-const builtin = @import("builtin");
-const root = @import("root");
 
 pub fn deprecated(value: anytype) @TypeOf(value) {
     if (@TypeOf(value) == void) {
@@ -166,10 +164,14 @@ pub fn Extend(comptime Self: type) type {
         }
 
         /// Connects a callback function to a signal for a particular object
-        pub fn signalConnect(self: *Self, signal: [*:0]const u8, handler: anytype, args: anytype, comptime flags: gobject.ConnectFlags, comptime signature: []const type) usize {
-            var closure = zig_closure(handler, args, if (flags.swapped) signature[0..1] else signature);
-            const cclosure = if (!flags.swapped) closure.g_closure() else closure.g_closure_swapped();
-            return gobject.signalConnectClosure(self.into(gobject.Object), signal, cclosure, flags.after);
+        pub fn signalConnect(self: *Self, signal: [*:0]const u8, callback_func: anytype, user_data: anytype, flags: gobject.ConnectFlags, comptime contract: []const type) usize {
+            var closure = ZigClosure.newWithContract(callback_func, user_data, contract);
+            if (flags.swapped) {
+                const CallbackRaw = @TypeOf(callback_func);
+                const Callback = if (@typeInfo(CallbackRaw) == .@"fn") CallbackRaw else std.meta.Child(CallbackRaw);
+                std.debug.assert(@typeInfo(Callback).@"fn".params.len == user_data.len);
+            }
+            return gobject.signalConnectClosure(self.into(gobject.Object), signal, closure.cClosure(), flags.after);
         }
 
         /// Returns the interface of a given instance
@@ -275,6 +277,11 @@ fn Arg(comptime T: type) type {
     return if (isBasicType(T)) T else *T;
 }
 
+/// Reverse of `Arg(T)`
+fn ReverseArg(comptime T: type) type {
+    return if (@typeInfo(T) == .pointer and Arg(std.meta.Child(T)) == T) std.meta.Child(T) else T;
+}
+
 /// An opaque structure used to hold different types of values
 const Value = struct {
     const Self = gobject.Value;
@@ -328,8 +335,8 @@ const Value = struct {
     }
 
     /// Get the contents of a Value
-    pub fn get(self: Self, comptime T: type) Arg(T) {
-        if (comptime T == void) @compileError("Cannot initialize Value with type void");
+    pub fn get(self: *Self, comptime T: type) Arg(T) {
+        if (comptime T == void) @compileError("Cannot get Value with type void");
         if (comptime T == bool) return self.getBoolean();
         if (comptime T == i8) return self.getSchar();
         if (comptime T == u8) return self.getUchar();
@@ -353,14 +360,14 @@ const Value = struct {
         if (comptime @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .one) return @ptrCast(self.getPointer());
         if (comptime T == glib.Variant) return self.getVariant().?;
         if (comptime T == gobject.ParamSpec) return self.getParam();
-        if (comptime @hasDecl(T, "__call")) return downCast(T, self.getObject()).?;
+        if (comptime @hasDecl(T, "__call")) return downCast(T, self.getObject().?).?;
         return @ptrCast(self.getBoxed().?);
     }
 
     /// Set the contents of a Value
     pub fn set(self: *Self, comptime T: type, arg_value: Arg(T)) void {
         if (comptime T == void) {
-            @compileError("Cannot initialize Value with type void");
+            @compileError("Cannot set Value with type void");
         } else if (comptime T == bool) {
             self.setBoolean(arg_value);
         } else if (comptime T == i8) {
@@ -412,121 +419,117 @@ const Value = struct {
 // -------------
 // closure begin
 
-/// A no-op closure
-const NopClosure = struct {
-    const Self = @This();
-    pub fn new(_: anytype, _: anytype) !*Self {
-        return undefined;
+/// Represents a callback supplied by the programmer
+pub const ZigClosure = extern struct {
+    c_closure: gobject.Closure,
+    callback: *const anyopaque,
+    c_callback: *const anyopaque,
+    reserved: [0]u8,
+    // args: Args
+
+    fn marshal(comptime Callback: type, comptime n_param: usize) fn (*ZigClosure, *gobject.Value, u32, [*]gobject.Value) callconv(.c) void {
+        const Args = std.meta.ArgsTuple(Callback);
+        return struct {
+            fn marshal(zig_closure: *ZigClosure, return_value: *gobject.Value, n_param_values: u32, param_values: [*]gobject.Value) callconv(.c) void {
+                const args: *Args = @ptrFromInt(@intFromPtr(zig_closure) + @sizeOf(ZigClosure));
+                const params = param_values[0..n_param_values];
+                inline for (0..n_param) |idx| {
+                    const field_idx = std.fmt.comptimePrint("{}", .{idx});
+                    @field(args, field_idx) = Value.get(&params[idx], ReverseArg(@FieldType(Args, field_idx)));
+                }
+                const ret = @call(.auto, @as(*const Callback, @ptrCast(zig_closure.callback)), args.*);
+                if (@TypeOf(ret) != void) {
+                    Value.set(return_value, ReverseArg(@TypeOf(ret)), ret);
+                }
+            }
+        }.marshal;
     }
-    pub fn invoke() callconv(.c) void {}
-    pub fn setOnce(_: *Self) void {}
-    pub fn deinit(_: *Self) callconv(.c) void {}
-    pub inline fn c_closure(_: *Self) ?*anyopaque {
-        return null;
+
+    fn cInvoke(comptime Callback: type, comptime n_param: usize) fn (...) callconv(.c) @typeInfo(Callback).@"fn".return_type.? {
+        const Args = std.meta.ArgsTuple(Callback);
+        return struct {
+            fn invoke(...) callconv(.c) @typeInfo(Callback).@"fn".return_type.? {
+                var args: Args = undefined;
+                var va_list = @cVaStart();
+                inline for (0..n_param) |idx| {
+                    const field_idx = std.fmt.comptimePrint("{}", .{idx});
+                    @field(args, field_idx) = @cVaArg(&va_list, @FieldType(Args, field_idx));
+                }
+                const zig_closure = @cVaArg(&va_list, *ZigClosure);
+                @cVaEnd(&va_list);
+                const stored_args: *Args = @ptrFromInt(@intFromPtr(zig_closure) + @sizeOf(ZigClosure));
+                inline for (n_param..args.len) |idx| {
+                    const field_idx = std.fmt.comptimePrint("{}", .{idx});
+                    @field(args, field_idx) = @field(stored_args, field_idx);
+                }
+                return @call(.auto, @as(*const Callback, @ptrCast(zig_closure.callback)), args);
+            }
+        }.invoke;
     }
-    pub inline fn c_data(_: *Self) ?*anyopaque {
-        return null;
+
+    /// Creates a new closure which invokes `callback_func` with `user_data` as the last parameters.
+    pub fn new(callback_func: anytype, user_data: anytype) *ZigClosure {
+        const Callback = blk: {
+            const T = @TypeOf(callback_func);
+            if (!(@typeInfo(T) == .@"fn" or (@typeInfo(T) == .pointer and @typeInfo(std.meta.Child(T)) == .@"fn"))) {
+                @compileError("ZigClosure.new: 'callback_func' should be of type Fn or FnPtr.");
+            }
+            break :blk if (@typeInfo(T) == .@"fn") T else std.meta.Child(T);
+        };
+        {
+            const T = @TypeOf(user_data);
+            if (!(@typeInfo(T) == .@"struct" and @typeInfo(T).@"struct".is_tuple)) {
+                @compileError("ZigClosure.new: 'user_data' should be of type Tuple.");
+            }
+        }
+        const Args = std.meta.ArgsTuple(Callback);
+        var self: *ZigClosure = @ptrCast(gobject.Closure.newSimple(@sizeOf(ZigClosure) + @sizeOf(Args), null));
+        self.callback = @ptrCast(if (@typeInfo(@TypeOf(callback_func)) == .pointer) callback_func else &callback_func);
+        const args: *Args = @ptrFromInt(@intFromPtr(self) + @sizeOf(ZigClosure));
+        const n_param = args.len - user_data.len;
+        inline for (0..user_data.len) |idx| {
+            @field(args, std.fmt.comptimePrint("{}", .{n_param + idx})) = @field(user_data, std.fmt.comptimePrint("{}", .{idx}));
+        }
+        self.c_closure.setMarshal(@ptrCast(&marshal(Callback, n_param)));
+        self.c_callback = @ptrCast(&cInvoke(Callback, n_param));
+        return self;
     }
-    pub inline fn c_destroy(_: *Self) ?*anyopaque {
+
+    pub inline fn newWithContract(callback_func: anytype, user_data: anytype, comptime contract: []const type) *ZigClosure {
+        const closure = new(callback_func, user_data);
+        comptime {
+            const CallbackRaw = @TypeOf(callback_func);
+            const Callback = if (@typeInfo(CallbackRaw) == .@"fn") CallbackRaw else std.meta.Child(CallbackRaw);
+            std.debug.assert(@typeInfo(Callback).@"fn".return_type.? == contract[0]);
+            if (@typeInfo(Callback).@"fn".params.len != user_data.len) {
+                for (contract[1..], 0..) |T, idx| {
+                    std.debug.assert(@typeInfo(Callback).@"fn".params[idx].type.? == T);
+                }
+            }
+        }
+        return closure;
+    }
+
+    pub inline fn cClosure(self: *ZigClosure) *gobject.Closure {
+        return @ptrCast(self);
+    }
+
+    /// For internal use
+    pub inline fn cCallback(self: *ZigClosure) gobject.Callback {
+        return @ptrCast(self.c_callback);
+    }
+
+    /// For internal use
+    pub inline fn cData(self: *ZigClosure) ?*anyopaque {
+        return @ptrCast(self);
+    }
+
+    /// For internal use
+    pub inline fn cDestroy(self: *ZigClosure) ?glib.DestroyNotify {
+        _ = self;
         return null;
     }
 };
-
-/// A closure represents a callback supplied by the programmer
-pub fn ZigClosure(comptime FnPtr: type, comptime Args: type, comptime signature: []const type) type {
-    comptime std.debug.assert(@typeInfo(Args) == .@"struct" and @typeInfo(Args).@"struct".is_tuple);
-    comptime std.debug.assert(@typeInfo(FnPtr) == .pointer and @typeInfo(FnPtr).pointer.size == .one);
-    if (std.meta.Child(FnPtr) == void) {
-        return NopClosure;
-    }
-    comptime std.debug.assert(@typeInfo(std.meta.Child(FnPtr)) == .@"fn");
-    comptime std.debug.assert(signature.len >= 1);
-
-    const n_arg = @typeInfo(Args).@"struct".fields.len;
-    const n_param = @typeInfo(std.meta.Child(FnPtr)).@"fn".params.len;
-
-    return struct {
-        handler: FnPtr,
-        args: Args,
-        once: bool,
-
-        const Self = @This();
-
-        /// Creates a new closure which invokes `handler` with `args` as the last parameters
-        pub fn new(handler: FnPtr, args: Args) !*Self {
-            const allocator = std.heap.c_allocator;
-            var closure = try allocator.create(Self);
-            closure.handler = handler;
-            closure.args = args;
-            closure.once = false;
-            return closure;
-        }
-
-        /// Invokes the closure, i.e. executes the callback represented by the closure
-        pub fn invoke(...) callconv(.c) signature[0] {
-            var va_list = @cVaStart();
-            var args: std.meta.Tuple(signature[1..]) = undefined;
-            inline for (1..signature.len) |i| {
-                const idx = std.fmt.comptimePrint("{}", .{i - 1});
-                @field(args, idx) = @cVaArg(&va_list, signature[i]);
-            }
-            const self: *Self = @cVaArg(&va_list, *Self);
-            @cVaEnd(&va_list);
-
-            defer if (self.once) {
-                self.deinit();
-            };
-            if (comptime n_arg == 0) {
-                var args_real: std.meta.Tuple(signature[1 .. n_param + 1]) = undefined;
-                inline for (0..n_param) |i| {
-                    const idx = std.fmt.comptimePrint("{}", .{i});
-                    @field(args_real, idx) = @field(args, idx);
-                }
-                return @call(.auto, self.handler, args_real);
-            } else {
-                return @call(.auto, self.handler, args ++ self.args);
-            }
-        }
-
-        /// The closure is only valid for the duration of the first callback invocation
-        pub fn setOnce(self: *Self) void {
-            self.once = true;
-        }
-
-        /// Free its memory
-        pub fn deinit(self: *Self) callconv(.c) void {
-            std.heap.c_allocator.destroy(self);
-        }
-
-        /// The C callback function to invoke
-        pub inline fn c_closure(_: *Self) gobject.Callback {
-            return @ptrCast(&invoke);
-        }
-
-        /// The data to pass to callback
-        pub inline fn c_data(self: *Self) ?*anyopaque {
-            return self;
-        }
-
-        /// The destroy function to be called when data is no longer used
-        pub inline fn c_destroy(_: *Self) gobject.ClosureNotify {
-            return @ptrCast(&deinit);
-        }
-
-        pub inline fn g_closure(self: *Self) *gobject.Closure {
-            return gobject.CClosure.new(self.c_closure(), self.c_data(), self.c_destroy());
-        }
-
-        pub inline fn g_closure_swapped(self: *Self) *gobject.Closure {
-            return gobject.CClosure.newSwap(self.c_closure(), self.c_data(), self.c_destroy());
-        }
-    };
-}
-
-/// Creates a new closure which invokes `handler` with `args` as the last parameters
-pub fn zig_closure(handler: anytype, args: anytype, comptime signature: []const type) *ZigClosure(@TypeOf(&handler), @TypeOf(args), signature) {
-    return ZigClosure(@TypeOf(&handler), @TypeOf(args), signature).new(&handler, args) catch @panic("Out of Memory");
-}
 
 // closure end
 // -----------
@@ -693,7 +696,7 @@ fn classOverride(comptime Class: type, comptime Override: type, class: *Class) v
         }
     }
     if (@hasField(Class, "parent_class")) {
-        classOverride(@TypeOf(@field(class, "parent_class")), Override, @ptrCast(class));
+        classOverride(@FieldType(Class, "parent_class"), Override, @ptrCast(class));
     }
 }
 
