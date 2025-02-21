@@ -718,12 +718,7 @@ pub const FunctionInfoExt = struct {
             }
         }
         try root.generateDocs(.{ .function = self }, writer);
-        if (self.into(BaseInfo).isDeprecated()) {
-            try writer.print("pub const {s} = core.deprecated(@This().__deprecated__{s});\n", .{ func_name.to_identifier(), func_name });
-            try writer.print("fn __deprecated__{s}", .{func_name});
-        } else {
-            try writer.print("pub fn {s}", .{func_name.to_identifier()});
-        }
+        try writer.print("pub fn {s}", .{func_name.to_identifier()});
 
         {
             // PATCH: out len
@@ -966,6 +961,9 @@ pub const FunctionInfoExt = struct {
 
         // function body
         try writer.writeAll(" {\n");
+        if (self.into(BaseInfo).isDeprecated()) {
+            try writer.writeAll("core.deprecated({});\n");
+        }
         // prepare input/inout
         for (args, 0..) |arg, idx| {
             if (arg.getDirection() == .out and !arg.isCallerAllocates()) continue;
@@ -1465,11 +1463,9 @@ pub const SignalInfoExt = struct {
         const raw_name = self.into(BaseInfo).name_string();
         const name = raw_name.to_camel();
         try root.generateDocs(.{ .signal = self }, writer);
+        try writer.print("pub fn connect{c}{s}(self: *{s}, callback_func: anytype, user_data: anytype, flags: gobject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name.slice()[0]), name.slice()[1..], container_name });
         if (self.into(BaseInfo).isDeprecated()) {
-            try writer.print("pub const connect{c}{s} = core.deprecated(__deprecated__connect{c}{s});\n", .{ std.ascii.toUpper(name.slice()[0]), name.slice()[1..], std.ascii.toUpper(name.slice()[0]), name.slice()[1..] });
-            try writer.print("fn __deprecated__connect{c}{s}(self: *{s}, callback_func: anytype, user_data: anytype, flags: gobject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name.slice()[0]), name.slice()[1..], container_name });
-        } else {
-            try writer.print("pub fn connect{c}{s}(self: *{s}, callback_func: anytype, user_data: anytype, flags: gobject.ConnectFlags) usize {{\n", .{ std.ascii.toUpper(name.slice()[0]), name.slice()[1..], container_name });
+            try writer.writeAll("core.deprecated({});\n");
         }
         try writer.print("return self.signalConnect(\"{s}\", callback_func, user_data, flags, &.{{", .{raw_name});
         const return_type = self.into(CallableInfo).getReturnType();
@@ -1870,14 +1866,12 @@ pub const VFuncInfoExt = struct {
         };
         const class_name = class.into(BaseInfo).getName().?;
         try root.generateDocs(.{ .vfunc = self }, writer);
-        if (self.into(BaseInfo).isDeprecated()) {
-            try writer.print("pub const {s}V = core.deprecated(__deprecated__{s}V);\n", .{ vfunc_name, vfunc_name });
-            try writer.print("fn __deprecated__{s}V", .{vfunc_name});
-        } else {
-            try writer.print("pub fn {s}V", .{vfunc_name});
-        }
+        try writer.print("pub fn {s}V", .{vfunc_name});
         try writer.print("{e}", .{self.into(CallableInfo)});
         try writer.writeAll(" {\n");
+        if (self.into(BaseInfo).isDeprecated()) {
+            try writer.writeAll("core.deprecated({});\n");
+        }
         try writer.print("const class: *{s} = @ptrCast(core.unsafeCast(gobject.TypeInstance, self).g_class.?);\n", .{class_name});
         try writer.print("const vFn = class.{s}.?;", .{raw_vfunc_name});
         try writer.writeAll("const ret = vFn");
