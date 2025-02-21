@@ -164,8 +164,8 @@ pub fn Extend(comptime Self: type) type {
         }
 
         /// Connects a callback function to a signal for a particular object
-        pub fn signalConnect(self: *Self, signal: [*:0]const u8, callback_func: anytype, user_data: anytype, flags: gobject.ConnectFlags, comptime contract: []const type) usize {
-            var closure = ZigClosure.newWithContract(callback_func, user_data, contract);
+        pub fn signalConnect(self: *Self, signal: [*:0]const u8, callback_func: anytype, user_data: anytype, flags: gobject.ConnectFlags, comptime Contract: type) usize {
+            var closure = ZigClosure.newWithContract(callback_func, user_data, Contract);
             if (flags.swapped) {
                 const CallbackRaw = @TypeOf(callback_func);
                 const Callback = if (@typeInfo(CallbackRaw) == .@"fn") CallbackRaw else std.meta.Child(CallbackRaw);
@@ -504,16 +504,16 @@ pub const ZigClosure = extern struct {
         return self;
     }
 
-    pub inline fn newWithContract(callback_func: anytype, user_data: anytype, comptime contract: []const type) *ZigClosure {
+    pub inline fn newWithContract(callback_func: anytype, user_data: anytype, comptime Contract: type) *ZigClosure {
         const closure = new(callback_func, user_data);
         comptime {
             const CallbackRaw = @TypeOf(callback_func);
             const Callback = if (@typeInfo(CallbackRaw) == .@"fn") CallbackRaw else std.meta.Child(CallbackRaw);
-            std.debug.assert(@typeInfo(Callback).@"fn".return_type.? == contract[0]);
-            if (@typeInfo(Callback).@"fn".params.len != user_data.len) {
-                for (contract[1 .. 1 + @typeInfo(Callback).@"fn".params.len - user_data.len], 0..) |T, idx| {
-                    std.debug.assert(@typeInfo(Callback).@"fn".params[idx].type.? == T);
-                }
+            const callback_info = @typeInfo(Callback).@"fn";
+            const contract_info = @typeInfo(Contract).@"fn";
+            std.debug.assert(callback_info.return_type == contract_info.return_type);
+            for (0..callback_info.params.len - user_data.len) |idx| {
+                std.debug.assert(callback_info.params[idx].type == contract_info.params[idx].type);
             }
         }
         return closure;

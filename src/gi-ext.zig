@@ -985,35 +985,40 @@ pub const FunctionInfoExt = struct {
                 }
             }
             if (closure_info[idx].is_func) {
-                try writer.print("var closure_{s} = core.ZigClosure.newWithContract({s}, {s}_args, &.{{", .{ arg_name, arg_name, arg_name });
+                try writer.print("var closure_{s} = core.ZigClosure.newWithContract({s}, {s}_args, fn (", .{ arg_name, arg_name, arg_name });
                 const arg_type = arg.getTypeInfo();
                 if (arg_type.getInterface()) |interface| {
                     if (interface.getType() == .callback) {
-                        const cb_return_type = interface.tryInto(CallableInfo).?.getReturnType();
-                        if (interface.tryInto(CallableInfo).?.mayReturnNull() or cb_return_type.getTag() == .glist or cb_return_type.getTag() == .gslist) {
-                            try writer.print("{mn}", .{cb_return_type});
-                        } else {
-                            try writer.print("{m}", .{cb_return_type});
-                        }
                         var callback_args = CallableInfoExt.argsAlloc(interface.tryInto(CallableInfo).?, allocator) catch @panic("Out of Memory");
                         if (callback_args.len > 0) {
+                            var first_cb_arg = true;
                             for (callback_args[0 .. callback_args.len - 1]) |cb_arg| {
-                                try writer.writeAll(", ");
+                                if (!first_cb_arg) {
+                                    try writer.writeAll(", ");
+                                } else {
+                                    first_cb_arg = false;
+                                }
                                 try writer.print("{t}", .{cb_arg});
                             }
                         } else {
                             std.log.warn("[Generic Callback] {s}", .{self.getSymbol()});
                         }
+                        const cb_return_type = interface.tryInto(CallableInfo).?.getReturnType();
+                        if (interface.tryInto(CallableInfo).?.mayReturnNull() or cb_return_type.getTag() == .glist or cb_return_type.getTag() == .gslist) {
+                            try writer.print(") {mn}", .{cb_return_type});
+                        } else {
+                            try writer.print(") {m}", .{cb_return_type});
+                        }
                         std.debug.assert(!interface.tryInto(CallableInfo).?.canThrowGerror());
                     } else {
-                        try writer.writeAll("void");
+                        try writer.writeAll(") void");
                         std.log.warn("[Generic Callback] {s}", .{self.getSymbol()});
                     }
                 } else {
-                    try writer.writeAll("void");
+                    try writer.writeAll(") void");
                     std.log.warn("[Generic Callback] {s}", .{self.getSymbol()});
                 }
-                try writer.writeAll("});\n");
+                try writer.writeAll(");\n");
                 switch (closure_info[idx].scope) {
                     .call => {
                         // TODO: try writer.print("defer closure_{s}.deinit();\n", .{arg_name});
@@ -1467,7 +1472,13 @@ pub const SignalInfoExt = struct {
         if (self.into(BaseInfo).isDeprecated()) {
             try writer.writeAll("core.deprecated({});\n");
         }
-        try writer.print("return self.signalConnect(\"{s}\", callback_func, user_data, flags, &.{{", .{raw_name});
+        try writer.print("return self.signalConnect(\"{s}\", callback_func, user_data, flags, fn (", .{raw_name});
+        try writer.print("*{s}", .{container_name});
+        var iter = CallableInfoExt.args_iter(self.into(CallableInfo));
+        while (iter.next()) |arg| {
+            try writer.print(", {tp}", .{arg});
+        }
+        try writer.writeAll(") ");
         const return_type = self.into(CallableInfo).getReturnType();
         var interface_returned = false;
         if (return_type.getInterface()) |child_type| {
@@ -1481,12 +1492,7 @@ pub const SignalInfoExt = struct {
         } else {
             try writer.print("{m}", .{return_type});
         }
-        try writer.print(", *{s}", .{container_name});
-        var iter = CallableInfoExt.args_iter(self.into(CallableInfo));
-        while (iter.next()) |arg| {
-            try writer.print(", {tp}", .{arg});
-        }
-        try writer.writeAll("});\n");
+        try writer.writeAll(");\n");
         try writer.writeAll("}\n");
     }
 };
