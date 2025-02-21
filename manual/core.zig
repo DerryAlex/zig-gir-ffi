@@ -423,7 +423,7 @@ const Value = struct {
 pub const ZigClosure = extern struct {
     c_closure: gobject.Closure,
     callback: *const anyopaque,
-    c_callback: *const anyopaque,
+    c_callback: ?*const anyopaque,
     reserved: [0]u8,
     // args: Args
 
@@ -478,6 +478,9 @@ pub const ZigClosure = extern struct {
 
     /// Creates a new closure which invokes `callback_func` with `user_data` as the last parameters.
     pub fn new(callback_func: anytype, user_data: anytype) *ZigClosure {
+        if (@TypeOf(callback_func) == @TypeOf(null)) {
+            return @ptrCast(gobject.Closure.newSimple(@sizeOf(ZigClosure), null));
+        }
         const Callback = blk: {
             const T = @TypeOf(callback_func);
             if (!(@typeInfo(T) == .@"fn" or (@typeInfo(T) == .pointer and @typeInfo(std.meta.Child(T)) == .@"fn"))) {
@@ -506,7 +509,7 @@ pub const ZigClosure = extern struct {
 
     pub inline fn newWithContract(callback_func: anytype, user_data: anytype, comptime Contract: type) *ZigClosure {
         const closure = new(callback_func, user_data);
-        comptime {
+        comptime if (@TypeOf(callback_func) != @TypeOf(null)) {
             const CallbackRaw = @TypeOf(callback_func);
             const Callback = if (@typeInfo(CallbackRaw) == .@"fn") CallbackRaw else std.meta.Child(CallbackRaw);
             const callback_info = @typeInfo(Callback).@"fn";
@@ -515,7 +518,7 @@ pub const ZigClosure = extern struct {
             for (0..callback_info.params.len - user_data.len) |idx| {
                 std.debug.assert(callback_info.params[idx].type == contract_info.params[idx].type);
             }
-        }
+        };
         return closure;
     }
 
@@ -524,13 +527,18 @@ pub const ZigClosure = extern struct {
     }
 
     /// For internal use
-    pub inline fn cCallback(self: *ZigClosure) gobject.Callback {
+    pub inline fn cCallback(self: *ZigClosure) ?gobject.Callback {
         return @ptrCast(self.c_callback);
     }
 
     /// For internal use
     pub inline fn cData(self: *ZigClosure) ?*anyopaque {
-        return @ptrCast(self);
+        if (self.c_callback != null) {
+            return @ptrCast(self);
+        } else {
+            @branchHint(.unlikely);
+            return null;
+        }
     }
 
     /// For internal use

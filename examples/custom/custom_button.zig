@@ -42,7 +42,7 @@ pub const CustomButtonClass = extern struct {
                 .run_last = true,
                 .no_recurse = true,
                 .no_hooks = true,
-            }, {}, .{}),
+            }, null, .{}),
         });
         return _signals[0..];
     }
