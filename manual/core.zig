@@ -361,7 +361,7 @@ const Value = struct {
         if (comptime T == glib.Variant) return self.getVariant().?;
         if (comptime T == gobject.ParamSpec) return self.getParam();
         if (comptime @hasDecl(T, "__call")) return downCast(T, self.getObject().?).?;
-        return @ptrCast(self.getBoxed().?);
+        return unsafeCast(T, self.getBoxed().?);
     }
 
     /// Set the contents of a Value
@@ -435,7 +435,16 @@ pub const ZigClosure = extern struct {
                 const params = param_values[0..n_param_values];
                 inline for (0..n_param) |idx| {
                     const field_idx = std.fmt.comptimePrint("{}", .{idx});
-                    @field(args, field_idx) = Value.get(&params[idx], ReverseArg(@FieldType(Args, field_idx)));
+                    const FieldType = @FieldType(Args, field_idx);
+                    if (@typeInfo(FieldType) == .optional and @typeInfo(std.meta.Child(FieldType)) == .pointer) {
+                        if (params[idx].getPointer() == null) {
+                            @field(args, field_idx) = null;
+                        } else {
+                            @field(args, field_idx) = Value.get(&params[idx], ReverseArg(std.meta.Child(FieldType)));
+                        }
+                    } else {
+                        @field(args, field_idx) = Value.get(&params[idx], ReverseArg(FieldType));
+                    }
                 }
                 const ret = @call(.auto, @as(*const Callback, @ptrCast(zig_closure.callback)), args.*);
                 if (@TypeOf(ret) != void) {
@@ -502,7 +511,7 @@ pub const ZigClosure = extern struct {
             const Callback = if (@typeInfo(CallbackRaw) == .@"fn") CallbackRaw else std.meta.Child(CallbackRaw);
             std.debug.assert(@typeInfo(Callback).@"fn".return_type.? == contract[0]);
             if (@typeInfo(Callback).@"fn".params.len != user_data.len) {
-                for (contract[1..], 0..) |T, idx| {
+                for (contract[1 .. 1 + @typeInfo(Callback).@"fn".params.len - user_data.len], 0..) |T, idx| {
                     std.debug.assert(@typeInfo(Callback).@"fn".params[idx].type.? == T);
                 }
             }
