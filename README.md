@@ -3,7 +3,7 @@
 GObject Introspection for zig. Generated [GTK4 binding](https://github.com/DerryAlex/zig-gir-ffi/releases) can be downloaded.
 
 > **Warning**
-> Only pre-releases targeting zig 0.x and 0.(x-1) are guarenteed to be kept.
+> Before zig 1.0 is released, only pre-releases targeting latest zig stable are guarenteed to be kept.
 
 ###### Table of Contents
 

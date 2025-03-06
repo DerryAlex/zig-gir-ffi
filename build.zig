@@ -119,11 +119,14 @@ pub fn build(b: *std.Build) !void {
     const clap = b.dependency("clap", .{}).module("clap");
 
     // Check step
-    const exe_check = b.addExecutable(.{
-        .name = "main",
+    const root_module = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .optimize = optimize,
         .target = target,
+    });
+    const exe_check = b.addExecutable(.{
+        .name = "main",
+        .root_module = root_module,
     });
     exe_check.root_module.addOptions("config", options);
     exe_check.root_module.addImport("clap", clap);
@@ -134,9 +137,8 @@ pub fn build(b: *std.Build) !void {
     // Install step
     const exe = b.addExecutable(.{
         .name = "main",
-        .root_source_file = b.path("src/main.zig"),
-        .optimize = optimize,
-        .target = target,
+        .root_module = root_module,
+        .use_llvm = if (optimize == .Debug and target.result.cpu.arch == .x86_64) false else null,
     });
     exe.root_module.addOptions("config", options);
     exe.root_module.addImport("clap", clap);

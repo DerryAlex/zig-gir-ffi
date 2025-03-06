@@ -1,11 +1,12 @@
 .{
-    .name = "hello",
+    .name = .custom_button,
     .version = "1.0.0",
+    .fingerprint = 0xeab78397f40c368,
     .paths = .{
         "build.zig",
         "build.zig.zon",
         "main.zig",
-        "custom_buttion.zig",
+        "custom_button.zig",
     },
     .dependencies = .{
         .gtk = .{

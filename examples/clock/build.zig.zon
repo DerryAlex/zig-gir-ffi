@@ -1,6 +1,7 @@
 .{
-    .name = "clock",
+    .name = .clock,
     .version = "1.0.0",
+    .fingerprint = 0xbe7bbe92151a4ef2,
     .paths = .{
         "build.zig",
         "build.zig.zon",
