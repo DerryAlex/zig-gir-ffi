@@ -17,6 +17,7 @@ pub fn main() !void {
         \\--outputdir <str>               Output directory (default: {s})
         \\--pkg-name <str>                Generated package name (default: $gi-namespace[0])
         \\--pkg-version <str>             Generated package version (default: $gi-version[0])
+        \\--pkg-fingerprint <u64>         Generated package fingerprint
         \\--emit-abi                      Output ABI description
         \\--gi-ext                        Enable manual extensions for gi
         \\
@@ -73,6 +74,16 @@ pub fn main() !void {
     var pkg_version = String.new_from("{s}", .{if (gi_versions) |version| version[0] else "0.0.0"});
     if (res.args.@"pkg-version") |p| {
         pkg_version = String.new_from("{s}", .{p});
+    }
+    var pkg_fingerprint = Fingerprint.generate(pkg_name.slice());
+    if (res.args.@"pkg-fingerprint") |p| {
+        if (p < 0xffffffff) {
+            pkg_fingerprint.id = @truncate(p);
+        } else {
+            pkg_fingerprint = @bitCast(p);
+        }
+    } else {
+        std.log.warn("warning: Package fingerprint default to 0x{x}", .{pkg_fingerprint.id});
     }
     const emit_abi = res.args.@"emit-abi" != 0;
     const has_gi_ext = res.args.@"gi-ext" != 0;
@@ -143,6 +154,7 @@ pub fn main() !void {
     try generateBindings(allocator, repository, output_dir, .{
         .name = pkg_name,
         .version = pkg_version,
+        .fingerprint = pkg_fingerprint.int(),
         .extra_files = manual_files.items,
         .emit_abi = emit_abi,
         .has_gi_ext = has_gi_ext,
@@ -152,9 +164,33 @@ pub fn main() !void {
 const PkgConfig = struct {
     name: String,
     version: String,
+    fingerprint: u64,
     extra_files: [][]const u8,
     emit_abi: bool,
     has_gi_ext: bool,
+};
+
+const Fingerprint = packed struct(u64) {
+    id: u32,
+    checksum: u32,
+
+    pub fn generate(name: []const u8) Fingerprint {
+        return .{
+            .id = std.hash.Crc32.hash("gi"), // std.crypto.random.intRangeLessThan(u32, 1, 0xffffffff),
+            .checksum = std.hash.Crc32.hash(name),
+        };
+    }
+
+    pub fn validate(n: Fingerprint, name: []const u8) bool {
+        switch (n.id) {
+            0x00000000, 0xffffffff => return false,
+            else => return std.hash.Crc32.hash(name) == n.checksum,
+        }
+    }
+
+    pub fn int(n: Fingerprint) u64 {
+        return @bitCast(n);
+    }
 };
 
 pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository, output_dir: std.fs.Dir, pkg_config: PkgConfig) !void {
@@ -170,11 +206,12 @@ pub fn generateBindings(allocator: std.mem.Allocator, repository: *gi.Repository
     );
     try build_zig_zon.writer().print(
         \\.{{
-        \\    .name = "{s}",
+        \\    .name = .{s},
         \\    .version = "{s}",
         \\    .minimum_zig_version = "{s}",
+        \\    .fingerprint = 0x{x},
         \\
-    , .{ pkg_config.name, pkg_config.version, @import("builtin").zig_version_string });
+    , .{ pkg_config.name, pkg_config.version, @import("builtin").zig_version_string, pkg_config.fingerprint });
     try build_zig_zon.writer().writeAll(
         \\    .dependencies = .{},
         \\    .paths = .{

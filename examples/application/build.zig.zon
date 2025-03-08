@@ -1,7 +1,7 @@
 .{
     .name = .application,
     .version = "1.0.0",
-    .fingerprint = 0xa45bddc1936993da,
+    .fingerprint = 0xa45bddc15f0b3663,
     .paths = .{
         "build.zig",
         "build.zig.zon",
