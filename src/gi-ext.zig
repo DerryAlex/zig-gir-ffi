@@ -1029,10 +1029,10 @@ pub const FunctionInfoExt = struct {
                 try writer.writeAll(");\n");
                 switch (closure_info[idx].scope) {
                     .call => {
-                        // TODO: try writer.print("defer closure_{s}.deinit();\n", .{arg_name});
+                        try writer.print("defer closure_{s}.deinit();\n", .{arg_name});
                     },
                     .@"async" => {
-                        // TODO: try writer.print("closure_{s}.setOnce();\n", .{arg_name});
+                        try writer.print("closure_{s}.once = true;\n", .{arg_name});
                     },
                     .notified, .forever => {
                         //

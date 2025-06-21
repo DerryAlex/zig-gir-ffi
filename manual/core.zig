@@ -424,6 +424,7 @@ pub const ZigClosure = extern struct {
     c_closure: gobject.Closure,
     callback: *const anyopaque,
     c_callback: ?*const anyopaque,
+    once: bool,
     reserved: [0]u8,
     // args: Args
 
@@ -449,6 +450,9 @@ pub const ZigClosure = extern struct {
                 const ret = @call(.auto, @as(*const Callback, @ptrCast(zig_closure.callback)), args.*);
                 if (@TypeOf(ret) != void) {
                     Value.set(return_value, ReverseArg(@TypeOf(ret)), ret);
+                }
+                if (zig_closure.once) {
+                    zig_closure.c_closure.invalidate();
                 }
             }
         }.marshal;
