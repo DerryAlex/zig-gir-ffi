@@ -30,6 +30,7 @@ pub const CustomButtonClass = extern struct {
     }
 
     pub fn properties() []*ParamSpec {
+        @as(*?*anyopaque, @ptrCast(&_properties[0])).* = null;
         @memcpy(_properties[1..], &[_]*ParamSpec{
             gobject.paramSpecInt("number", null, null, 0, 10, 10, .readwrite),
         });

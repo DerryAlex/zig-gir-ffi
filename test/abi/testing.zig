@@ -35,10 +35,10 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
         typeinfo_v = @typeInfo(typeinfo_v.optional.child);
     }
 
-    if (typeinfo_u == .pointer and typeinfo_u.pointer.size == .One and @typeInfo(typeinfo_u.pointer.child) == .array) {
+    if (typeinfo_u == .pointer and typeinfo_u.pointer.size == .one and @typeInfo(typeinfo_u.pointer.child) == .array) {
         typeinfo_u = @typeInfo([*]@typeInfo(typeinfo_u.pointer.child).array.child);
     }
-    if (typeinfo_v == .pointer and typeinfo_v.pointer.size == .One and @typeInfo(typeinfo_v.pointer.child) == .array) {
+    if (typeinfo_v == .pointer and typeinfo_v.pointer.size == .one and @typeInfo(typeinfo_v.pointer.child) == .array) {
         typeinfo_v = @typeInfo([*]@typeInfo(typeinfo_v.pointer.child).array.child);
     }
 
@@ -83,16 +83,16 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
         .pointer => {
             const pointerinfo_u = typeinfo_u.pointer;
             const pointerinfo_v = typeinfo_v.pointer;
-            if (pointerinfo_u.size != .C and pointerinfo_v.size != .C) {
+            if (pointerinfo_u.size != .c and pointerinfo_v.size != .c) {
                 var has_anyopaque = false;
-                if (pointerinfo_u.size == .One and @typeInfo(pointerinfo_u.child) == .@"opaque") has_anyopaque = true;
-                if (pointerinfo_v.size == .One and @typeInfo(pointerinfo_v.child) == .@"opaque") has_anyopaque = true;
+                if (pointerinfo_u.size == .one and @typeInfo(pointerinfo_u.child) == .@"opaque") has_anyopaque = true;
+                if (pointerinfo_v.size == .one and @typeInfo(pointerinfo_v.child) == .@"opaque") has_anyopaque = true;
                 if (!has_anyopaque) {
                     if (pointerinfo_u.size != pointerinfo_v.size) return false;
-                    if ((pointerinfo_u.sentinel == null) != (pointerinfo_v.sentinel == null)) return false;
+                    if ((pointerinfo_u.sentinel() == null) != (pointerinfo_v.sentinel() == null)) return false;
                 }
             } else {
-                if (pointerinfo_u.size == .Slice or pointerinfo_v.size == .Slice) return false;
+                if (pointerinfo_u.size == .slice or pointerinfo_v.size == .slice) return false;
             }
             return isAbiCompatitable(pointerinfo_u.child, pointerinfo_v.child);
         },
@@ -109,11 +109,11 @@ pub fn isAbiCompatitable(comptime U: type, comptime V: type) bool {
             const fninfo_u = typeinfo_u.@"fn";
             const fninfo_v = typeinfo_v.@"fn";
             // if (fninfo_u.calling_convention != fninfo_v.calling_convention) return false;
+            const params_len = if (fninfo_u.params.len <= fninfo_v.params.len) fninfo_u.params.len else fninfo_v.params.len;
+            if (params_len == 0) return true; // cairo_image_surface_create
             if (!fninfo_u.is_var_args and !fninfo_v.is_var_args) {
                 if (fninfo_u.params.len != fninfo_v.params.len) return false;
             }
-            const params_len = if (fninfo_u.params.len <= fninfo_v.params.len) fninfo_u.params.len else fninfo_v.params.len;
-            if (params_len == 0) return true; // cairo_image_surface_create
             inline for (0..params_len) |idx| {
                 if (!isAbiCompatitable(fninfo_u.params[idx].type.?, fninfo_v.params[idx].type.?)) return false;
             }

@@ -138,7 +138,6 @@ pub fn build(b: *std.Build) !void {
     const exe = b.addExecutable(.{
         .name = "main",
         .root_module = root_module,
-        .use_llvm = if (optimize == .Debug and target.result.cpu.arch == .x86_64) false else null,
     });
     exe.root_module.addOptions("config", options);
     exe.root_module.addImport("clap", clap);

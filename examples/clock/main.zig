@@ -1,12 +1,13 @@
 const std = @import("std");
 const gtk = @import("gtk");
 const glib = gtk.glib;
+const gobject = gtk.gobject;
 const gio = gtk.gio;
 
 pub fn main() u8 {
     var app = gtk.Application.new("org.example.clock", .{});
     defer app.__call("unref", .{});
-    _ = app.__call("connectActivate", .{ buildUi, .{}, .{} });
+    _ = app.__call("connectActivate", .{ buildUi, .{}, gobject.ConnectFlags{} });
     return @intCast(app.__call("run", .{@as([][*:0]const u8, @ptrCast(std.os.argv))}));
 }
 

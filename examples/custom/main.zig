@@ -8,11 +8,13 @@ const Box = gtk.Box;
 const Widget = gtk.Widget;
 const gio = gtk.gio;
 const GApplication = gio.Application;
+const gobject = gtk.gobject;
+const ConnectFlags = gobject.ConnectFlags;
 
 pub fn main() u8 {
     var app = Application.new("org.example.custom_button", .{});
     defer app.__call("unref", .{});
-    _ = app.__call("connectActivate", .{ activate, .{}, .{} });
+    _ = app.__call("connectActivate", .{ activate, .{}, ConnectFlags{} });
     return @intCast(app.__call("run", .{@as([][*:0]const u8, @ptrCast(std.os.argv))}));
 }
 

@@ -472,7 +472,11 @@ pub const EnumInfoExt = struct {
             try writer.writeAll(";\n");
         }
         if (emit_abi) {
-            try writer.writeAll("};\n");
+            try writer.writeAll("}");
+            if (self.into(BaseInfo).isDeprecated()) {
+                try writer.writeAll(")");
+            }
+            try writer.writeAll(";\n");
             var m_iter = method_iter(self);
             while (m_iter.next()) |method| {
                 try writer.print("{b}", .{method});
@@ -572,7 +576,11 @@ pub const FlagsInfoExt = struct {
             try writer.writeAll(";\n");
         }
         if (emit_abi) {
-            try writer.writeAll("};\n");
+            try writer.writeAll("}");
+            if (self.into(BaseInfo).isDeprecated()) {
+                try writer.writeAll(")");
+            }
+            try writer.writeAll(";\n");
             var m_iter = EnumInfoExt.method_iter(self.into(EnumInfo));
             while (m_iter.next()) |method| {
                 try writer.print("{b}", .{method});
@@ -1192,7 +1200,11 @@ pub const InterfaceInfoExt = struct {
             try writer.print("{}", .{constant});
         }
         if (emit_abi) {
-            try writer.writeAll("};\n");
+            try writer.writeAll("}");
+            if (self.into(BaseInfo).isDeprecated()) {
+                try writer.writeAll(")");
+            }
+            try writer.writeAll(";\n");
             var m_iter = method_iter(self);
             while (m_iter.next()) |method| {
                 try writer.print("{b}\n", .{method});
@@ -1321,7 +1333,11 @@ pub const ObjectInfoExt = struct {
             try writer.print("{}", .{constant});
         }
         if (emit_abi) {
-            try writer.writeAll("};\n");
+            try writer.writeAll("}");
+            if (self.into(BaseInfo).isDeprecated()) {
+                try writer.writeAll(")");
+            }
+            try writer.writeAll(";\n");
             var m_iter = method_iter(self);
             while (m_iter.next()) |method| {
                 try writer.print("{b}", .{method});
@@ -1533,7 +1549,11 @@ pub const StructInfoExt = struct {
         }
         try BitField._end(writer);
         if (emit_abi) {
-            try writer.writeAll("};\n");
+            try writer.writeAll("}");
+            if (self.into(BaseInfo).isDeprecated()) {
+                try writer.writeAll(")");
+            }
+            try writer.writeAll(";\n");
             var m_iter = method_iter(self);
             while (m_iter.next()) |method| {
                 try writer.print("{b}", .{method});
@@ -1790,7 +1810,11 @@ pub const UnionInfoExt = struct {
             try writer.print("{}", .{field});
         }
         if (emit_abi) {
-            try writer.writeAll("};\n");
+            try writer.writeAll("}");
+            if (self.into(BaseInfo).isDeprecated()) {
+                try writer.writeAll(")");
+            }
+            try writer.writeAll(";\n");
             var m_iter = method_iter(self);
             while (m_iter.next()) |method| {
                 try writer.print("{b}", .{method});

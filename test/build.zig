@@ -12,6 +12,7 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
         .target = target,
         .filters = &.{ "g_", "gi_", "gtk_", "gsk_", "gdk_", "pango_", "cairo_" },
+        .use_llvm = true,
     });
     test_abi.root_module.addAnonymousImport("c", .{ .root_source_file = b.path("abi/c.zig") });
 

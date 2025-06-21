@@ -20,6 +20,7 @@ const Label = gtk.Label;
 const ListBox = gtk.ListBox;
 const MenuButton = gtk.MenuButton;
 const MenuModel = gio.MenuModel;
+const BindingFlags = gobject.BindingFlags;
 const Object = gobject.Object;
 const ObjectClass = gobject.ObjectClass;
 const ParamSpec = gobject.ParamSpec;
@@ -153,7 +154,7 @@ pub const ExampleAppWindow = extern struct {
         var action_show_lines = PropertyAction.new("show-lines", self.lines.into(Object), "visible");
         defer action_show_lines.__call("unref", .{});
         self.__call("addAction", .{action_show_lines.into(Action)});
-        _ = self.lines.__call("bindProperty", .{ "visible", self.lines_label.into(Object), "visible", .{} });
+        _ = self.lines.__call("bindProperty", .{ "visible", self.lines_label.into(Object), "visible", BindingFlags{} });
     }
 
     pub fn new(app: *ExampleApp) *ExampleAppWindow {
