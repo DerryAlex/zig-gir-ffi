@@ -1,6 +1,6 @@
 const std = @import("std");
-const AutoHashMap = std.AutoHashMap;
 const assert = std.debug.assert;
+const AutoHashMap = std.AutoHashMap;
 const Writer = std.Io.Writer;
 const gi = @import("gi.zig");
 
@@ -171,7 +171,7 @@ pub const ArgFormatter = struct {
 /// Helper to print `(arg_names...: arg_types...) return_type`
 pub const CallableFormatter = struct {
     callable: *gi.Callable,
-    container: ?*gi.Info = null,
+    container: ?*const gi.Base = null,
     arg_name: bool = true,
     arg_type: bool = false,
     c_callconv: bool = false,
@@ -184,7 +184,7 @@ pub const CallableFormatter = struct {
             if (!first) try writer.writeAll(", ") else first = false;
             if (self.arg_name) try writer.writeAll("self");
             if (self.arg_name and self.arg_type) try writer.writeAll(": ");
-            if (self.arg_type) try writer.print("*{s}", .{self.container.?.getBase().name});
+            if (self.arg_type) try writer.print("*{s}", .{self.container.?.name});
         }
         for (self.callable.args.items) |*arg| {
             if (!first) try writer.writeAll(", ") else first = false;
@@ -212,7 +212,7 @@ pub const CallableFormatter = struct {
                 const return_type = self.callable.return_type.?;
                 if (self.constructor) {
                     if (self.callable.may_return_null) try writer.writeAll("?");
-                    try writer.print("*{s}", .{self.container.?.getBase().name});
+                    try writer.print("*{s}", .{self.container.?.name});
                 } else {
                     try writer.print("{f}", .{TypeFormatter{
                         .type = return_type,
@@ -337,7 +337,7 @@ pub const PropertyFormatter = struct {
 
 pub const SignalFormatter = struct {
     signal: *gi.Signal,
-    container: ?*gi.Info = null,
+    container: ?*const gi.Base = null,
 
     pub fn format(self: SignalFormatter, writer: *Writer) Writer.Error!void {
         const name = self.signal.getBase().name;
@@ -354,7 +354,7 @@ pub const SignalFormatter = struct {
 
 pub const VFuncFormatter = struct {
     vfunc: *gi.VFunc,
-    container: ?*gi.Info = null,
+    container: ?*const gi.Base = null,
 
     pub fn format(self: VFuncFormatter, writer: *Writer) Writer.Error!void {
         const name = self.vfunc.getBase().name;
@@ -401,7 +401,7 @@ pub const EnumFormatter = struct {
 
         for (self.context.methods.items) |*method| try writer.print("{f}", .{FunctionFormatter{
             .function = method,
-            .container = @constCast(&gi.Info{ .@"enum" = self.context.* }),
+            .container = self.context.getBase(),
         }});
 
         try writer.writeAll("};\n");
@@ -448,7 +448,7 @@ pub const FlagsFormatter = struct {
 
         for (self.context.base.methods.items) |*method| try writer.print("{f}", .{FunctionFormatter{
             .function = method,
-            .container = @constCast(&gi.Info{ .flags = self.context.* }),
+            .container = self.context.getBase(),
         }});
 
         try writer.writeAll("};\n");
@@ -464,7 +464,7 @@ pub const StructFormatter = struct {
         try BitField.end(writer);
         for (self.context.methods.items) |*method| try writer.print("{f}", .{FunctionFormatter{
             .function = method,
-            .container = @constCast(&gi.Info{ .@"struct" = self.context.* }),
+            .container = self.context.getBase(),
         }});
         try writer.writeAll("};\n");
     }
@@ -478,7 +478,7 @@ pub const UnionFormatter = struct {
         for (self.context.fields.items) |*field| try writer.print("{f}", .{FieldFormatter{ .field = field }});
         for (self.context.methods.items) |*method| try writer.print("{f}", .{FunctionFormatter{
             .function = method,
-            .container = @constCast(&gi.Info{ .@"union" = self.context.* }),
+            .container = self.context.getBase(),
         }});
         try writer.writeAll("};\n");
     }
@@ -501,16 +501,16 @@ pub const InterfaceFormatter = struct {
         for (self.context.properties.items) |*prop| try writer.print("{f}", .{PropertyFormatter{ .property = prop }});
         for (self.context.signals.items) |*signal| try writer.print("{f}", .{SignalFormatter{
             .signal = signal,
-            .container = @constCast(&gi.Info{ .interface = self.context.* }),
+            .container = self.context.getBase(),
         }});
         for (self.context.vfuncs.items) |*vfunc| try writer.print("{f}", .{VFuncFormatter{
             .vfunc = vfunc,
-            .container = @constCast(&gi.Info{ .interface = self.context.* }),
+            .container = self.context.getBase(),
         }});
         for (self.context.constants.items) |*constant| try writer.print("{f}", .{ConstantFormatter{ .constant = constant }});
         for (self.context.methods.items) |*method| try writer.print("{f}", .{FunctionFormatter{
             .function = method,
-            .container = @constCast(&gi.Info{ .interface = self.context.* }),
+            .container = self.context.getBase(),
         }});
         try writer.writeAll("};\n");
     }
@@ -535,16 +535,16 @@ pub const ObjectFormatter = struct {
         for (self.context.properties.items) |*prop| try writer.print("{f}", .{PropertyFormatter{ .property = prop }});
         for (self.context.signals.items) |*signal| try writer.print("{f}", .{SignalFormatter{
             .signal = signal,
-            .container = @constCast(&gi.Info{ .object = self.context.* }),
+            .container = self.context.getBase(),
         }});
         for (self.context.vfuncs.items) |*vfunc| try writer.print("{f}", .{VFuncFormatter{
             .vfunc = vfunc,
-            .container = @constCast(&gi.Info{ .object = self.context.* }),
+            .container = self.context.getBase(),
         }});
         for (self.context.constants.items) |*constant| try writer.print("{f}", .{ConstantFormatter{ .constant = constant }});
         for (self.context.methods.items) |*method| try writer.print("{f}", .{FunctionFormatter{
             .function = method,
-            .container = @constCast(&gi.Info{ .object = self.context.* }),
+            .container = self.context.getBase(),
         }});
         try writer.writeAll("};\n");
     }
@@ -553,11 +553,273 @@ pub const ObjectFormatter = struct {
 // --- Function ---
 pub const FunctionFormatter = struct {
     function: *gi.Function,
-    container: ?*gi.Info = null,
+    container: ?*const gi.Base = null,
+
+    /// Infomation to convert `[*]T, usize` to `[]T`
+    const SliceInfo = struct {
+        is_slice_ptr: bool = false,
+        slice_len: usize = undefined,
+        is_slice_len: bool = false,
+        slice_ptr: usize = undefined,
+    };
+
+    /// Infomation to convert `void (*)(void), void*` to `handler, args`
+    const ClosureInfo = struct {
+        scope: gi.ScopeType = .invalid,
+        is_func: bool = false,
+        closure_data: usize = undefined,
+        is_data: bool = false,
+        closure_func: usize = undefined,
+        is_destroy: bool = false,
+        closure_destroy: usize = undefined,
+    };
 
     pub fn format(self: FunctionFormatter, writer: *Writer) Writer.Error!void {
-        _ = self;
-        _ = writer;
-        @panic("TODO");
+        var buffer: [4096]u8 = undefined;
+        var fixed: std.heap.FixedBufferAllocator = .init(&buffer);
+        const allocator = fixed.allocator();
+
+        const func_name = self.function.getBase().name;
+        try writer.print("pub fn {s}", .{func_name});
+
+        const callable = &self.function.callable;
+        const args = callable.args.items;
+        // initialize slice info and closure info
+        var slice_info = allocator.alloc(SliceInfo, args.len) catch @panic("Out of Memory");
+        @memset(slice_info[0..], .{});
+        var closure_info = allocator.alloc(ClosureInfo, args.len) catch @panic("Out of Memory");
+        @memset(closure_info[0..], .{});
+
+        // analyse parameters
+        const is_method = callable.is_method;
+        const is_constructor = self.function.flags.is_constructor;
+        var n_out_param: usize = 0;
+        for (args, 0..) |*arg, idx| {
+            // collect out parameter info
+            if (arg.direction == .out and !arg.caller_allocates) n_out_param += 1;
+            // collect slice info
+            const arg_type = arg.type_info.?;
+            if (arg_type.arg_length_index) |pos| {
+                slice_info[idx].is_slice_ptr = true;
+                slice_info[idx].slice_len = pos;
+                if (!slice_info[pos].is_slice_len) {
+                    slice_info[pos].is_slice_len = true;
+                    slice_info[pos].slice_ptr = idx;
+                }
+            }
+            // collect closure info
+            const arg_name = arg.getBase().name;
+            if (arg.scope != .invalid and arg.closure_index != null and !std.mem.endsWith(u8, arg_name, "data")) {
+                closure_info[idx].scope = arg.scope;
+                closure_info[idx].is_func = true;
+                if (arg.closure_index) |pos| {
+                    closure_info[idx].closure_data = pos;
+                    closure_info[pos].is_data = true;
+                    closure_info[pos].closure_func = idx;
+                }
+                if (arg.destroy_index) |pos| {
+                    closure_info[idx].closure_destroy = pos;
+                    closure_info[pos].is_destroy = true;
+                    closure_info[pos].closure_func = idx;
+                }
+            }
+        }
+
+        // analyse return type
+        const return_type = callable.return_type.?;
+        const return_bool = return_type.tag == .boolean;
+        // some function returns true if out parameters are valid
+        const throw_bool = return_bool and (n_out_param > 0) and (is_method and std.mem.startsWith(u8, func_name, "get"));
+        const throw_error = callable.can_throw_gerror;
+        const skip_return = callable.skip_return;
+        const real_skip_return = skip_return or throw_bool;
+        const n_out = n_out_param + @intFromBool(!real_skip_return);
+
+        // parameters
+        {
+            var first = true;
+            try writer.writeAll("(");
+            if (is_method) {
+                if (!first) try writer.writeAll(", ") else first = false;
+                const container = self.container.?;
+                try writer.print("self: *{s}", .{container.name});
+            }
+            for (args, 0..) |*arg, idx| {
+                // skip out parameter
+                if (arg.direction == .out and !arg.caller_allocates) continue;
+                // skip slice len
+                if (slice_info[idx].is_slice_len) continue;
+                // skip closure data
+                if (closure_info[idx].is_data) continue;
+                // skip closure destroy
+                if (closure_info[idx].is_destroy) continue;
+
+                if (!first) try writer.writeAll(", ") else first = false;
+
+                const arg_name = arg.getBase().name;
+                if (slice_info[idx].is_slice_ptr) {
+                    // slice
+                    try writer.print("argS_{s}: ", .{arg_name});
+                    if (arg.optional) try writer.writeAll("?");
+                    try writer.writeAll("[]");
+                    if (arg.type_info.?.zero_terminated) try writer.writeAll("?");
+                    try writer.print("{f}", .{TypeFormatter{ .type = arg.type_info.?.param_type.? }});
+                } else if (closure_info[idx].is_func) {
+                    // closure
+                    try writer.print("argC_{s}: *core.Closure({f}, {})", .{ arg_name, ArgFormatter{
+                        .arg = arg,
+                        .arg_name = false,
+                    }, arg.scope });
+                } else {
+                    try writer.print("{f}", .{ArgFormatter{ .arg = arg }});
+                }
+            }
+            if (throw_error) {
+                if (!first) try writer.writeAll(", ") else first = false;
+                try writer.writeAll("arg_error: *?*core.Error");
+            }
+            try writer.writeAll(") ");
+        }
+
+        // return type
+        {
+            if (throw_error) try writer.writeAll("error{GError}!");
+            if (throw_bool) try writer.writeAll("?");
+            if (n_out > 1) try writer.writeAll("struct {\n");
+            if (!real_skip_return) {
+                if (n_out > 1) try writer.writeAll("ret: ");
+                if (return_bool) {
+                    try writer.writeAll("bool");
+                } else if (self.function.flags.is_constructor) {
+                    const container = self.container.?;
+                    if (self.function.callable.may_return_null) try writer.writeAll("?");
+                    try writer.print("*{s}", .{container.name});
+                } else {
+                    try writer.print("{f}", .{TypeFormatter{
+                        .type = return_type,
+                        .mutable = true,
+                        .nullable = self.function.callable.may_return_null or return_type.tag == .glist or return_type.tag == .gslist,
+                    }});
+                }
+                if (n_out > 1) try writer.writeAll(",\n");
+            }
+            if (n_out_param > 0) {
+                for (args, 0..) |*arg, idx| {
+                    if (arg.direction != .out or arg.caller_allocates) continue;
+                    if (slice_info[idx].is_slice_len) continue;
+
+                    const arg_name = arg.getBase().name;
+                    if (n_out > 1) try writer.print("{s}: ", .{arg_name});
+                    if (slice_info[idx].is_slice_ptr) {
+                        if (arg.optional) try writer.writeAll("?");
+                        try writer.writeAll("[]");
+                        if (arg.type_info.?.zero_terminated) try writer.writeAll("?");
+                        try writer.print("{f}", .{TypeFormatter{ .type = arg.type_info.?.param_type.? }});
+                    } else {
+                        try writer.print("{f}", .{TypeFormatter{
+                            .type = arg.type_info.?,
+                            .mutable = true,
+                            .nullable = arg.may_be_null,
+                        }});
+                    }
+                    if (n_out > 1) try writer.writeAll(",\n");
+                }
+            }
+            if (n_out > 1) try writer.writeAll("}");
+        }
+
+        // function body
+        try writer.writeAll(" {\n");
+        // prepare input/inout
+        for (args, 0..) |*arg, idx| {
+            if (arg.direction == .out and !arg.caller_allocates) continue;
+            const arg_name = arg.getBase().name;
+            if (slice_info[idx].is_slice_len) {
+                const ptr_arg = &args[slice_info[idx].slice_ptr];
+                const ptr_arg_name = ptr_arg.getBase().name;
+                try writer.print("const {f} = @intCast((argS_{s}", .{ arg, ptr_arg_name });
+                if (ptr_arg.optional) try writer.writeAll("orelse &.{}");
+                try writer.writeAll(").len);\n");
+            }
+            if (slice_info[idx].is_slice_ptr) {
+                try writer.print("const {f} = @ptrCast(argS_{s});\n", .{ arg, arg_name });
+            }
+            if (closure_info[idx].is_func) {
+                try writer.print("const {f} = @ptrCast(argC_{s}.cCallback());\n", .{ arg, arg_name });
+            }
+            if (closure_info[idx].is_data) {
+                const func_arg_name = args[closure_info[idx].closure_func].getBase().name;
+                try writer.print("const {f} = @ptrCast(argC_{s}.cData());\n", .{ arg, func_arg_name });
+            }
+            if (closure_info[idx].is_destroy) {
+                const func_arg_name = args[closure_info[idx].closure_func].getBase().name;
+                try writer.print("const {f} = @ptrCast(argC_{s}.cDestroy());\n", .{ arg, func_arg_name });
+            }
+        }
+        // prepare output
+        for (args) |*arg| {
+            if (arg.direction != .out or arg.caller_allocates) continue;
+            const arg_name = arg.getBase().name;
+            const arg_type = arg.type_info.?;
+            try writer.print("var argO_{s}: {f} = undefined;\n", .{ arg_name, TypeFormatter{
+                .type = arg_type,
+                .mutable = true,
+                .nullable = arg.optional,
+            } });
+            try writer.print("const {f} = &argO_{s};\n", .{ arg, arg_name });
+        }
+        // call C function
+        try writer.writeAll("const cFn = @extern(*const fn");
+        try writer.print("{f}", .{CallableFormatter{
+            .callable = &self.function.callable,
+            .arg_name = false,
+            .arg_type = true,
+            .c_callconv = true,
+            .constructor = is_constructor,
+        }});
+        try writer.print(", .{{ .name = \"{s}\"}});\n", .{self.function.symbol.?});
+        try writer.writeAll("const ret = cFn");
+        try writer.print("{f}", .{CallableFormatter{
+            .callable = &self.function.callable,
+            .constructor = is_constructor,
+        }});
+        try writer.writeAll(";\n");
+        // return
+        if (skip_return) try writer.writeAll("_ = ret;\n");
+        if (throw_error) try writer.writeAll("if (arg_error.* != null) return error.GError;\n");
+        if (throw_bool) try writer.writeAll("if (!ret) return null;\n");
+        try writer.writeAll("return ");
+        var first = true;
+        if (n_out > 1) try writer.writeAll(".{ ");
+        if (!real_skip_return) {
+            if (!first) try writer.writeAll(", ") else first = false;
+            if (n_out > 1) try writer.writeAll(".ret = ");
+            try writer.writeAll("ret");
+        }
+        if (n_out_param > 0) {
+            for (args, 0..) |*arg, idx| {
+                if (arg.direction != .out or arg.caller_allocates) continue;
+                if (slice_info[idx].is_slice_len) continue;
+
+                if (n_out > 1) {
+                    if (!first) try writer.writeAll(", ") else first = false;
+                }
+                const arg_name = arg.getBase().name;
+                if (n_out > 1) try writer.print(".{s} = ", .{arg_name});
+                try writer.print("argO_{s}", .{arg_name});
+                if (slice_info[idx].is_slice_ptr) {
+                    const len_arg = &args[slice_info[idx].slice_len];
+                    const len_arg_name = len_arg.getBase().name;
+                    try writer.writeAll("[0..@intCast(arg");
+                    if (len_arg.direction == .out and !len_arg.caller_allocates) try writer.writeAll("O");
+                    try writer.print("_{s}", .{len_arg_name});
+                    try writer.writeAll(")]");
+                }
+            }
+        }
+        if (n_out > 1) try writer.writeAll(" }");
+        try writer.writeAll(";\n");
+
+        try writer.writeAll("}\n");
     }
 };
