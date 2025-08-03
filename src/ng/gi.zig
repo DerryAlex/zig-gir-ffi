@@ -87,6 +87,7 @@ pub const Namespace = struct {
     }
 };
 
+/// Closed interface for Info structs.
 pub const Info = union(enum) {
     arg: Arg,
     callback: Callback,
@@ -112,7 +113,7 @@ pub const Info = union(enum) {
         }
     }
 
-    pub fn getBase(self: *Info) *Base {
+    pub fn getBase(self: *Info) *const Base {
         return switch (self.*) {
             inline else => |*info| info.getBase(),
         };
@@ -123,58 +124,6 @@ pub const Info = union(enum) {
             inline else => |*info| try info.format(writer),
         }
     }
-};
-
-pub const ArrayType = enum {
-    c,
-    array,
-    ptr_array,
-    byte_array,
-};
-
-pub const Direction = enum {
-    in,
-    out,
-    inout,
-};
-
-pub const Transfer = enum {
-    none,
-    container,
-    everything,
-};
-
-pub const TypeTag = enum {
-    void,
-    boolean,
-    int8,
-    uint8,
-    int16,
-    uint16,
-    int32,
-    uint32,
-    int64,
-    uint64,
-    float,
-    double,
-    gtype,
-    utf8,
-    filename,
-    array,
-    interface,
-    glist,
-    gslist,
-    ghash,
-    @"error",
-    unichar,
-};
-
-pub const ScopeType = enum {
-    invalid,
-    call,
-    async,
-    notified,
-    forever,
 };
 
 /// `Base` is the common base struct of all other Info structs.
@@ -195,7 +144,7 @@ pub const Base = struct {
         allocator.free(self.namespace);
     }
 
-    pub fn format(self: *Base, writer: *Writer) Writer.Error!void {
+    pub fn format(self: *const Base, writer: *Writer) Writer.Error!void {
         if (self.namespace.len > 0) try writer.print("{s}.", .{self.namespace});
         try writer.print("{s}", .{self.name});
     }
@@ -207,7 +156,7 @@ pub const Arg = struct {
     type_info: ?*Type = null,
     // basic information
     direction: Direction = .in,
-    ownership_transfer: Transfer = .none,
+    ownership_transfer: Transfer = .nothing,
     caller_allocates: bool = false,
     may_be_null: bool = false,
     optional: bool = false,
@@ -227,7 +176,7 @@ pub const Arg = struct {
         self.base.deinit(allocator);
     }
 
-    pub fn getBase(self: *Arg) *Base {
+    pub fn getBase(self: *Arg) *const Base {
         return @ptrCast(self);
     }
 
@@ -245,7 +194,7 @@ pub const Callable = struct {
     // basic information
     can_throw_gerror: bool = false,
     caller_owns: bool = false,
-    instance_ownership_transfer: Transfer = .none,
+    instance_ownership_transfer: Transfer = .nothing,
     is_method: bool = false,
     may_return_null: bool = false,
     skip_return: bool = false,
@@ -272,7 +221,7 @@ pub const Callback = struct {
         self.callable.deinit(allocator);
     }
 
-    pub fn getBase(self: *Callback) *Base {
+    pub fn getBase(self: *Callback) *const Base {
         return @ptrCast(self);
     }
 
@@ -285,21 +234,9 @@ pub const Callback = struct {
 pub const Function = struct {
     callable: Callable,
     symbol: ?[]const u8 = null,
-    flags: FunctionFlags = .none,
+    flags: FunctionFlags = .{},
     property: ?*Property = null,
     vfunc: ?*VFunc = null,
-
-    pub const FunctionFlags = packed struct(u32) {
-        is_method: bool = false,
-        is_constructor: bool = false,
-        is_getter: bool = false,
-        is_setter: bool = false,
-        wraps_vfunc: bool = false,
-        is_async: bool = false,
-        _: u26 = 0,
-
-        pub const none: @This() = .{};
-    };
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Function {
         return .{ .callable = try .init(allocator, name) };
@@ -312,7 +249,7 @@ pub const Function = struct {
         }
     }
 
-    pub fn getBase(self: *Function) *Base {
+    pub fn getBase(self: *Function) *const Base {
         return @ptrCast(self);
     }
 
@@ -325,20 +262,6 @@ pub const Function = struct {
 pub const Signal = struct {
     callable: Callable,
 
-    pub const SignalFlags = packed struct(u32) {
-        run_first: bool = false,
-        run_last: bool = false,
-        run_cleanup: bool = false,
-        no_recurse: bool = false,
-        detailed: bool = false,
-        action: bool = false,
-        no_hooks: bool = false,
-        must_collect: bool = false,
-        deprecated: bool = false,
-        _: u8 = 0,
-        accumulator_first_run: bool = false,
-    };
-
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Signal {
         return .{ .callable = try .init(allocator, name) };
     }
@@ -347,7 +270,7 @@ pub const Signal = struct {
         self.callable.deinit(allocator);
     }
 
-    pub fn getBase(self: *Signal) *Base {
+    pub fn getBase(self: *Signal) *const Base {
         return @ptrCast(self);
     }
 
@@ -361,17 +284,8 @@ pub const Signal = struct {
 /// `VFunc` represents a virtual function.
 pub const VFunc = struct {
     callable: Callable,
-    flag: VFuncFlags = .none,
+    flag: VFuncFlags = .{},
     signal: ?*Signal = null,
-
-    pub const VFuncFlags = packed struct(u32) {
-        chain_up: bool = false,
-        must_override: bool = false,
-        must_not_override: bool = false,
-        _: u29 = 0,
-
-        pub const none: @This() = .{};
-    };
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!VFunc {
         return .{ .callable = try .init(allocator, name) };
@@ -382,7 +296,7 @@ pub const VFunc = struct {
         self.callable.deinit(allocator);
     }
 
-    pub fn getBase(self: *VFunc) *Base {
+    pub fn getBase(self: *VFunc) *const Base {
         return @ptrCast(self);
     }
 
@@ -430,7 +344,7 @@ pub const Constant = struct {
         self.base.deinit(allocator);
     }
 
-    pub fn getBase(self: *Constant) *Base {
+    pub fn getBase(self: *Constant) *const Base {
         return @ptrCast(self);
     }
 
@@ -471,7 +385,7 @@ pub const Enum = struct {
         self.base.deinit(allocator);
     }
 
-    pub fn getBase(self: *Enum) *Base {
+    pub fn getBase(self: *Enum) *const Base {
         return @ptrCast(self);
     }
 
@@ -492,7 +406,7 @@ pub const Flags = struct {
         self.base.deinit(allocator);
     }
 
-    pub fn getBase(self: *Flags) *Base {
+    pub fn getBase(self: *Flags) *const Base {
         return @ptrCast(self);
     }
 
@@ -531,7 +445,7 @@ pub const Interface = struct {
         self.base.deinit(allocator);
     }
 
-    pub fn getBase(self: *Interface) *Base {
+    pub fn getBase(self: *Interface) *const Base {
         return @ptrCast(self);
     }
 
@@ -578,7 +492,7 @@ pub const Object = struct {
         self.base.deinit(allocator);
     }
 
-    pub fn getBase(self: *Object) *Base {
+    pub fn getBase(self: *Object) *const Base {
         return @ptrCast(self);
     }
 
@@ -606,7 +520,7 @@ pub const Struct = struct {
         self.base.deinit(allocator);
     }
 
-    pub fn getBase(self: *Struct) *Base {
+    pub fn getBase(self: *Struct) *const Base {
         return @ptrCast(self);
     }
 
@@ -633,7 +547,7 @@ pub const Union = struct {
         self.base.deinit(allocator);
     }
 
-    pub fn getBase(self: *Union) *Base {
+    pub fn getBase(self: *Union) *const Base {
         return @ptrCast(self);
     }
 
@@ -645,18 +559,10 @@ pub const Union = struct {
 /// `Field` represents a field of a struct, union, or object.
 pub const Field = struct {
     base: Base,
-    flags: FieldFlags = .none,
+    flags: FieldFlags = .{},
     offset: usize = 0,
     size: usize = 0,
     type_info: ?*Type = null,
-
-    pub const FieldFlags = packed struct(u32) {
-        readable: bool = false,
-        writable: bool = false,
-        _: u30 = 0,
-
-        pub const none: @This() = .{};
-    };
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Field {
         return .{ .base = try .init(allocator, name) };
@@ -666,7 +572,7 @@ pub const Field = struct {
         self.base.deinit(allocator);
     }
 
-    pub fn getBase(self: *Field) *Base {
+    pub fn getBase(self: *Field) *const Base {
         return @ptrCast(self);
     }
 
@@ -682,22 +588,6 @@ pub const Property = struct {
     base: Base,
     type_info: ?*Type = null,
 
-    pub const ParamFlags = packed struct(u32) {
-        readable: bool = false,
-        writable: bool = false,
-        construct: bool = false,
-        construct_only: bool = false,
-        lax_validation: bool = false,
-        static_name: bool = false,
-        static_nick: bool = false,
-        static_blurb: bool = false,
-        _: u22 = 0,
-        explicit_notify: bool = false,
-        deprecated: bool = false,
-
-        pub const readwrite: @This() = .{ .readable = true, .writeable = true };
-    };
-
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Property {
         return .{ .base = try .init(allocator, name) };
     }
@@ -707,7 +597,7 @@ pub const Property = struct {
         self.base.deinit(allocator);
     }
 
-    pub fn getBase(self: *Property) *Base {
+    pub fn getBase(self: *Property) *const Base {
         return @ptrCast(self);
     }
 
@@ -731,6 +621,8 @@ pub const Type = struct {
     param_type: ?*Type = null,
     // interface information
     interface: ?*Info = null,
+    // slice information
+    arg_length_index: ?usize = null,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Type {
         return .{ .base = try .init(allocator, name) };
@@ -742,7 +634,7 @@ pub const Type = struct {
         self.base.deinit(allocator);
     }
 
-    pub fn getBase(self: *Type) *Base {
+    pub fn getBase(self: *Type) *const Base {
         return @ptrCast(self);
     }
 
@@ -765,7 +657,7 @@ pub const Unresolved = struct {
         self.base.deinit(allocator);
     }
 
-    pub fn getBase(self: *Unresolved) *Base {
+    pub fn getBase(self: *Unresolved) *const Base {
         return @ptrCast(self);
     }
 
@@ -789,7 +681,7 @@ pub const Value = struct {
         self.base.deinit(allocator);
     }
 
-    pub fn getBase(self: *Value) *Base {
+    pub fn getBase(self: *Value) *const Base {
         return @ptrCast(self);
     }
 
@@ -798,4 +690,112 @@ pub const Value = struct {
         _ = writer;
         unreachable;
     }
+};
+
+// enums
+pub const ArrayType = enum(u32) {
+    c = 0,
+    array = 1,
+    ptr_array = 2,
+    byte_array = 3,
+};
+
+pub const Direction = enum(u32) {
+    in = 0,
+    out = 1,
+    inout = 2,
+};
+
+pub const Transfer = enum(u32) {
+    nothing = 0,
+    container = 1,
+    everything = 2,
+};
+
+pub const TypeTag = enum(u32) {
+    void = 0,
+    boolean = 1,
+    int8 = 2,
+    uint8 = 3,
+    int16 = 4,
+    uint16 = 5,
+    int32 = 6,
+    uint32 = 7,
+    int64 = 8,
+    uint64 = 9,
+    float = 10,
+    double = 11,
+    gtype = 12,
+    utf8 = 13,
+    filename = 14,
+    array = 15,
+    interface = 16,
+    glist = 17,
+    gslist = 18,
+    ghash = 19,
+    @"error" = 20,
+    unichar = 21,
+};
+
+pub const ScopeType = enum(u32) {
+    invalid = 0,
+    call = 1,
+    async = 2,
+    notified = 3,
+    forever = 4,
+};
+
+// flags
+pub const FieldFlags = packed struct(u32) {
+    readable: bool = false,
+    writable: bool = false,
+    _: u30 = 0,
+};
+
+pub const FunctionFlags = packed struct(u32) {
+    is_method: bool = false,
+    is_constructor: bool = false,
+    is_getter: bool = false,
+    is_setter: bool = false,
+    wraps_vfunc: bool = false,
+    is_async: bool = false,
+    _: u26 = 0,
+};
+
+pub const ParamFlags = packed struct(u32) {
+    readable: bool = false,
+    writable: bool = false,
+    construct: bool = false,
+    construct_only: bool = false,
+    lax_validation: bool = false,
+    static_name: bool = false,
+    static_nick: bool = false,
+    static_blurb: bool = false,
+    _8: u22 = 0,
+    explicit_notify: bool = false,
+    deprecated: bool = false,
+
+    pub const readwrite: @This() = .{ .readable = true, .writeable = true };
+};
+
+pub const SignalFlags = packed struct(u32) {
+    run_first: bool = false,
+    run_last: bool = false,
+    run_cleanup: bool = false,
+    no_recurse: bool = false,
+    detailed: bool = false,
+    action: bool = false,
+    no_hooks: bool = false,
+    must_collect: bool = false,
+    deprecated: bool = false,
+    _9: u8 = 0,
+    accumulator_first_run: bool = false,
+    _: u14 = 0,
+};
+
+pub const VFuncFlags = packed struct(u32) {
+    chain_up: bool = false,
+    must_override: bool = false,
+    must_not_override: bool = false,
+    _: u29 = 0,
 };
