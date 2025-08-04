@@ -1,4 +1,5 @@
 const std = @import("std");
+pub const options = @import("options");
 const fatal = std.process.fatal;
 const CliOptions = @import("CliOptions.zig");
 const gi = @import("gi.zig");
@@ -17,11 +18,7 @@ pub fn main() !void {
         return;
     }
     if (cli_options.version) {
-        try CliOptions.printVersion(.{
-            .major = 0,
-            .minor = 0,
-            .patch = 0,
-        });
+        try CliOptions.printVersion(options.version);
         return;
     }
     if (cli_options.namespaces.len == 0) fatal("no namespace specified", .{});

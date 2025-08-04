@@ -1,10 +1,13 @@
 const std = @import("std");
+const options = @import("options");
 const gi = @import("../gi.zig");
 const Repository = gi.Repository;
 const loadGir = @import("gir/load.zig").loadGir;
 
 /// Load `namespace` if it isn't ready.
 pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repository.Error!void {
+    if (!options.has_gir) return error.FileNotFound;
+
     const default_search_path = "/usr/share/gir-1.0/";
     try self._search_paths.append(self.allocator, default_search_path);
     defer _ = self._search_paths.pop();

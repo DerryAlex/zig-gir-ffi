@@ -1,4 +1,5 @@
 const std = @import("std");
+const options = @import("options");
 const Allocator = std.mem.Allocator;
 const gi = @import("../gi.zig");
 const Repository = gi.Repository;
@@ -9,6 +10,8 @@ var _cur_ns: ?[]const u8 = null;
 
 /// Load `namespace` if it isn't ready.
 pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repository.Error!void {
+    if (!options.has_typelib) return error.FileNotFound;
+
     if (_repo == null) _repo = libgi.Repository.new();
     var repo = _repo.?;
 
