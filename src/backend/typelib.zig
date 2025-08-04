@@ -105,9 +105,7 @@ fn parseFunction(allocator: Allocator, info: *libgi.FunctionInfo) Allocator.Erro
 }
 
 fn parseConstant(allocator: Allocator, info: *libgi.ConstantInfo) Allocator.Error!gi.Constant {
-    const base_info = info.into(libgi.BaseInfo);
-    const name = std.mem.span(base_info.getName().?);
-    var constant: gi.Constant = try .init(allocator, name);
+    var constant: gi.Constant = try .init(allocator, getFullName(info.into(libgi.BaseInfo)));
     errdefer constant.deinit(allocator);
     constant.type_tag = info.getTypeInfo().getTag();
     _ = info.getValue(&constant.value);
@@ -115,9 +113,7 @@ fn parseConstant(allocator: Allocator, info: *libgi.ConstantInfo) Allocator.Erro
 }
 
 fn parseEnum(allocator: Allocator, info: *libgi.EnumInfo) Allocator.Error!gi.Enum {
-    const base_info = info.into(libgi.BaseInfo);
-    const name = std.mem.span(base_info.getName().?);
-    var _enum: gi.Enum = try .init(allocator, name);
+    var _enum: gi.Enum = try .init(allocator, getFullName(info.into(libgi.BaseInfo)));
     errdefer _enum.deinit(allocator);
     _enum.storage_type = info.getStorageType();
     const n_method = info.getNMethods();
@@ -134,9 +130,7 @@ fn parseFlags(allocator: Allocator, info: *libgi.FlagsInfo) Allocator.Error!gi.F
 }
 
 fn parseInterface(allocator: Allocator, info: *libgi.InterfaceInfo) Allocator.Error!gi.Interface {
-    const base_info = info.into(libgi.BaseInfo);
-    const name = std.mem.span(base_info.getName().?);
-    var interface: gi.Interface = try .init(allocator, name);
+    var interface: gi.Interface = try .init(allocator, getFullName(info.into(libgi.BaseInfo)));
     const n_constant = info.getNConstants();
     var idx: u32 = 0;
     while (idx < n_constant) : (idx += 1) try interface.constants.append(allocator, try parseConstant(allocator, info.getConstant(idx)));
@@ -159,9 +153,7 @@ fn parseInterface(allocator: Allocator, info: *libgi.InterfaceInfo) Allocator.Er
 }
 
 fn parseObject(allocator: Allocator, info: *libgi.ObjectInfo) Allocator.Error!gi.Object {
-    const base_info = info.into(libgi.BaseInfo);
-    const name = std.mem.span(base_info.getName().?);
-    var object: gi.Object = try .init(allocator, name);
+    var object: gi.Object = try .init(allocator, getFullName(info.into(libgi.BaseInfo)));
     errdefer object.deinit(allocator);
     if (info.getClassStruct()) |class_struct| {
         object.class_struct = try allocator.create(gi.Base);
@@ -196,9 +188,7 @@ fn parseObject(allocator: Allocator, info: *libgi.ObjectInfo) Allocator.Error!gi
 }
 
 fn parseStruct(allocator: Allocator, info: *libgi.StructInfo) Allocator.Error!gi.Struct {
-    const base_info = info.into(libgi.BaseInfo);
-    const name = std.mem.span(base_info.getName().?);
-    var _struct: gi.Struct = try .init(allocator, name);
+    var _struct: gi.Struct = try .init(allocator, getFullName(info.into(libgi.BaseInfo)));
     errdefer _struct.deinit(allocator);
     const n_field = info.getNFields();
     var idx: u32 = 0;
@@ -211,9 +201,7 @@ fn parseStruct(allocator: Allocator, info: *libgi.StructInfo) Allocator.Error!gi
 }
 
 fn parseUnion(allocator: Allocator, info: *libgi.UnionInfo) Allocator.Error!gi.Union {
-    const base_info = info.into(libgi.BaseInfo);
-    const name = std.mem.span(base_info.getName().?);
-    var _union: gi.Union = try .init(allocator, name);
+    var _union: gi.Union = try .init(allocator, getFullName(info.into(libgi.BaseInfo)));
     errdefer _union.deinit(allocator);
     const n_field = info.getNFields();
     var idx: u32 = 0;
@@ -225,35 +213,33 @@ fn parseUnion(allocator: Allocator, info: *libgi.UnionInfo) Allocator.Error!gi.U
 }
 
 fn parseUnresolved(allocator: Allocator, info: *libgi.UnresolvedInfo) Allocator.Error!gi.Unresolved {
-    const base_info = info.into(libgi.BaseInfo);
-    const name = std.mem.span(base_info.getName().?);
-    return try .init(allocator, name);
+    return .{ .base = try parseBase(allocator, info.into(libgi.BaseInfo)) };
+}
+
+fn getName(info: *libgi.BaseInfo) []const u8 {
+    return std.mem.span(info.getName().?);
+}
+
+fn getFullName(info: *libgi.BaseInfo) []const u8 {
+    const Static = struct {
+        var buffer: [64]u8 = undefined;
+    };
+    const name = std.mem.span(info.getName().?);
+    if (info.getNamespace()) |ns| {
+        const namespace = std.mem.span(ns);
+        if (_cur_ns != null and !std.mem.eql(u8, _cur_ns.?, namespace)) {
+            return std.fmt.bufPrint(&Static.buffer, "{s}.{s}", .{ namespace, name }) catch @panic("No Space Left");
+        }
+    }
+    return name;
 }
 
 fn parseBase(allocator: Allocator, info: *libgi.BaseInfo) Allocator.Error!gi.Base {
-    const base_info = info.into(libgi.BaseInfo);
-    const name = std.mem.span(base_info.getName().?);
-    return try .init(allocator, name);
-}
-
-var count: usize = 0;
-
-fn parseCallbackAsBase(allocator: Allocator, info: *libgi.CallbackInfo) Allocator.Error!gi.Base {
-    // const base_info = info.into(libgi.BaseInfo);
-    // const name = std.mem.span(base_info.getName().?);
-    // if (std.ascii.isLower(name[0])) {
-    //     const namespace = if (base_info.getNamespace()) |ns| std.mem.span(ns) else "(unknown)";
-    //     std.log.warn("callback {s} ns={s}", .{ name, namespace });
-    //     count += 1;
-    //     if (count >= 10) @panic("test");
-    // }
-    return try parseBase(allocator, info.into(libgi.BaseInfo));
+    return try .init(allocator, getFullName(info));
 }
 
 fn parseArg(allocator: Allocator, info: *libgi.ArgInfo) Allocator.Error!gi.Arg {
-    const base_info = info.into(libgi.BaseInfo);
-    const name = std.mem.span(base_info.getName().?);
-    var arg: gi.Arg = try .init(allocator, name);
+    var arg: gi.Arg = try .init(allocator, getName(info.into(libgi.BaseInfo)));
     errdefer arg.deinit(allocator);
     arg.type_info = try allocator.create(gi.Type);
     arg.type_info.?.* = try parseType(allocator, info.getTypeInfo());
@@ -268,9 +254,7 @@ fn parseArg(allocator: Allocator, info: *libgi.ArgInfo) Allocator.Error!gi.Arg {
 }
 
 fn parseCallable(allocator: Allocator, info: *libgi.CallableInfo) Allocator.Error!gi.Callable {
-    const base_info = info.into(libgi.BaseInfo);
-    const name = std.mem.span(base_info.getName().?);
-    var callable: gi.Callable = try .init(allocator, name);
+    var callable: gi.Callable = try .init(allocator, getFullName(info.into(libgi.BaseInfo)));
     errdefer callable.deinit(allocator);
     const n_arg = info.getNArgs();
     var idx: u32 = 0;
@@ -285,9 +269,7 @@ fn parseCallable(allocator: Allocator, info: *libgi.CallableInfo) Allocator.Erro
 }
 
 fn parseField(allocator: Allocator, info: *libgi.FieldInfo) Allocator.Error!gi.Field {
-    const base_info = info.into(libgi.BaseInfo);
-    const name = std.mem.span(base_info.getName().?);
-    var field: gi.Field = try .init(allocator, name);
+    var field: gi.Field = try .init(allocator, getName(info.into(libgi.BaseInfo)));
     errdefer field.deinit(allocator);
     field.offset = info.getOffset();
     field.size = info.getSize();
@@ -297,9 +279,7 @@ fn parseField(allocator: Allocator, info: *libgi.FieldInfo) Allocator.Error!gi.F
 }
 
 fn parseProperty(allocator: Allocator, info: *libgi.PropertyInfo) Allocator.Error!gi.Property {
-    const base_info = info.into(libgi.BaseInfo);
-    const name = std.mem.span(base_info.getName().?);
-    var property: gi.Property = try .init(allocator, name);
+    var property: gi.Property = try .init(allocator, getName(info.into(libgi.BaseInfo)));
     errdefer property.deinit(allocator);
     property.type_info = try allocator.create(gi.Type);
     property.type_info.?.* = try parseType(allocator, info.getTypeInfo());
@@ -326,11 +306,7 @@ fn parseType(allocator: Allocator, info: *libgi.TypeInfo) Allocator.Error!gi.Typ
     if (_type.tag == .interface) {
         _type.interface = try allocator.create(gi.Base);
         const interface = info.getInterface().?;
-        if (interface.tryInto(libgi.CallbackInfo)) |callback| {
-            _type.interface.?.* = try parseCallbackAsBase(allocator, callback);
-        } else {
-            _type.interface.?.* = try parseBase(allocator, interface);
-        }
+        _type.interface.?.* = try parseBase(allocator, interface);
     }
     return _type;
 }
