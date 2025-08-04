@@ -164,12 +164,12 @@ fn parseObject(allocator: Allocator, info: *libgi.ObjectInfo) Allocator.Error!gi
     var object: gi.Object = try .init(allocator, name);
     errdefer object.deinit(allocator);
     if (info.getClassStruct()) |class_struct| {
-        object.class_struct = try allocator.create(gi.Struct);
-        object.class_struct.?.* = try parseStruct(allocator, class_struct);
+        object.class_struct = try allocator.create(gi.Base);
+        object.class_struct.?.* = try parseBase(allocator, class_struct.into(libgi.BaseInfo));
     }
     if (info.getParent()) |parent| {
-        object.parent = try allocator.create(gi.Object);
-        object.parent.?.* = try parseObject(allocator, parent);
+        object.parent = try allocator.create(gi.Base);
+        object.parent.?.* = try parseBase(allocator, parent.into(libgi.BaseInfo));
     }
     const n_constant = info.getNConstants();
     var idx: u32 = 0;
@@ -228,6 +228,26 @@ fn parseUnresolved(allocator: Allocator, info: *libgi.UnresolvedInfo) Allocator.
     const base_info = info.into(libgi.BaseInfo);
     const name = std.mem.span(base_info.getName().?);
     return try .init(allocator, name);
+}
+
+fn parseBase(allocator: Allocator, info: *libgi.BaseInfo) Allocator.Error!gi.Base {
+    const base_info = info.into(libgi.BaseInfo);
+    const name = std.mem.span(base_info.getName().?);
+    return try .init(allocator, name);
+}
+
+var count: usize = 0;
+
+fn parseCallbackAsBase(allocator: Allocator, info: *libgi.CallbackInfo) Allocator.Error!gi.Base {
+    // const base_info = info.into(libgi.BaseInfo);
+    // const name = std.mem.span(base_info.getName().?);
+    // if (std.ascii.isLower(name[0])) {
+    //     const namespace = if (base_info.getNamespace()) |ns| std.mem.span(ns) else "(unknown)";
+    //     std.log.warn("callback {s} ns={s}", .{ name, namespace });
+    //     count += 1;
+    //     if (count >= 10) @panic("test");
+    // }
+    return try parseBase(allocator, info.into(libgi.BaseInfo));
 }
 
 fn parseArg(allocator: Allocator, info: *libgi.ArgInfo) Allocator.Error!gi.Arg {
@@ -291,12 +311,7 @@ fn parseSignal(allocator: Allocator, info: *libgi.SignalInfo) Allocator.Error!gi
 }
 
 fn parseType(allocator: Allocator, info: *libgi.TypeInfo) Allocator.Error!gi.Type {
-    const base_info = info.into(libgi.BaseInfo);
-    const name = std.mem.span(base_info.getName().?);
-    const namespace = std.mem.span(base_info.getNamespace().?);
-    var buffer: [64]u8 = undefined;
-    const type_name: []const u8 = if (_cur_ns != null and std.mem.eql(u8, _cur_ns.?, namespace)) name else std.fmt.bufPrint(&buffer, "{s}.{s}", .{ namespace, name }) catch unreachable;
-    var _type: gi.Type = try .init(allocator, type_name);
+    var _type: gi.Type = try .init(allocator, "type");
     errdefer _type.deinit(allocator);
     _type.tag = info.getTag();
     _type.pointer = info.isPointer();
@@ -309,8 +324,13 @@ fn parseType(allocator: Allocator, info: *libgi.TypeInfo) Allocator.Error!gi.Typ
         _type.param_type.?.* = try parseType(allocator, info.getParamType(0).?);
     }
     if (_type.tag == .interface) {
-        _type.interface = try allocator.create(gi.Info);
-        _type.interface.?.* = try parseInfo(allocator, info.getInterface().?);
+        _type.interface = try allocator.create(gi.Base);
+        const interface = info.getInterface().?;
+        if (interface.tryInto(libgi.CallbackInfo)) |callback| {
+            _type.interface.?.* = try parseCallbackAsBase(allocator, callback);
+        } else {
+            _type.interface.?.* = try parseBase(allocator, interface);
+        }
     }
     return _type;
 }

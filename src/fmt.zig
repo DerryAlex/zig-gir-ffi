@@ -120,30 +120,11 @@ pub const TypeFormatter = struct {
             },
             .interface => {
                 const child_type = self.type.interface.?;
-                const base = child_type.getBase();
-                switch (child_type.*) {
-                    .callback => {
-                        if (self.nullable) try writer.writeAll("?");
-                        if (std.ascii.isUpper(base.name[0])) {
-                            try writer.print("{f}", .{base});
-                        } else {
-                            // expand
-                            try writer.print("{f}", .{CallbackFormatter{ .callback = &child_type.callback }});
-                        }
-                    },
-                    .@"enum", .flags, .interface, .object, .@"struct", .@"union" => {
-                        if (self.type.pointer) {
-                            if (self.nullable) try writer.writeAll("?");
-                            try writer.writeAll("*");
-                        }
-                        try writer.print("{f}", .{base});
-                    },
-                    .unresolved => {
-                        try writer.writeAll("*anyopaque");
-                        std.log.warn("Unresolved: {f}", .{base});
-                    },
-                    else => unreachable,
+                if (self.type.pointer) {
+                    if (self.nullable) try writer.writeAll("?");
+                    try writer.writeAll("*");
                 }
+                try writer.print("{f}", .{child_type});
             },
         }
     }
@@ -202,10 +183,10 @@ pub const CallableFormatter = struct {
             if (self.arg_name and self.arg_type) try writer.writeAll(": ");
             if (self.arg_type) try writer.writeAll("*?*core.Error");
         }
-        try writer.writeAll(")");
+        try writer.writeAll(") ");
 
         if (self.arg_type) {
-            if (self.c_callconv) try writer.writeAll(" callconv(.c)");
+            if (self.c_callconv) try writer.writeAll("callconv(.c) ");
             if (self.callable.skip_return) {
                 try writer.writeAll("void");
             } else {
@@ -242,6 +223,7 @@ pub const ConstantFormatter = struct {
     constant: *gi.Constant,
 
     pub fn format(self: ConstantFormatter, writer: *Writer) Writer.Error!void {
+        try writer.print("pub const {s} = ", .{self.constant.getBase().name});
         const value = self.constant.value;
         switch (self.constant.type_tag) {
             .boolean => try writer.print("{}", .{value.v_boolean}),
@@ -259,6 +241,7 @@ pub const ConstantFormatter = struct {
             .interface => try writer.print("{?}", .{value.v_pointer}),
             else => unreachable,
         }
+        try writer.writeAll(";\n");
     }
 };
 
@@ -433,7 +416,7 @@ pub const FlagsFormatter = struct {
         var values: AutoHashMap(usize, []const u8) = .init(allocator);
 
         for (self.context.base.values.items) |*value| {
-            if (value.value < 0 or !std.math.isPowerOfTwo(value.value)) continue;
+            if (value.value <= 0 or !std.math.isPowerOfTwo(value.value)) continue;
             const idx = std.math.log2_int(usize, @intCast(value.value));
             if (values.contains(idx)) continue;
             values.put(idx, value.getBase().name) catch @panic("Out of Memory");
@@ -540,8 +523,8 @@ pub const ObjectFormatter = struct {
             try writer.print("{f}", .{interface.getBase()});
         }
         try writer.writeAll("};\n");
-        if (self.context.parent) |parent| try writer.print("pub const Parent = {f};\n", .{parent.getBase()});
-        if (self.context.class_struct) |class| try writer.print("pub const Class = {f};\n", .{class.getBase()});
+        if (self.context.parent) |parent| try writer.print("pub const Parent = {f};\n", .{parent});
+        if (self.context.class_struct) |class| try writer.print("pub const Class = {f};\n", .{class});
         for (self.context.fields.items) |*field| try writer.print("{f}", .{FieldFormatter{ .field = field }});
         try BitField.end(writer);
         for (self.context.properties.items) |*prop| try writer.print("{f}", .{PropertyFormatter{ .property = prop }});
@@ -749,23 +732,23 @@ pub const FunctionFormatter = struct {
             if (slice_info[idx].is_slice_len) {
                 const ptr_arg = &args[slice_info[idx].slice_ptr];
                 const ptr_arg_name = ptr_arg.getBase().name;
-                try writer.print("const {f} = @intCast((argS_{s}", .{ arg, ptr_arg_name });
+                try writer.print("const {f} = @intCast((argS_{s}", .{ ArgFormatter{ .arg = arg }, ptr_arg_name });
                 if (ptr_arg.optional) try writer.writeAll("orelse &.{}");
                 try writer.writeAll(").len);\n");
             }
             if (slice_info[idx].is_slice_ptr) {
-                try writer.print("const {f} = @ptrCast(argS_{s});\n", .{ arg, arg_name });
+                try writer.print("const {f} = @ptrCast(argS_{s});\n", .{ ArgFormatter{ .arg = arg }, arg_name });
             }
             if (closure_info[idx].is_func) {
-                try writer.print("const {f} = @ptrCast(argC_{s}.cCallback());\n", .{ arg, arg_name });
+                try writer.print("const {f} = @ptrCast(argC_{s}.cCallback());\n", .{ ArgFormatter{ .arg = arg }, arg_name });
             }
             if (closure_info[idx].is_data) {
                 const func_arg_name = args[closure_info[idx].closure_func].getBase().name;
-                try writer.print("const {f} = @ptrCast(argC_{s}.cData());\n", .{ arg, func_arg_name });
+                try writer.print("const {f} = @ptrCast(argC_{s}.cData());\n", .{ ArgFormatter{ .arg = arg }, func_arg_name });
             }
             if (closure_info[idx].is_destroy) {
                 const func_arg_name = args[closure_info[idx].closure_func].getBase().name;
-                try writer.print("const {f} = @ptrCast(argC_{s}.cDestroy());\n", .{ arg, func_arg_name });
+                try writer.print("const {f} = @ptrCast(argC_{s}.cDestroy());\n", .{ ArgFormatter{ .arg = arg }, func_arg_name });
             }
         }
         // prepare output
@@ -778,12 +761,13 @@ pub const FunctionFormatter = struct {
                 .mutable = true,
                 .nullable = arg.optional,
             } });
-            try writer.print("const {f} = &argO_{s};\n", .{ arg, arg_name });
+            try writer.print("const {f} = &argO_{s};\n", .{ ArgFormatter{ .arg = arg }, arg_name });
         }
         // call C function
         try writer.writeAll("const cFn = @extern(*const fn");
         try writer.print("{f}", .{CallableFormatter{
             .callable = &self.function.callable,
+            .container = self.container,
             .arg_name = false,
             .arg_type = true,
             .c_callconv = true,

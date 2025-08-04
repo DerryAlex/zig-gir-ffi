@@ -428,8 +428,8 @@ pub const Interface = struct {
 /// `Object` represents a classed type.
 pub const Object = struct {
     base: RegisteredType,
-    class_struct: ?*Struct = null,
-    parent: ?*Object = null,
+    class_struct: ?*Base = null,
+    parent: ?*Base = null,
     constants: ArrayListUnmanaged(Constant) = .empty,
     fields: ArrayListUnmanaged(Field) = .empty,
     interfaces: ArrayListUnmanaged(Interface) = .empty,
@@ -601,7 +601,7 @@ pub const Type = struct {
     zero_terminated: bool = false,
     param_type: ?*Type = null,
     // interface information
-    interface: ?*Info = null,
+    interface: ?*Base = null,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Type {
         return .{ .base = try .init(allocator, name) };
