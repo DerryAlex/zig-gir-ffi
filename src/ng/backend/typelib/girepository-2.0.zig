@@ -1,4 +1,5 @@
 const gi_repository = @This();
+const gi = @import("../../gi.zig");
 pub const core = @import("core_min.zig");
 const std = @import("std");
 /// Class [ArgInfo](https://docs.gtk.org/girepository/class.ArgInfo.html)
@@ -93,36 +94,9 @@ pub const ArgInfo = extern struct {
     }
 };
 /// Union [Argument](https://docs.gtk.org/girepository/union.Argument.html)
-pub const Argument = extern union {
-    v_boolean: bool,
-    v_int8: i8,
-    v_uint8: u8,
-    v_int16: i16,
-    v_uint16: u16,
-    v_int32: i32,
-    v_uint32: u32,
-    v_int64: i64,
-    v_uint64: u64,
-    v_float: f32,
-    v_double: f64,
-    v_short: i16,
-    v_ushort: u16,
-    v_int: i32,
-    v_uint: u32,
-    v_long: i64,
-    v_ulong: u64,
-    v_ssize: i64,
-    v_size: u64,
-    v_string: ?[*:0]const u8,
-    v_pointer: ?*anyopaque,
-};
+pub const Argument = gi.Argument;
 /// Enum [ArrayType](https://docs.gtk.org/girepository/enum.ArrayType.html)
-pub const ArrayType = enum(u32) {
-    c = 0,
-    array = 1,
-    ptr_array = 2,
-    byte_array = 3,
-};
+pub const ArrayType = gi.ArrayType;
 /// Struct [AttributeIter](https://docs.gtk.org/girepository/struct.AttributeIter.html)
 pub const AttributeIter = extern struct {
     data: ?*anyopaque,
@@ -371,11 +345,7 @@ pub const ConstantInfo = opaque {
     }
 };
 /// Enum [Direction](https://docs.gtk.org/girepository/enum.Direction.html)
-pub const Direction = enum(u32) {
-    in = 0,
-    out = 1,
-    inout = 2,
-};
+pub const Direction = gi.Direction;
 /// Class [EnumInfo](https://docs.gtk.org/girepository/class.EnumInfo.html)
 pub const EnumInfo = opaque {
     pub const Parent = RegisteredTypeInfo;
@@ -511,14 +481,7 @@ pub const FunctionInfo = opaque {
     }
 };
 /// Flags [FunctionInfoFlags](https://docs.gtk.org/girepository/flags.FunctionInfoFlags.html)
-pub const FunctionInfoFlags = packed struct(u32) {
-    is_method: bool = false,
-    is_constructor: bool = false,
-    is_getter: bool = false,
-    is_setter: bool = false,
-    wraps_vfunc: bool = false,
-    _: u27 = 0,
-};
+pub const FunctionInfoFlags = gi.FunctionFlags;
 /// Class [InterfaceInfo](https://docs.gtk.org/girepository/class.InterfaceInfo.html)
 pub const InterfaceInfo = opaque {
     pub const Parent = RegisteredTypeInfo;
@@ -1139,13 +1102,7 @@ pub const RepositoryLoadFlags = packed struct(u32) {
     _: u31 = 0,
 };
 /// Enum [ScopeType](https://docs.gtk.org/girepository/enum.ScopeType.html)
-pub const ScopeType = enum(u32) {
-    invalid = 0,
-    call = 1,
-    async = 2,
-    notified = 3,
-    forever = 4,
-};
+pub const ScopeType = gi.ScopeType;
 /// Class [SignalInfo](https://docs.gtk.org/girepository/class.SignalInfo.html)
 pub const SignalInfo = opaque {
     pub const Parent = CallableInfo;
@@ -1261,11 +1218,7 @@ pub const StructInfo = opaque {
 /// const [TYPE_TAG_N_TYPES](https://docs.gtk.org/girepository/const.TYPE_TAG_N_TYPES.html)
 pub const TYPE_TAG_N_TYPES = 22;
 /// Enum [Transfer](https://docs.gtk.org/girepository/enum.Transfer.html)
-pub const Transfer = enum(u32) {
-    nothing = 0,
-    container = 1,
-    everything = 2,
-};
+pub const Transfer = gi.Transfer;
 /// Class [TypeInfo](https://docs.gtk.org/girepository/class.TypeInfo.html)
 pub const TypeInfo = extern struct {
     parent: BaseInfoStack,
@@ -1352,30 +1305,7 @@ pub const TypeInfo = extern struct {
     }
 };
 /// Enum [TypeTag](https://docs.gtk.org/girepository/enum.TypeTag.html)
-pub const TypeTag = enum(u32) {
-    void = 0,
-    boolean = 1,
-    int8 = 2,
-    uint8 = 3,
-    int16 = 4,
-    uint16 = 5,
-    int32 = 6,
-    uint32 = 7,
-    int64 = 8,
-    uint64 = 9,
-    float = 10,
-    double = 11,
-    gtype = 12,
-    utf8 = 13,
-    filename = 14,
-    array = 15,
-    interface = 16,
-    glist = 17,
-    gslist = 18,
-    ghash = 19,
-    @"error" = 20,
-    unichar = 21,
-};
+pub const TypeTag = gi.TypeTag;
 /// Struct [Typelib](https://docs.gtk.org/girepository/struct.Typelib.html)
 pub const Typelib = opaque {
     /// ctor [new_from_bytes](https://docs.gtk.org/girepository/ctor.Typelib.new_from_bytes.html)
