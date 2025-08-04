@@ -11,7 +11,7 @@ const fmt = @import("fmt.zig");
 pub const Repository = struct {
     allocator: Allocator,
     vtable: VTable,
-    search_paths: ArrayListUnmanaged([]const u8) = .empty,
+    _search_paths: ArrayListUnmanaged([]const u8) = .empty,
     namespaces: StringArrayHashMapUnmanaged(Namespace) = .empty,
 
     pub const Error = Allocator.Error || error{FileNotFound};
@@ -58,7 +58,7 @@ pub const Repository = struct {
 
     /// Append `dir` to search path.
     pub fn appendSearchPath(self: *Repository, dir: []const u8) Allocator.Error!void {
-        try self.search_paths.append(self.allocator, dir);
+        try self._search_paths.append(self.allocator, dir);
     }
 
     /// Load `namespace` if it isn't ready.
@@ -78,11 +78,10 @@ pub const Namespace = struct {
     }
 
     pub fn deinit(self: *Namespace, allocator: Allocator) void {
+        for (self.dependencies.items) |dep| allocator.free(dep);
         self.dependencies.deinit(allocator);
-        for (self.infos.items) |*info| {
-            info.deinit(allocator);
-        }
-        self.info.deinit(allocator);
+        for (self.infos.items) |*info| info.deinit(allocator);
+        self.infos.deinit(allocator);
         allocator.free(self.name);
     }
 };
@@ -160,8 +159,6 @@ pub const Arg = struct {
     caller_allocates: bool = false,
     may_be_null: bool = false,
     optional: bool = false,
-    skip: bool = false,
-    return_value: bool = false,
     // closure information
     closure_index: ?usize = null,
     destroy_index: ?usize = null,
@@ -172,7 +169,10 @@ pub const Arg = struct {
     }
 
     pub fn deinit(self: *Arg, allocator: Allocator) void {
-        if (self.type_info) |t| t.deinit(allocator);
+        if (self.type_info) |t| {
+            t.deinit(allocator);
+            allocator.destroy(t);
+        }
         self.base.deinit(allocator);
     }
 
@@ -193,8 +193,6 @@ pub const Callable = struct {
     return_type: ?*Type = null,
     // basic information
     can_throw_gerror: bool = false,
-    caller_owns: bool = false,
-    instance_ownership_transfer: Transfer = .nothing,
     is_method: bool = false,
     may_return_null: bool = false,
     skip_return: bool = false,
@@ -204,6 +202,8 @@ pub const Callable = struct {
     }
 
     pub fn deinit(self: *Callable, allocator: Allocator) void {
+        for (self.args.items) |*a| a.deinit(allocator);
+        self.args.deinit(allocator);
         if (self.return_type) |r| r.deinit(allocator);
         self.base.deinit(allocator);
     }
@@ -235,8 +235,6 @@ pub const Function = struct {
     callable: Callable,
     symbol: ?[]const u8 = null,
     flags: FunctionFlags = .{},
-    property: ?*Property = null,
-    vfunc: ?*VFunc = null,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Function {
         return .{ .callable = try .init(allocator, name) };
@@ -284,15 +282,12 @@ pub const Signal = struct {
 /// `VFunc` represents a virtual function.
 pub const VFunc = struct {
     callable: Callable,
-    flag: VFuncFlags = .{},
-    signal: ?*Signal = null,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!VFunc {
         return .{ .callable = try .init(allocator, name) };
     }
 
     pub fn deinit(self: *VFunc, allocator: Allocator) void {
-        if (self.signal) |s| s.deinit(allocator);
         self.callable.deinit(allocator);
     }
 
@@ -310,31 +305,8 @@ pub const VFunc = struct {
 /// `Constant` represents a constant.
 pub const Constant = struct {
     base: Base,
-    value: ?Argument = null,
-
-    pub const Argument = union(enum) {
-        boolean: bool,
-        int8: i8,
-        uint8: u8,
-        int16: i16,
-        uint16: u16,
-        int32: i32,
-        uint32: u32,
-        int64: i64,
-        uint64: u64,
-        float: f32,
-        double: f64,
-        short: c_short,
-        ushort: c_ushort,
-        int: c_int,
-        uint: c_uint,
-        long: c_long,
-        ulong: c_ulong,
-        ssize: isize,
-        size: usize,
-        string: [*:0]const u8,
-        pointer: ?*anyopaque,
-    };
+    type_tag: TypeTag = .void,
+    value: Argument = .{ .v_pointer = null },
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Constant {
         return .{ .base = try .init(allocator, name) };
@@ -371,16 +343,15 @@ pub const Enum = struct {
     storage_type: TypeTag = .void,
     values: ArrayListUnmanaged(Value) = .empty,
     methods: ArrayListUnmanaged(Function) = .empty,
-    error_domain: ?[]const u8 = null,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Enum {
         return .{ .base = try .init(allocator, name) };
     }
 
     pub fn deinit(self: *Enum, allocator: Allocator) void {
-        for (self.values.items) |v| v.deinit(allocator);
+        for (self.values.items) |*v| v.deinit(allocator);
         self.values.deinit(allocator);
-        for (self.methods.items) |m| m.deinit(allocator);
+        for (self.methods.items) |*m| m.deinit(allocator);
         self.methods.deinit(allocator);
         self.base.deinit(allocator);
     }
@@ -430,17 +401,17 @@ pub const Interface = struct {
     }
 
     pub fn deinit(self: *Interface, allocator: Allocator) void {
-        for (self.constants.items) |c| c.deinit(allocator);
+        for (self.constants.items) |*c| c.deinit(allocator);
         self.constants.deinit(allocator);
-        for (self.methods.items) |m| m.deinit(allocator);
+        for (self.methods.items) |*m| m.deinit(allocator);
         self.methods.deinit(allocator);
-        for (self.prerequisites.items) |p| p.deinit(allocator);
+        for (self.prerequisites.items) |*p| p.deinit(allocator);
         self.prerequisites.deinit(allocator);
-        for (self.properties.items) |p| p.deinit(allocator);
+        for (self.properties.items) |*p| p.deinit(allocator);
         self.properties.deinit(allocator);
-        for (self.signals.items) |s| s.deinit(allocator);
+        for (self.signals.items) |*s| s.deinit(allocator);
         self.signals.deinit(allocator);
-        for (self.vfuncs.items) |v| v.deinit(allocator);
+        for (self.vfuncs.items) |*v| v.deinit(allocator);
         self.vfuncs.deinit(allocator);
         self.base.deinit(allocator);
     }
@@ -466,28 +437,31 @@ pub const Object = struct {
     properties: ArrayListUnmanaged(Property) = .empty,
     signals: ArrayListUnmanaged(Signal) = .empty,
     vfuncs: ArrayListUnmanaged(VFunc) = .empty,
-    abstract: bool = false,
-    final: bool = false,
-    fundamental: bool = false,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Object {
         return .{ .base = try .init(allocator, name) };
     }
 
     pub fn deinit(self: *Object, allocator: Allocator) void {
-        if (self.class_struct) |c| c.deinit(allocator);
-        if (self.parent) |p| p.deinit(allocator);
-        for (self.constants.items) |c| c.deinit(allocator);
+        if (self.class_struct) |c| {
+            c.deinit(allocator);
+            allocator.destroy(c);
+        }
+        if (self.parent) |p| {
+            p.deinit(allocator);
+            allocator.destroy(p);
+        }
+        for (self.constants.items) |*c| c.deinit(allocator);
         self.constants.deinit(allocator);
-        for (self.interfaces.items) |i| i.deinit(allocator);
+        for (self.interfaces.items) |*i| i.deinit(allocator);
         self.interfaces.deinit(allocator);
-        for (self.methods.items) |m| m.deinit(allocator);
+        for (self.methods.items) |*m| m.deinit(allocator);
         self.methods.deinit(allocator);
-        for (self.properties.items) |p| p.deinit(allocator);
+        for (self.properties.items) |*p| p.deinit(allocator);
         self.properties.deinit(allocator);
-        for (self.signals.items) |s| s.deinit(allocator);
+        for (self.signals.items) |*s| s.deinit(allocator);
         self.signals.deinit(allocator);
-        for (self.vfuncs.items) |v| v.deinit(allocator);
+        for (self.vfuncs.items) |*v| v.deinit(allocator);
         self.vfuncs.deinit(allocator);
         self.base.deinit(allocator);
     }
@@ -513,9 +487,9 @@ pub const Struct = struct {
     }
 
     pub fn deinit(self: *Struct, allocator: Allocator) void {
-        for (self.fields.items) |f| f.deinit(allocator);
+        for (self.fields.items) |*f| f.deinit(allocator);
         self.fields.deinit(allocator);
-        for (self.methods.items) |m| m.deinit(allocator);
+        for (self.methods.items) |*m| m.deinit(allocator);
         self.methods.deinit(allocator);
         self.base.deinit(allocator);
     }
@@ -540,9 +514,9 @@ pub const Union = struct {
     }
 
     pub fn deinit(self: *Union, allocator: Allocator) void {
-        for (self.fields.items) |f| f.deinit(allocator);
+        for (self.fields.items) |*f| f.deinit(allocator);
         self.fields.deinit(allocator);
-        for (self.methods.items) |m| m.deinit(allocator);
+        for (self.methods.items) |*m| m.deinit(allocator);
         self.methods.deinit(allocator);
         self.base.deinit(allocator);
     }
@@ -559,7 +533,6 @@ pub const Union = struct {
 /// `Field` represents a field of a struct, union, or object.
 pub const Field = struct {
     base: Base,
-    flags: FieldFlags = .{},
     offset: usize = 0,
     size: usize = 0,
     type_info: ?*Type = null,
@@ -569,6 +542,10 @@ pub const Field = struct {
     }
 
     pub fn deinit(self: *Field, allocator: Allocator) void {
+        if (self.type_info) |t| {
+            t.deinit(allocator);
+            allocator.destroy(t);
+        }
         self.base.deinit(allocator);
     }
 
@@ -593,7 +570,10 @@ pub const Property = struct {
     }
 
     pub fn deinit(self: *Property, allocator: Allocator) void {
-        if (self.type_info) |t| t.deinit(allocator);
+        if (self.type_info) |t| {
+            t.deinit(allocator);
+            allocator.destroy(t);
+        }
         self.base.deinit(allocator);
     }
 
@@ -617,20 +597,25 @@ pub const Type = struct {
     // array information
     array_type: ArrayType = .c,
     array_fixed_size: ?usize = null,
+    array_length_index: ?usize = null,
     zero_terminated: bool = false,
     param_type: ?*Type = null,
     // interface information
     interface: ?*Info = null,
-    // slice information
-    arg_length_index: ?usize = null,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Type {
         return .{ .base = try .init(allocator, name) };
     }
 
     pub fn deinit(self: *Type, allocator: Allocator) void {
-        if (self.param_type) |p| p.deinit(allocator);
-        if (self.interface) |i| i.deinit(allocator);
+        if (self.param_type) |p| {
+            p.deinit(allocator);
+            allocator.destroy(p);
+        }
+        if (self.interface) |i| {
+            i.deinit(allocator);
+            allocator.destroy(i);
+        }
         self.base.deinit(allocator);
     }
 
@@ -798,4 +783,29 @@ pub const VFuncFlags = packed struct(u32) {
     must_override: bool = false,
     must_not_override: bool = false,
     _: u29 = 0,
+};
+
+// structs
+pub const Argument = extern union {
+    v_boolean: bool,
+    v_int8: i8,
+    v_uint8: u8,
+    v_int16: i16,
+    v_uint16: u16,
+    v_int32: i32,
+    v_uint32: u32,
+    v_int64: i64,
+    v_uint64: u64,
+    v_float: f32,
+    v_double: f64,
+    v_short: c_short,
+    v_ushort: c_ushort,
+    v_int: c_int,
+    v_uint: c_uint,
+    v_long: c_long,
+    v_ulong: c_ulong,
+    v_ssize: isize,
+    v_size: usize,
+    v_string: ?[*:0]const u8,
+    v_pointer: ?*anyopaque,
 };

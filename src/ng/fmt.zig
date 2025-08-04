@@ -242,10 +242,22 @@ pub const ConstantFormatter = struct {
     constant: *gi.Constant,
 
     pub fn format(self: ConstantFormatter, writer: *Writer) Writer.Error!void {
-        switch (self.constant.value.?) {
-            .string => |s| try writer.print("\"{s}\"", .{s}),
-            .pointer => |p| try writer.print("{?}", .{p}),
-            inline else => |v| try writer.print("{}", .{v}),
+        const value = self.constant.value;
+        switch (self.constant.type_tag) {
+            .boolean => try writer.print("{}", .{value.v_boolean}),
+            .int8 => try writer.print("{}", .{value.v_int8}),
+            .uint8 => try writer.print("{}", .{value.v_uint8}),
+            .int16 => try writer.print("{}", .{value.v_int16}),
+            .uint16 => try writer.print("{}", .{value.v_uint16}),
+            .int32 => try writer.print("{}", .{value.v_int32}),
+            .uint32 => try writer.print("{}", .{value.v_uint32}),
+            .int64 => try writer.print("{}", .{value.v_int64}),
+            .uint64 => try writer.print("{}", .{value.v_uint64}),
+            .float => try writer.print("{}", .{value.v_float}),
+            .double => try writer.print("{}", .{value.v_double}),
+            .utf8 => try writer.print("\"{s}\"", .{value.v_string.?}),
+            .interface => try writer.print("{?}", .{value.v_pointer}),
+            else => unreachable,
         }
     }
 };
@@ -599,7 +611,7 @@ pub const FunctionFormatter = struct {
             if (arg.direction == .out and !arg.caller_allocates) n_out_param += 1;
             // collect slice info
             const arg_type = arg.type_info.?;
-            if (arg_type.arg_length_index) |pos| {
+            if (arg_type.array_length_index) |pos| {
                 slice_info[idx].is_slice_ptr = true;
                 slice_info[idx].slice_len = pos;
                 if (!slice_info[pos].is_slice_len) {
