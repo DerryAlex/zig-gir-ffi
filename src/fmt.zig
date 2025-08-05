@@ -17,12 +17,12 @@ fn formatTypeTag(tag: gi.TypeTag) []const u8 {
         .uint64 => "u64",
         .float => "f32",
         .double => "f64",
-        .glist => "core.List",
-        .gslist => "core.SList",
-        .ghash => "core.HashTable",
+        .glist => "GLib.List",
+        .gslist => "GLib.SList",
+        .ghash => "GLib.HashTable",
         .gtype => "core.Type",
-        .@"error" => "core.Error",
-        .unichar => "core.Unichar",
+        .@"error" => "GLib.Error",
+        .unichar => "u32", // UCS-4
         else => unreachable,
     };
 }
@@ -449,7 +449,7 @@ pub const FlagsFormatter = struct {
         if (padding_bits != 0) try writer.print("_: u{} = 0,\n", .{padding_bits});
         for (self.context.base.values.items) |*value| {
             if (value.value == 0 or (value.value > 0 and std.math.isPowerOfTwo(value.value))) continue;
-            try writer.print("pub const {f};", .{ValueFormatter{
+            try writer.print("pub const {f};\n", .{ValueFormatter{
                 .value = value,
                 .storage = storage_type,
                 .convert = "@bitCast",
@@ -530,7 +530,7 @@ pub const ObjectFormatter = struct {
     context: *gi.Object,
 
     pub fn format(self: ObjectFormatter, writer: *Writer) Writer.Error!void {
-        try writer.print("pub const {s} = {s}{{\n", .{ self.context.getBase().name, if (self.context.fields.items.len != 0) "extern struct" else "opaque" });
+        try writer.print("pub const {s} = {s}{{\n", .{ self.context.getBase().name, if (self.context.fields.items.len != 0) "extern struct" else "struct" });
         try writer.writeAll("pub const Interfaces = [_]type{");
         var first = true;
         for (self.context.interfaces.items) |*interface| {

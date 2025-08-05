@@ -52,7 +52,8 @@ pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repo
                 break :blk tmp.ret[0..tmp.n_dependencies_out];
             };
             for (deps) |c_dep_name| {
-                const dep_name: []const u8 = std.mem.span(c_dep_name);
+                var dep_name: []const u8 = std.mem.span(c_dep_name);
+                if (std.mem.indexOfScalar(u8, dep_name, '-')) |pos| dep_name = dep_name[0..pos];
                 try ns.dependencies.append(allocator, try allocator.dupe(u8, dep_name));
             }
             const n_info = repo.getNInfos(c_ns_name);
@@ -242,9 +243,9 @@ fn parseBase(allocator: Allocator, info: *libgi.BaseInfo) Allocator.Error!gi.Bas
         const name = getName(info);
         if (!std.ascii.isUpper(name[0])) {
             const callable = cb.into(libgi.CallableInfo);
-            var allocating: Writer.Allocating = .init(allocator);
-            errdefer allocating.deinit();
-            allocating.writer.writeAll("*const fn(") catch return error.OutOfMemory;
+            var aw: Writer.Allocating = .init(allocator);
+            errdefer aw.deinit();
+            aw.writer.writeAll("*const fn(") catch return error.OutOfMemory;
             const n_arg = callable.getNArgs();
             var idx: u32 = 0;
             while (idx < n_arg) : (idx += 1) {
@@ -258,14 +259,14 @@ fn parseBase(allocator: Allocator, info: *libgi.BaseInfo) Allocator.Error!gi.Bas
                     }
                 }
                 var _type = try parseType(allocator, type_info);
-                if (idx != 0) allocating.writer.writeAll(", ") catch return error.OutOfMemory;
-                allocating.writer.print("{f}", .{TypeFormatter{ .type = &_type }}) catch return error.OutOfMemory;
+                if (idx != 0) aw.writer.writeAll(", ") catch return error.OutOfMemory;
+                aw.writer.print("{f}", .{TypeFormatter{ .type = &_type }}) catch return error.OutOfMemory;
             }
-            allocating.writer.writeAll(")") catch return error.OutOfMemory;
+            aw.writer.writeAll(") callconv(.c) ") catch return error.OutOfMemory;
             var return_type = try parseType(allocator, callable.getReturnType());
-            allocating.writer.print("{f}", .{TypeFormatter{ .type = &return_type }}) catch return error.OutOfMemory;
+            aw.writer.print("{f}", .{TypeFormatter{ .type = &return_type }}) catch return error.OutOfMemory;
             return .{
-                .name = try allocating.toOwnedSlice(),
+                .name = try aw.toOwnedSlice(),
                 .namespace = &.{},
             };
         }
