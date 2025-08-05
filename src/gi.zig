@@ -226,7 +226,7 @@ pub const Callback = struct {
     }
 
     pub fn format(self: *Callback, writer: *Writer) Writer.Error!void {
-        try writer.print("pub const {s} = {f}", .{ self.getBase().name, fmt.CallbackFormatter{ .callback = self } });
+        try writer.print("pub const {s} = {f};\n", .{ self.getBase().name, fmt.CallbackFormatter{ .callback = self } });
     }
 };
 

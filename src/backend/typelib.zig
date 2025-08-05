@@ -1,8 +1,11 @@
 const std = @import("std");
 const options = @import("options");
 const Allocator = std.mem.Allocator;
+const Writer = std.Io.Writer;
 const gi = @import("../gi.zig");
 const Repository = gi.Repository;
+const fmt = @import("../fmt.zig");
+const TypeFormatter = fmt.TypeFormatter;
 const libgi = @import("typelib/girepository-2.0.zig");
 
 var _repo: ?*libgi.Repository = null;
@@ -235,6 +238,38 @@ fn getFullName(info: *libgi.BaseInfo) []const u8 {
 }
 
 fn parseBase(allocator: Allocator, info: *libgi.BaseInfo) Allocator.Error!gi.Base {
+    if (info.tryInto(libgi.CallbackInfo)) |cb| {
+        const name = getName(info);
+        if (!std.ascii.isUpper(name[0])) {
+            const callable = cb.into(libgi.CallableInfo);
+            var allocating: Writer.Allocating = .init(allocator);
+            errdefer allocating.deinit();
+            allocating.writer.writeAll("*const fn(") catch return error.OutOfMemory;
+            const n_arg = callable.getNArgs();
+            var idx: u32 = 0;
+            while (idx < n_arg) : (idx += 1) {
+                const arg_info = callable.getArg(idx);
+                const type_info = arg_info.getTypeInfo();
+                if (type_info.getTag() == .interface) {
+                    const interface = type_info.getInterface().?;
+                    if (interface.tryInto(libgi.CallbackInfo)) |_cb| {
+                        const _cb_name = getName(_cb.into(libgi.BaseInfo));
+                        std.debug.assert(std.ascii.isUpper(_cb_name[0]));
+                    }
+                }
+                var _type = try parseType(allocator, type_info);
+                if (idx != 0) allocating.writer.writeAll(", ") catch return error.OutOfMemory;
+                allocating.writer.print("{f}", .{TypeFormatter{ .type = &_type }}) catch return error.OutOfMemory;
+            }
+            allocating.writer.writeAll(")") catch return error.OutOfMemory;
+            var return_type = try parseType(allocator, callable.getReturnType());
+            allocating.writer.print("{f}", .{TypeFormatter{ .type = &return_type }}) catch return error.OutOfMemory;
+            return .{
+                .name = try allocating.toOwnedSlice(),
+                .namespace = &.{},
+            };
+        }
+    }
     return try .init(allocator, getFullName(info));
 }
 

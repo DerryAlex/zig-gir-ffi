@@ -27,6 +27,19 @@ fn formatTypeTag(tag: gi.TypeTag) []const u8 {
     };
 }
 
+const IdFormatter = struct {
+    id: []const u8,
+
+    pub fn format(self: IdFormatter, writer: *Writer) Writer.Error!void {
+        if (std.zig.isValidId(self.id)) {
+            @branchHint(.likely);
+            try writer.writeAll(self.id);
+        } else {
+            try writer.print("@\"{s}\"", .{self.id});
+        }
+    }
+};
+
 fn formatArrayType(tag: gi.ArrayType) []const u8 {
     return switch (tag) {
         .array => "core.Array",
@@ -115,6 +128,7 @@ pub const TypeFormatter = struct {
                                 try writer.writeAll("*");
                             }
                         }
+                        try writer.writeAll(formatArrayType(self.type.array_type));
                     },
                 }
             },
@@ -183,9 +197,10 @@ pub const CallableFormatter = struct {
             if (self.arg_name and self.arg_type) try writer.writeAll(": ");
             if (self.arg_type) try writer.writeAll("*?*core.Error");
         }
-        try writer.writeAll(") ");
+        try writer.writeAll(")");
 
         if (self.arg_type) {
+            try writer.writeAll(" ");
             if (self.c_callconv) try writer.writeAll("callconv(.c) ");
             if (self.callable.skip_return) {
                 try writer.writeAll("void");
@@ -251,7 +266,7 @@ pub const ValueFormatter = struct {
     convert: ?[]const u8 = null,
 
     pub fn format(self: ValueFormatter, writer: *Writer) Writer.Error!void {
-        try writer.print("{s}", .{self.value.getBase().name});
+        try writer.print("{f}", .{IdFormatter{ .id = self.value.getBase().name }});
         if (self.convert) |_| try writer.writeAll(": @This()");
         try writer.writeAll(" = ");
         if (self.convert) |c| try writer.print("{s}(@as({s}, ", .{ c, formatTypeTag(self.storage) });
@@ -298,7 +313,7 @@ pub const FieldFormatter = struct {
         } else {
             try BitField.end(writer);
         }
-        try writer.print("{s}: ", .{self.field.getBase().name});
+        try writer.print("{f}: ", .{IdFormatter{ .id = self.field.getBase().name }});
         if (field_size == 0) {
             // FIXME: simd4f alignment
             try writer.print("{f}", .{TypeFormatter{
@@ -326,7 +341,7 @@ pub const PropertyFormatter = struct {
     pub fn format(self: PropertyFormatter, writer: *Writer) Writer.Error!void {
         const name = self.property.getBase().name;
         const type_info = self.property.type_info.?;
-        try writer.print("{s}: core.Property({f}, \"{s}\") = .{{}},\n", .{ name, TypeFormatter{ .type = type_info }, name });
+        try writer.print("{f}: core.Property({f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, TypeFormatter{ .type = type_info }, name });
     }
 };
 
@@ -338,7 +353,7 @@ pub const SignalFormatter = struct {
         const name = self.signal.getBase().name;
         const callable = &self.signal.callable;
         // FIXME: patch for signal param
-        try writer.print("{s}: core.Signal(fn {f}, \"{s}\") = .{{}},\n", .{ name, CallableFormatter{
+        try writer.print("{f}: core.Signal(fn {f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, CallableFormatter{
             .callable = callable,
             .container = self.container,
             .arg_name = false,
@@ -354,7 +369,7 @@ pub const VFuncFormatter = struct {
     pub fn format(self: VFuncFormatter, writer: *Writer) Writer.Error!void {
         const name = self.vfunc.getBase().name;
         const callable = &self.vfunc.callable;
-        try writer.print("{s}: core.VFunc(fn {f}, \"{s}\") = .{{}},\n", .{ name, CallableFormatter{
+        try writer.print("{f}: core.VFunc(fn {f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, CallableFormatter{
             .callable = callable,
             .container = self.container,
             .arg_name = false,
@@ -426,7 +441,7 @@ pub const FlagsFormatter = struct {
             if (values.get(idx)) |name| {
                 if (padding_bits != 0) try writer.print("_{}: u{} = 0,\n", .{ idx - padding_bits, padding_bits });
                 padding_bits = 0;
-                try writer.print("{s}: bool = false,\n", .{name});
+                try writer.print("{f}: bool = false,\n", .{IdFormatter{ .id = name }});
             } else {
                 padding_bits += 1;
             }
@@ -575,7 +590,7 @@ pub const FunctionFormatter = struct {
         const allocator = fixed.allocator();
 
         const func_name = self.function.getBase().name;
-        try writer.print("pub fn {s}", .{func_name});
+        try writer.print("pub fn {f}", .{IdFormatter{ .id = func_name }});
 
         const callable = &self.function.callable;
         const args = callable.args.items;
