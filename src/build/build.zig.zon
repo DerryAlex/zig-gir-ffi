@@ -1,0 +1,13 @@
+.{
+    .name = .gi,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.14.0",
+    .fingerprint = 0xd8832352d8832352,
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "gi.zig",
+        "binding",
+    },
+}

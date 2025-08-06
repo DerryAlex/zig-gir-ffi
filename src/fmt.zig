@@ -22,7 +22,7 @@ fn formatTypeTag(tag: gi.TypeTag) []const u8 {
         .ghash => "GLib.HashTable",
         .gtype => "core.Type",
         .@"error" => "GLib.Error",
-        .unichar => "u32", // UCS-4
+        .unichar => "u32", // UTF-32 or UCS-4
         else => unreachable,
     };
 }
