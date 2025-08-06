@@ -367,14 +367,16 @@ pub const VFuncFormatter = struct {
     container: ?*const gi.Base = null,
 
     pub fn format(self: VFuncFormatter, writer: *Writer) Writer.Error!void {
-        const name = self.vfunc.getBase().name;
-        const callable = &self.vfunc.callable;
-        try writer.print("{f}: core.VFunc(fn {f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, CallableFormatter{
-            .callable = callable,
-            .container = self.container,
-            .arg_name = false,
-            .arg_type = true,
-        }, name });
+        _ = self;
+        _ = writer;
+        // const name = self.vfunc.getBase().name;
+        // const callable = &self.vfunc.callable;
+        // try writer.print("{f}: core.VFunc(fn {f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, CallableFormatter{
+        //     .callable = callable,
+        //     .container = self.container,
+        //     .arg_name = false,
+        //     .arg_type = true,
+        // }, name });
     }
 };
 
