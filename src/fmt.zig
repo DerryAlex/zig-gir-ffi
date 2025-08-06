@@ -348,7 +348,6 @@ pub const PropertyFormatter = struct {
     pub fn format(self: PropertyFormatter, writer: *Writer) Writer.Error!void {
         const name = self.property.getBase().name;
         const type_info = self.property.type_info.?;
-        if (PreservedField.names.contains(name)) try writer.writeAll("_");
         try writer.print("{f}: core.Property({f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, TypeFormatter{ .type = type_info }, name });
     }
 };
@@ -360,7 +359,6 @@ pub const SignalFormatter = struct {
     pub fn format(self: SignalFormatter, writer: *Writer) Writer.Error!void {
         const name = self.signal.getBase().name;
         const callable = &self.signal.callable;
-        if (PreservedField.names.contains(name)) try writer.writeAll("_");
         // FIXME: patch for signal param
         try writer.print("{f}: core.Signal(fn {f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, CallableFormatter{
             .callable = callable,
@@ -376,16 +374,14 @@ pub const VFuncFormatter = struct {
     container: ?*const gi.Base = null,
 
     pub fn format(self: VFuncFormatter, writer: *Writer) Writer.Error!void {
-        _ = self;
-        _ = writer;
-        // const name = self.vfunc.getBase().name;
-        // const callable = &self.vfunc.callable;
-        // try writer.print("{f}: core.VFunc(fn {f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, CallableFormatter{
-        //     .callable = callable,
-        //     .container = self.container,
-        //     .arg_name = false,
-        //     .arg_type = true,
-        // }, name });
+        const name = self.vfunc.getBase().name;
+        const callable = &self.vfunc.callable;
+        try writer.print("{f}: core.VFunc(fn {f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, CallableFormatter{
+            .callable = callable,
+            .container = self.container,
+            .arg_name = false,
+            .arg_type = true,
+        }, name });
     }
 };
 
@@ -481,6 +477,8 @@ pub const StructFormatter = struct {
 
     pub fn format(self: StructFormatter, writer: *Writer) Writer.Error!void {
         try writer.print("pub const {s} = {s}{{\n", .{ self.context.getBase().name, if (self.context.size != 0) "extern struct" else "opaque" });
+        for (self.context.methods.items) |*method| PreservedField.names.put(method.getBase().name, {}) catch @panic("Out Of Memory");
+        defer PreservedField.names.clearAndFree();
         for (self.context.fields.items) |*field| try writer.print("{f}", .{FieldFormatter{ .field = field }});
         try BitField.end(writer);
         for (self.context.methods.items) |*method| try writer.print("{f}", .{FunctionFormatter{
@@ -496,6 +494,8 @@ pub const UnionFormatter = struct {
 
     pub fn format(self: UnionFormatter, writer: *Writer) Writer.Error!void {
         try writer.print("pub const {s} = extern union{{\n", .{self.context.getBase().name});
+        for (self.context.methods.items) |*method| PreservedField.names.put(method.getBase().name, {}) catch @panic("Out Of Memory");
+        defer PreservedField.names.clearAndFree();
         for (self.context.fields.items) |*field| try writer.print("{f}", .{FieldFormatter{ .field = field }});
         for (self.context.methods.items) |*method| try writer.print("{f}", .{FunctionFormatter{
             .function = method,
@@ -519,17 +519,21 @@ pub const InterfaceFormatter = struct {
             try writer.print("{f}", .{preq.getBase()});
         }
         try writer.writeAll("};\n");
-        for (self.context.methods.items) |*method| PreservedField.names.put(method.getBase().name, {}) catch @panic("Out Of Memory");
-        defer PreservedField.names.clearAndFree();
+        try writer.writeAll("_props: struct {\n");
         for (self.context.properties.items) |*prop| try writer.print("{f}", .{PropertyFormatter{ .property = prop }});
+        try writer.writeAll("},\n");
+        try writer.writeAll("_signals: struct {\n");
         for (self.context.signals.items) |*signal| try writer.print("{f}", .{SignalFormatter{
             .signal = signal,
             .container = self.context.getBase(),
         }});
+        try writer.writeAll("},\n");
+        try writer.writeAll("_vfuncs: struct {\n");
         for (self.context.vfuncs.items) |*vfunc| try writer.print("{f}", .{VFuncFormatter{
             .vfunc = vfunc,
             .container = self.context.getBase(),
         }});
+        try writer.writeAll("},\n");
         for (self.context.constants.items) |*constant| try writer.print("{f}", .{ConstantFormatter{ .constant = constant }});
         for (self.context.methods.items) |*method| try writer.print("{f}", .{FunctionFormatter{
             .function = method,
@@ -553,19 +557,25 @@ pub const ObjectFormatter = struct {
         try writer.writeAll("};\n");
         if (self.context.parent) |parent| try writer.print("pub const Parent = {f};\n", .{parent});
         if (self.context.class_struct) |class| try writer.print("pub const Class = {f};\n", .{class});
-        for (self.context.methods.items) |*method| PreservedField.names.put(method.getBase().name, {}) catch @panic("Out Of Memory");
-        defer PreservedField.names.clearAndFree();
-        for (self.context.fields.items) |*field| try writer.print("{f}", .{FieldFormatter{ .field = field }});
-        try BitField.end(writer);
+        try writer.writeAll("_props: struct {\n");
         for (self.context.properties.items) |*prop| try writer.print("{f}", .{PropertyFormatter{ .property = prop }});
+        try writer.writeAll("},\n");
+        try writer.writeAll("_signals: struct {\n");
         for (self.context.signals.items) |*signal| try writer.print("{f}", .{SignalFormatter{
             .signal = signal,
             .container = self.context.getBase(),
         }});
+        try writer.writeAll("},\n");
+        try writer.writeAll("_vfuncs: struct {\n");
         for (self.context.vfuncs.items) |*vfunc| try writer.print("{f}", .{VFuncFormatter{
             .vfunc = vfunc,
             .container = self.context.getBase(),
         }});
+        try writer.writeAll("},\n");
+        for (self.context.methods.items) |*method| PreservedField.names.put(method.getBase().name, {}) catch @panic("Out Of Memory");
+        defer PreservedField.names.clearAndFree();
+        for (self.context.fields.items) |*field| try writer.print("{f}", .{FieldFormatter{ .field = field }});
+        try BitField.end(writer);
         for (self.context.constants.items) |*constant| try writer.print("{f}", .{ConstantFormatter{ .constant = constant }});
         for (self.context.methods.items) |*method| try writer.print("{f}", .{FunctionFormatter{
             .function = method,
@@ -691,7 +701,7 @@ pub const FunctionFormatter = struct {
                 // skip out parameter
                 if (arg.direction == .out and !arg.caller_allocates) continue;
                 // skip slice len
-                if (slice_info[idx].is_slice_len) continue;
+                if (slice_info[idx].is_slice_len and slice_info[idx].slice_ptr < args.len) continue;
                 // skip closure data
                 if (closure_info[idx].is_data) continue;
                 // skip closure destroy
@@ -786,9 +796,19 @@ pub const FunctionFormatter = struct {
             if (slice_info[idx].is_slice_len and slice_info[idx].slice_ptr < args.len) {
                 const ptr_arg = &args[slice_info[idx].slice_ptr];
                 const ptr_arg_name = ptr_arg.getBase().name;
-                try writer.print("const {f} = @intCast((argS_{s}", .{ ArgFormatter{ .arg = arg }, ptr_arg_name });
+                if (arg.direction == .in) {
+                    try writer.print("const {f} = ", .{ArgFormatter{ .arg = arg }});
+                } else {
+                    var arg_type = arg.type_info.?.*;
+                    arg_type.pointer = false;
+                    try writer.print("var argO_{s}: {f} = ", .{ arg_name, TypeFormatter{ .type = &arg_type } });
+                }
+                try writer.print("@intCast((argS_{s}", .{ptr_arg_name});
                 if (ptr_arg.optional) try writer.writeAll("orelse &.{}");
                 try writer.writeAll(").len);\n");
+                if (arg.direction != .in) {
+                    try writer.print("const {f} = &argO_{s};\n", .{ ArgFormatter{ .arg = arg }, arg_name });
+                }
             }
             if (slice_info[idx].is_slice_ptr) {
                 try writer.print("const {f} = @ptrCast(argS_{s});\n", .{ ArgFormatter{ .arg = arg }, arg_name });

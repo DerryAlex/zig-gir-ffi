@@ -1,5 +1,6 @@
 const std = @import("std");
 const options = @import("options");
+const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const Writer = std.Io.Writer;
 const gi = @import("../gi.zig");
@@ -52,8 +53,7 @@ pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repo
                 break :blk tmp.ret[0..tmp.n_dependencies_out];
             };
             for (deps) |c_dep_name| {
-                var dep_name: []const u8 = std.mem.span(c_dep_name);
-                if (std.mem.indexOfScalar(u8, dep_name, '-')) |pos| dep_name = dep_name[0..pos];
+                const dep_name: []const u8 = std.mem.sliceTo(std.mem.span(c_dep_name), '-');
                 try ns.dependencies.append(allocator, try allocator.dupe(u8, dep_name));
             }
             const n_info = repo.getNInfos(c_ns_name);
@@ -255,7 +255,7 @@ fn parseBase(allocator: Allocator, info: *libgi.BaseInfo) Allocator.Error!gi.Bas
                     const interface = type_info.getInterface().?;
                     if (interface.tryInto(libgi.CallbackInfo)) |_cb| {
                         const _cb_name = getName(_cb.into(libgi.BaseInfo));
-                        std.debug.assert(std.ascii.isUpper(_cb_name[0]));
+                        assert(std.ascii.isUpper(_cb_name[0]));
                     }
                 }
                 var _type = try parseType(allocator, type_info);

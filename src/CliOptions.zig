@@ -7,7 +7,7 @@ const fatal = std.process.fatal;
 help: bool = false,
 version: bool = false,
 namespaces: []const Namespace = &.{},
-output_dir: []const u8 = &.{},
+output_dir: []const u8 = "gi",
 include_dirs: []const []const u8 = &.{},
 
 pub const Namespace = struct {
