@@ -1,6 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const AutoHashMap = std.AutoHashMap;
+const StringHashMap = std.StringHashMap;
 const Writer = std.Io.Writer;
 const gi = @import("gi.zig");
 
@@ -195,7 +196,7 @@ pub const CallableFormatter = struct {
             if (!first) try writer.writeAll(", ") else first = false;
             if (self.arg_name) try writer.writeAll("arg_error");
             if (self.arg_name and self.arg_type) try writer.writeAll(": ");
-            if (self.arg_type) try writer.writeAll("*?*core.Error");
+            if (self.arg_type) try writer.writeAll("*?*GLib.Error");
         }
         try writer.writeAll(")");
 
@@ -297,6 +298,10 @@ const BitField = struct {
     }
 };
 
+const PreservedField = struct {
+    var names: StringHashMap(void) = .init(std.heap.smp_allocator);
+};
+
 pub const FieldFormatter = struct {
     field: *gi.Field,
 
@@ -313,7 +318,9 @@ pub const FieldFormatter = struct {
         } else {
             try BitField.end(writer);
         }
-        try writer.print("{f}: ", .{IdFormatter{ .id = self.field.getBase().name }});
+        const name = self.field.getBase().name;
+        if (PreservedField.names.contains(name)) try writer.writeAll("_");
+        try writer.print("{f}: ", .{IdFormatter{ .id = name }});
         if (field_size == 0) {
             // FIXME: simd4f alignment
             try writer.print("{f}", .{TypeFormatter{
@@ -341,6 +348,7 @@ pub const PropertyFormatter = struct {
     pub fn format(self: PropertyFormatter, writer: *Writer) Writer.Error!void {
         const name = self.property.getBase().name;
         const type_info = self.property.type_info.?;
+        if (PreservedField.names.contains(name)) try writer.writeAll("_");
         try writer.print("{f}: core.Property({f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, TypeFormatter{ .type = type_info }, name });
     }
 };
@@ -352,6 +360,7 @@ pub const SignalFormatter = struct {
     pub fn format(self: SignalFormatter, writer: *Writer) Writer.Error!void {
         const name = self.signal.getBase().name;
         const callable = &self.signal.callable;
+        if (PreservedField.names.contains(name)) try writer.writeAll("_");
         // FIXME: patch for signal param
         try writer.print("{f}: core.Signal(fn {f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, CallableFormatter{
             .callable = callable,
@@ -510,6 +519,8 @@ pub const InterfaceFormatter = struct {
             try writer.print("{f}", .{preq.getBase()});
         }
         try writer.writeAll("};\n");
+        for (self.context.methods.items) |*method| PreservedField.names.put(method.getBase().name, {}) catch @panic("Out Of Memory");
+        defer PreservedField.names.clearAndFree();
         for (self.context.properties.items) |*prop| try writer.print("{f}", .{PropertyFormatter{ .property = prop }});
         for (self.context.signals.items) |*signal| try writer.print("{f}", .{SignalFormatter{
             .signal = signal,
@@ -542,6 +553,8 @@ pub const ObjectFormatter = struct {
         try writer.writeAll("};\n");
         if (self.context.parent) |parent| try writer.print("pub const Parent = {f};\n", .{parent});
         if (self.context.class_struct) |class| try writer.print("pub const Class = {f};\n", .{class});
+        for (self.context.methods.items) |*method| PreservedField.names.put(method.getBase().name, {}) catch @panic("Out Of Memory");
+        defer PreservedField.names.clearAndFree();
         for (self.context.fields.items) |*field| try writer.print("{f}", .{FieldFormatter{ .field = field }});
         try BitField.end(writer);
         for (self.context.properties.items) |*prop| try writer.print("{f}", .{PropertyFormatter{ .property = prop }});
@@ -573,6 +586,7 @@ pub const FunctionFormatter = struct {
         slice_len: usize = undefined,
         is_slice_len: bool = false,
         slice_ptr: usize = undefined,
+        out: bool = false,
     };
 
     /// Infomation to convert `void (*)(void), void*` to `handler, args`
@@ -592,7 +606,7 @@ pub const FunctionFormatter = struct {
         const allocator = fixed.allocator();
 
         const func_name = self.function.getBase().name;
-        try writer.print("pub fn {f}", .{IdFormatter{ .id = func_name }});
+        try writer.print("pub fn {f}", .{IdFormatter{ .id = if (!std.mem.eql(u8, func_name, "self")) func_name else "_self" }});
 
         const callable = &self.function.callable;
         const args = callable.args.items;
@@ -607,8 +621,6 @@ pub const FunctionFormatter = struct {
         const is_constructor = self.function.flags.is_constructor;
         var n_out_param: usize = 0;
         for (args, 0..) |*arg, idx| {
-            // collect out parameter info
-            if (arg.direction == .out and !arg.caller_allocates) n_out_param += 1;
             // collect slice info
             const arg_type = arg.type_info.?;
             if (arg_type.array_length_index) |pos| {
@@ -618,6 +630,7 @@ pub const FunctionFormatter = struct {
                     slice_info[pos].is_slice_len = true;
                     slice_info[pos].slice_ptr = idx;
                 }
+                if (args[pos].direction != .in) slice_info[idx].out = true;
             }
             // collect closure info
             const arg_name = arg.getBase().name;
@@ -636,14 +649,32 @@ pub const FunctionFormatter = struct {
                 }
             }
         }
+        for (args, 0..) |*arg, idx| {
+            // collect out parameter info
+            if (slice_info[idx].is_slice_len) continue;
+            if (slice_info[idx].is_slice_ptr) {
+                if (slice_info[idx].out) n_out_param += 1;
+                continue;
+            }
+            if (arg.direction == .out and !arg.caller_allocates) n_out_param += 1;
+        }
 
         // analyse return type
         const return_type = callable.return_type.?;
         const return_bool = return_type.tag == .boolean;
+        const return_void = return_type.tag == .void and !return_type.pointer;
+        const return_slice = return_type.array_length_index;
+        if (return_slice) |pos| {
+            if (!slice_info[pos].is_slice_len) {
+                slice_info[pos].is_slice_len = true;
+                slice_info[pos].slice_ptr = std.math.maxInt(usize);
+                if (args[pos].direction == .out and !args[pos].caller_allocates) n_out_param -= 1;
+            }
+        }
         // some function returns true if out parameters are valid
         const throw_bool = return_bool and (n_out_param > 0) and (is_method and std.mem.startsWith(u8, func_name, "get"));
         const throw_error = callable.can_throw_gerror;
-        const skip_return = callable.skip_return;
+        const skip_return = callable.skip_return or (n_out_param > 0 and return_void);
         const real_skip_return = skip_return or throw_bool;
         const n_out = n_out_param + @intFromBool(!real_skip_return);
 
@@ -688,7 +719,7 @@ pub const FunctionFormatter = struct {
             }
             if (throw_error) {
                 if (!first) try writer.writeAll(", ") else first = false;
-                try writer.writeAll("arg_error: *?*core.Error");
+                try writer.writeAll("arg_error: *?*GLib.Error");
             }
             try writer.writeAll(") ");
         }
@@ -706,6 +737,8 @@ pub const FunctionFormatter = struct {
                     const container = self.container.?;
                     if (self.function.callable.may_return_null) try writer.writeAll("?");
                     try writer.print("*{s}", .{container.name});
+                } else if (return_slice) |_| {
+                    try writer.print("[]{f}", .{TypeFormatter{ .type = return_type.param_type.? }});
                 } else {
                     try writer.print("{f}", .{TypeFormatter{
                         .type = return_type,
@@ -717,8 +750,12 @@ pub const FunctionFormatter = struct {
             }
             if (n_out_param > 0) {
                 for (args, 0..) |*arg, idx| {
-                    if (arg.direction != .out or arg.caller_allocates) continue;
                     if (slice_info[idx].is_slice_len) continue;
+                    if (slice_info[idx].is_slice_ptr) {
+                        if (!slice_info[idx].out) continue;
+                    } else {
+                        if (arg.direction != .out or arg.caller_allocates) continue;
+                    }
 
                     const arg_name = arg.getBase().name;
                     if (n_out > 1) try writer.print("{s}: ", .{arg_name});
@@ -746,7 +783,7 @@ pub const FunctionFormatter = struct {
         for (args, 0..) |*arg, idx| {
             if (arg.direction == .out and !arg.caller_allocates) continue;
             const arg_name = arg.getBase().name;
-            if (slice_info[idx].is_slice_len) {
+            if (slice_info[idx].is_slice_len and slice_info[idx].slice_ptr < args.len) {
                 const ptr_arg = &args[slice_info[idx].slice_ptr];
                 const ptr_arg_name = ptr_arg.getBase().name;
                 try writer.print("const {f} = @intCast((argS_{s}", .{ ArgFormatter{ .arg = arg }, ptr_arg_name });
@@ -808,18 +845,32 @@ pub const FunctionFormatter = struct {
             if (!first) try writer.writeAll(", ") else first = false;
             if (n_out > 1) try writer.writeAll(".ret = ");
             try writer.writeAll("ret");
+            if (return_slice) |pos| {
+                const len_arg = &args[pos];
+                const len_arg_name = len_arg.getBase().name;
+                try writer.writeAll("[0..@intCast(arg");
+                if (len_arg.direction == .out and !len_arg.caller_allocates) try writer.writeAll("O");
+                try writer.print("_{s}", .{len_arg_name});
+                try writer.writeAll(")]");
+            }
         }
         if (n_out_param > 0) {
             for (args, 0..) |*arg, idx| {
-                if (arg.direction != .out or arg.caller_allocates) continue;
                 if (slice_info[idx].is_slice_len) continue;
+                if (slice_info[idx].is_slice_ptr) {
+                    if (!slice_info[idx].out) continue;
+                } else {
+                    if (arg.direction != .out or arg.caller_allocates) continue;
+                }
 
                 if (n_out > 1) {
                     if (!first) try writer.writeAll(", ") else first = false;
                 }
                 const arg_name = arg.getBase().name;
                 if (n_out > 1) try writer.print(".{s} = ", .{arg_name});
-                try writer.print("argO_{s}", .{arg_name});
+                try writer.writeAll("arg");
+                if (arg.direction == .out and !arg.caller_allocates) try writer.writeAll("O");
+                try writer.print("_{s}", .{arg_name});
                 if (slice_info[idx].is_slice_ptr) {
                     const len_arg = &args[slice_info[idx].slice_len];
                     const len_arg_name = len_arg.getBase().name;
