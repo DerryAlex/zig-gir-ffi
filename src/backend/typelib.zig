@@ -260,6 +260,12 @@ fn parseBase(allocator: Allocator, info: *libgi.BaseInfo) Allocator.Error!gi.Bas
                 }
                 var _type = try parseType(allocator, type_info);
                 if (idx != 0) aw.writer.writeAll(", ") catch return error.OutOfMemory;
+                const arg_name = getName(arg_info.into(libgi.BaseInfo));
+                if (std.zig.isValidId(arg_name)) {
+                    aw.writer.print("{s}: ", .{arg_name}) catch return error.OutOfMemory;
+                } else {
+                    aw.writer.print("@\"{s}\": ", .{arg_name}) catch return error.OutOfMemory;
+                }
                 aw.writer.print("{f}", .{TypeFormatter{ .type = &_type }}) catch return error.OutOfMemory;
             }
             aw.writer.writeAll(") callconv(.c) ") catch return error.OutOfMemory;
@@ -323,7 +329,22 @@ fn parseProperty(allocator: Allocator, info: *libgi.PropertyInfo) Allocator.Erro
 }
 
 fn parseSignal(allocator: Allocator, info: *libgi.SignalInfo) Allocator.Error!gi.Signal {
-    return .{ .callable = try parseCallable(allocator, info.into(libgi.CallableInfo)) };
+    var signal: gi.Signal = .{ .callable = try parseCallable(allocator, info.into(libgi.CallableInfo)) };
+    const callable = info.into(libgi.CallableInfo);
+    const n_arg = callable.getNArgs();
+    var idx: u32 = 0;
+    while (idx < n_arg) : (idx += 1) {
+        const arg_info = callable.getArg(@intCast(idx));
+        const type_info = arg_info.getTypeInfo();
+        if (type_info.getTag() == .interface) {
+            const interface = type_info.getInterface().?;
+            if (interface.tryInto(libgi.EnumInfo) == null) {
+                // patch for signal
+                signal.callable.args.items[idx].type_info.?.pointer = true;
+            }
+        }
+    }
+    return signal;
 }
 
 fn parseType(allocator: Allocator, info: *libgi.TypeInfo) Allocator.Error!gi.Type {

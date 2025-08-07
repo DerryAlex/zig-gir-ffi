@@ -1,14 +1,8 @@
-const glib = @import("glib");
-const gobject = @import("gobject");
-
+const core = @This();
 const std = @import("std");
-
-pub fn deprecated(value: anytype) @TypeOf(value) {
-    if (@TypeOf(value) == void) {
-        @compileError("deprecated");
-    }
-    return value;
-}
+const assert = std.debug.assert;
+const glib = @import("GLib.zig");
+const gobject = @import("GObject.zig");
 
 // ----------
 // type begin
@@ -39,25 +33,6 @@ pub const Type = enum(usize) {
     variant = 84,
     _,
 };
-
-/// UCS-4
-pub const Unichar = u32;
-
-// re-exports
-/// Contains the public fields of a GArray
-pub const Array = glib.Array;
-/// Contains the public fields of a GByteArray
-pub const ByteArray = glib.ByteArray;
-/// The GError structure contains information about an error that has occurred
-pub const Error = glib.Error;
-/// The GHashTable struct is an opaque data structure to represent a Hash Table
-pub const HashTable = glib.HashTable;
-/// The GList struct is used for each element in a doubly-linked list
-pub const List = glib.List;
-/// Contains the public fields of a pointer array
-pub const PtrArray = glib.PtrArray;
-/// The GSList struct is used for each element in the singly-linked list
-pub const SList = glib.SList;
 
 // type end
 // --------
@@ -120,11 +95,6 @@ pub inline fn unsafeCast(comptime T: type, object: anytype) *T {
 /// Inherits from Self.Parent
 pub fn Extend(comptime Self: type) type {
     return struct {
-        /// Calls inherited method
-        pub fn __call(self: *Self, comptime method: []const u8, args: anytype) if (CallMethod(Self, method)) |R| R else @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(Self), method })) {
-            return callMethod(self, Self, method, args);
-        }
-
         /// Converts to base type T
         pub fn into(self: *Self, comptime T: type) *T {
             return upCast(T, self);
@@ -133,45 +103,6 @@ pub fn Extend(comptime Self: type) type {
         /// Converts to derived type T
         pub fn tryInto(self: *Self, comptime T: type) ?*T {
             return downCast(T, self);
-        }
-
-        fn Property(comptime T: type) type {
-            return struct {
-                object: *gobject.Object,
-                property_name: [*:0]const u8,
-
-                pub fn get(self: @This()) Arg(T) {
-                    var property_value = Value.new(T);
-                    defer property_value.unset();
-                    self.object.getProperty(self.property_name, &property_value);
-                    return Value.get(&property_value, T);
-                }
-
-                pub fn set(self: @This(), value: Arg(T)) void {
-                    var property_value = Value.new(T);
-                    defer property_value.unset();
-                    Value.set(&property_value, T, value);
-                    self.object.setProperty(self.property_name, &property_value);
-                }
-            };
-        }
-
-        pub fn property(self: *Self, comptime T: type, property_name: [*:0]const u8) Property(T) {
-            return .{
-                .object = self.into(gobject.Object),
-                .property_name = property_name,
-            };
-        }
-
-        /// Connects a callback function to a signal for a particular object
-        pub fn signalConnect(self: *Self, signal: [*:0]const u8, callback_func: anytype, user_data: anytype, flags: gobject.ConnectFlags, comptime Contract: type) usize {
-            var closure = ZigClosure.newWithContract(callback_func, user_data, Contract);
-            if (flags.swapped) {
-                const CallbackRaw = @TypeOf(callback_func);
-                const Callback = if (@typeInfo(CallbackRaw) == .@"fn") CallbackRaw else std.meta.Child(CallbackRaw);
-                std.debug.assert(@typeInfo(Callback).@"fn".params.len == user_data.len);
-            }
-            return gobject.signalConnectClosure(self.into(gobject.Object), signal, closure.cClosure(), flags.after);
         }
 
         /// Returns the interface of a given instance
@@ -185,64 +116,6 @@ pub fn Extend(comptime Self: type) type {
 fn typeInstanceGetInterface(comptime Interface: type, self: *Interface) *Interface {
     const class = unsafeCast(gobject.TypeInstance, self).g_class.?;
     return unsafeCast(Interface, gobject.typeInterfacePeek(class, Interface.gType()));
-}
-
-/// Gets return type of `method`
-fn CallMethod(comptime T: type, comptime method: []const u8) ?type {
-    if (comptime std.meta.hasFn(T, method)) {
-        const method_info = @typeInfo(@TypeOf(@field(T, method))).@"fn";
-        comptime std.debug.assert(method_info.params[0].is_generic or std.meta.Child(method_info.params[0].type.?) == T);
-        return method_info.return_type.?;
-    }
-    if (comptime @hasDecl(T, "Prerequisites")) {
-        inline for (T.Prerequisites) |Prerequisite| {
-            if (comptime CallMethod(Prerequisite, method)) |R| {
-                return R;
-            }
-        }
-    }
-    if (comptime @hasDecl(T, "Interfaces")) {
-        inline for (T.Interfaces) |Interface| {
-            if (comptime CallMethod(Interface, method)) |R| {
-                return R;
-            }
-        }
-    }
-    if (comptime @hasDecl(T, "Parent")) {
-        if (comptime CallMethod(T.Parent, method)) |R| {
-            return R;
-        }
-    }
-    return null;
-}
-
-/// Invokes `method` with `args`
-fn callMethod(self: anytype, comptime Self: type, comptime method: []const u8, args: anytype) if (CallMethod(Self, method)) |R| R else @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(Self), method })) {
-    if (std.meta.hasFn(Self, method)) {
-        const method_fn = @field(Self, method);
-        const method_info = @typeInfo(@TypeOf(method_fn)).@"fn";
-        return @call(.auto, method_fn, .{if (comptime method_info.params[0].is_generic) self else self.into(Self)} ++ args);
-    }
-    if (comptime @hasDecl(Self, "Prerequisites")) {
-        inline for (Self.Prerequisites) |Prerequisite| {
-            if (comptime CallMethod(Prerequisite, method)) |_| {
-                return callMethod(self, Prerequisite, method, args);
-            }
-        }
-    }
-    if (comptime @hasDecl(Self, "Interfaces")) {
-        inline for (Self.Interfaces) |Interface| {
-            if (comptime CallMethod(Interface, method)) |_| {
-                return callMethod(self, Interface, method, args);
-            }
-        }
-    }
-    if (comptime @hasDecl(Self, "Parent")) {
-        if (comptime CallMethod(Self.Parent, method)) |_| {
-            return callMethod(self, Self.Parent, method, args);
-        }
-    }
-    @compileError(std.fmt.comptimePrint("{s}.{s}: no such method", .{ @typeName(Self), method }));
 }
 
 // OOP inheritance end
@@ -292,7 +165,7 @@ const Value = struct {
     const Ulong = @Type(@typeInfo(c_ulong));
 
     /// Initializes value with the default value
-    pub fn new(comptime T: type) Self {
+    pub fn init(comptime T: type) Self {
         var value = std.mem.zeroes(Self);
         if (comptime T == void) {
             value.g_type = .none; // for internal use
@@ -350,7 +223,7 @@ const Value = struct {
         if (comptime T == f64) return self.getDouble();
         if (comptime T == Type) return self.getGtype();
         if (comptime @typeInfo(T) == .@"enum") {
-            comptime std.debug.assert(@typeInfo(T).@"enum".is_exhaustive);
+            comptime assert(@typeInfo(T).@"enum".is_exhaustive);
             return @enumFromInt(self.getEnum());
         }
         if (comptime @typeInfo(T) == .@"struct" and @typeInfo(T).@"struct".layout == .@"packed") {
@@ -360,7 +233,7 @@ const Value = struct {
         if (comptime @typeInfo(T) == .pointer and @typeInfo(T).pointer.size == .one) return @ptrCast(self.getPointer());
         if (comptime T == glib.Variant) return self.getVariant().?;
         if (comptime T == gobject.ParamSpec) return self.getParam();
-        if (comptime @hasDecl(T, "__call")) return downCast(T, self.getObject().?).?;
+        if (comptime isA(gobject.Object)(T)) return downCast(T, self.getObject().?).?;
         return unsafeCast(T, self.getBoxed().?);
     }
 
@@ -393,7 +266,7 @@ const Value = struct {
         } else if (comptime T == Type) {
             self.setGtype(arg_value);
         } else if (comptime @typeInfo(T) == .@"enum") {
-            comptime std.debug.assert(@typeInfo(T).@"enum".is_exhaustive);
+            comptime assert(@typeInfo(T).@"enum".is_exhaustive);
             self.setEnum(@intFromEnum(arg_value));
         } else if (comptime @typeInfo(T) == .@"struct" and @typeInfo(T).@"struct".layout == .@"packed") {
             self.setFlags(@bitCast(arg_value));
@@ -405,13 +278,40 @@ const Value = struct {
             self.setVariant(arg_value);
         } else if (comptime T == gobject.ParamSpec) {
             self.setParam(arg_value);
-        } else if (comptime @hasDecl(T, "__call")) {
+        } else if (isA(gobject.Object)(T)) {
             self.setObject(upCast(gobject.Object, arg_value));
         } else {
             self.setBoxed(arg_value);
         }
     }
 };
+
+pub fn Property(comptime T: type, comptime name: [:0]const u8) type {
+    return struct {
+        const Self = @This();
+
+        pub fn get(self: *Self) Arg(T) {
+            var prop = Value.init(T);
+            defer prop.unset();
+            const object = dynamicCast(gobject.Object, self).?;
+            object.getProperty(name, &prop);
+            return Value.get(&prop, T);
+        }
+
+        pub fn set(self: *Self, value: Arg(T)) void {
+            var prop = Value.init(T);
+            defer prop.unset();
+            Value.set(&prop, T, value);
+            const object = dynamicCast(gobject.Object, self).?;
+            object.setProperty(name, &prop);
+        }
+
+        pub fn connectNotify(self: *Self, closure: Closure(fn (*gobject.Object, *gobject.ParamSpec) void, .notified), flags: gobject.ConnectFlags) HandlerId {
+            const object = dynamicCast(gobject.Object, self).?;
+            return gobject.signalConnectClosure(object, "notify::" ++ name, closure.closure.cClosure(), flags.after);
+        }
+    };
+}
 
 // value end
 // ---------
@@ -448,12 +348,8 @@ pub const ZigClosure = extern struct {
                     }
                 }
                 const ret = @call(.auto, @as(*const Callback, @ptrCast(zig_closure.callback)), args.*);
-                if (@TypeOf(ret) != void) {
-                    Value.set(return_value, ReverseArg(@TypeOf(ret)), ret);
-                }
-                if (zig_closure.once) {
-                    zig_closure.c_closure.invalidate();
-                }
+                if (@TypeOf(ret) != void) Value.set(return_value, ReverseArg(@TypeOf(ret)), ret);
+                if (zig_closure.once) zig_closure.deinit();
             }
         }.marshal;
     }
@@ -481,21 +377,21 @@ pub const ZigClosure = extern struct {
     }
 
     /// Creates a new closure which invokes `callback_func` with `user_data` as the last parameters.
-    pub fn new(callback_func: anytype, user_data: anytype) *ZigClosure {
+    pub fn create(callback_func: anytype, user_data: anytype) *ZigClosure {
         if (@TypeOf(callback_func) == @TypeOf(null)) {
             return @ptrCast(gobject.Closure.newSimple(@sizeOf(ZigClosure), null));
         }
         const Callback = blk: {
             const T = @TypeOf(callback_func);
             if (!(@typeInfo(T) == .@"fn" or (@typeInfo(T) == .pointer and @typeInfo(std.meta.Child(T)) == .@"fn"))) {
-                @compileError("ZigClosure.new: 'callback_func' should be of type Fn or FnPtr.");
+                @compileError("ZigClosure.create: 'callback_func' should be of type Fn or FnPtr.");
             }
             break :blk if (@typeInfo(T) == .@"fn") T else std.meta.Child(T);
         };
         {
             const T = @TypeOf(user_data);
             if (!(@typeInfo(T) == .@"struct" and @typeInfo(T).@"struct".is_tuple)) {
-                @compileError("ZigClosure.new: 'user_data' should be of type Tuple.");
+                @compileError("ZigClosure.create: 'user_data' should be of type Tuple.");
             }
         }
         const Args = std.meta.ArgsTuple(Callback);
@@ -511,19 +407,22 @@ pub const ZigClosure = extern struct {
         return self;
     }
 
-    pub inline fn newWithContract(callback_func: anytype, user_data: anytype, comptime Contract: type) *ZigClosure {
-        const closure = new(callback_func, user_data);
+    pub inline fn createChecked(comptime Fn: type, callback_func: anytype, user_data: anytype) *ZigClosure {
         comptime if (@TypeOf(callback_func) != @TypeOf(null)) {
             const CallbackRaw = @TypeOf(callback_func);
             const Callback = if (@typeInfo(CallbackRaw) == .@"fn") CallbackRaw else std.meta.Child(CallbackRaw);
             const callback_info = @typeInfo(Callback).@"fn";
-            const contract_info = @typeInfo(Contract).@"fn";
-            std.debug.assert(callback_info.return_type == contract_info.return_type);
+            const contract_info = @typeInfo(Fn).@"fn";
+            assert(callback_info.return_type == contract_info.return_type);
             for (0..callback_info.params.len - user_data.len) |idx| {
-                std.debug.assert(callback_info.params[idx].type == contract_info.params[idx].type);
+                assert(callback_info.params[idx].type == contract_info.params[idx].type);
             }
         };
-        return closure;
+        return create(callback_func, user_data);
+    }
+
+    pub fn deinit(self: *ZigClosure) void {
+        self.c_closure.invalidate();
     }
 
     pub inline fn cClosure(self: *ZigClosure) *gobject.Closure {
@@ -552,6 +451,71 @@ pub const ZigClosure = extern struct {
     }
 };
 
+pub const Scope = enum {
+    /// The callback and associated user_data is only used during the call to this function.
+    call,
+    /// The callback and associated user_data is only used until the callback is invoked, and the callback. is invoked always exactly once.
+    async,
+    /// The callback and associated user_data is used until the caller is notified via the `DestroyNotify`.
+    notified,
+    /// The callback and associated user_data is used until the process terminates.
+    forever,
+};
+
+pub fn Closure(comptime FnPtr: type, comptime scope: Scope) type {
+    return struct {
+        closure: *ZigClosure,
+
+        const Self = @This();
+
+        pub fn init(callback_func: anytype, user_data: anytype) Self {
+            const Fn: type = blk: {
+                if (@typeInfo(FnPtr) != .pointer and @typeInfo(std.meta.Child(FnPtr)) != .@"fn") break :blk FnPtr;
+                var fn_info = @typeInfo(std.meta.Child(FnPtr)).@"fn";
+                const params = fn_info.params;
+                const n_param = params.len;
+                // remove `data: void *` in c callback
+                if (n_param > 0 and params[n_param - 1].type.? == ?*anyopaque) fn_info.params = params[0 .. n_param - 1];
+                break :blk @Type(fn_info);
+            };
+            var self: Self = .{ .closure = .createChecked(Fn, callback_func, user_data) };
+            if (scope == .async) self.closure.once = true;
+            return self;
+        }
+
+        pub fn deinit(self: *Self) void {
+            if (scope == .call) self.closure.deinit();
+        }
+
+        pub inline fn callback(self: *Self) ?gobject.Callback {
+            return self.closure.cCallback();
+        }
+
+        pub inline fn data(self: *Self) ?*anyopaque {
+            return self.closure.cData();
+        }
+
+        pub inline fn destroy(self: *Self) ?gobject.DestroyNotify {
+            return self.closure.cDestroy();
+        }
+    };
+}
+
+pub const HandlerId = c_ulong;
+
+pub fn Signal(comptime Fn: type, comptime name: [:0]const u8) type {
+    return struct {
+        const Self = @This();
+
+        pub fn connect(self: *Self, closure: Closure(Fn, .notified), flags: gobject.ConnectFlags) HandlerId {
+            const Object = std.meta.Child(@typeInfo(Fn).@"fn".params[0].type.?);
+            const _signals: *@FieldType(Object, "_signals") = @fieldParentPtr(name, self);
+            const object: *Object = @fieldParentPtr("_signals", _signals);
+            return gobject.signalConnectClosure(object.into(gobject.Object), name, closure.closure.cClosure(), flags.after);
+        }
+    };
+}
+
 // closure end
 // -----------
 
@@ -561,7 +525,7 @@ pub const ZigClosure = extern struct {
 /// Creates a new instance of an Object subtype and sets its properties using the provided map
 pub fn newObject(comptime T: type, properties: anytype) *T {
     const info = @typeInfo(@TypeOf(properties));
-    comptime std.debug.assert(info == .@"struct");
+    comptime assert(info == .@"struct");
     const n_props = info.@"struct".fields.len;
     var names: [n_props][*:0]const u8 = undefined;
     var values: [n_props]gobject.Value = undefined;
@@ -575,7 +539,7 @@ pub fn newObject(comptime T: type, properties: anytype) *T {
             }
             break :blk field.type;
         };
-        values[idx] = Value.new(V);
+        values[idx] = Value.init(V);
         Value.set(&values[idx], V, @field(properties, field.name));
     }
     defer for (&values) |*value| value.unset();
@@ -585,7 +549,7 @@ pub fn newObject(comptime T: type, properties: anytype) *T {
 /// Creates a new signal
 pub fn newSignal(comptime Object: type, comptime signal_name: [:0]const u8, signal_flags: gobject.SignalFlags, accumulator: anytype, accu_data: anytype) u32 {
     const Class = Object.Class;
-    std.debug.assert(signal_flags.run_first or signal_flags.run_last or signal_flags.run_cleanup);
+    assert(signal_flags.run_first or signal_flags.run_last or signal_flags.run_cleanup);
     comptime var field_name: [signal_name.len:0]u8 = undefined;
     comptime {
         @memcpy(field_name[0..], signal_name[0..]);
@@ -598,7 +562,7 @@ pub fn newSignal(comptime Object: type, comptime signal_name: [:0]const u8, sign
     const class_closure = gobject.signalTypeCclosureNew(Object.gType(), @offsetOf(Class, &field_name));
     const signal_field_type = std.meta.FieldType(Class, std.meta.stringToEnum(std.meta.FieldEnum(Class), &field_name).?);
     const signal_info = @typeInfo(std.meta.Child(std.meta.Child(signal_field_type))).@"fn"; // ?*const fn(args...) return_type
-    const return_type = Value.new(signal_info.return_type.?).g_type;
+    const return_type = Value.init(signal_info.return_type.?).g_type;
     var param_types: [signal_info.params.len - 1]Type = undefined;
     inline for (signal_info.params[1..], &param_types) |param, *ty| {
         var is_gtyped = false;
@@ -610,7 +574,7 @@ pub fn newSignal(comptime Object: type, comptime signal_name: [:0]const u8, sign
         if (is_gtyped) {
             ty.* = std.meta.Child(param.type.?).gType();
         } else {
-            ty.* = Value.new(param.type.?).g_type;
+            ty.* = Value.init(param.type.?).g_type;
         }
     }
     return gobject.signalNewv(signal_name.ptr, Object.gType(), signal_flags, class_closure, accumulator, accu_data, null, return_type, param_types[0..]);

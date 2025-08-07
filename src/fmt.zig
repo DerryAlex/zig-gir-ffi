@@ -28,6 +28,15 @@ fn formatTypeTag(tag: gi.TypeTag) []const u8 {
     };
 }
 
+fn formatArrayType(tag: gi.ArrayType) []const u8 {
+    return switch (tag) {
+        .array => "GLib.Array",
+        .ptr_array => "GLib.PtrArray",
+        .byte_array => "GLib.ByteArray",
+        else => unreachable,
+    };
+}
+
 const IdFormatter = struct {
     id: []const u8,
 
@@ -41,14 +50,28 @@ const IdFormatter = struct {
     }
 };
 
-fn formatArrayType(tag: gi.ArrayType) []const u8 {
-    return switch (tag) {
-        .array => "core.Array",
-        .ptr_array => "core.PtrArray",
-        .byte_array => "core.ByteArray",
-        else => unreachable,
-    };
-}
+const CamelFormatter = struct {
+    id: []const u8,
+
+    pub fn format(self: CamelFormatter, writer: *Writer) Writer.Error!void {
+        if (std.mem.indexOfScalar(u8, self.id, '_')) |_| {
+            if (std.mem.startsWith(u8, self.id, "_")) try writer.writeAll("_");
+            var first = true;
+            var iter = std.mem.tokenizeScalar(u8, self.id, '_');
+            while (iter.next()) |tok| {
+                if (!first) {
+                    try writer.writeByte(std.ascii.toUpper(tok[0]));
+                } else {
+                    first = false;
+                    try writer.writeByte(tok[0]);
+                }
+                try writer.writeAll(tok[1..]);
+            }
+        } else {
+            try writer.print("{f}", .{IdFormatter{ .id = self.id }});
+        }
+    }
+};
 
 // --- Type ---
 pub const TypeFormatter = struct {
@@ -108,7 +131,6 @@ pub const TypeFormatter = struct {
                             if (self.type.zero_terminated) {
                                 switch (child_type.tag) {
                                     .int8, .uint8, .int16, .uint16, .int32, .uint32, .int64, .uint64, .float, .double, .unichar => try writer.writeAll(":0"),
-                                    // FIXME: interface == .@"struct" and interface.@"struct".size == 0
                                     .interface => if (child_type.pointer) try writer.writeAll(":null"),
                                     else => {},
                                 }
@@ -214,7 +236,7 @@ pub const CallableFormatter = struct {
                     try writer.print("{f}", .{TypeFormatter{
                         .type = return_type,
                         .mutable = true,
-                        .nullable = self.callable.may_return_null, // FIXME: glist, gslist
+                        .nullable = self.callable.may_return_null or return_type.tag == .glist or return_type.tag == .gslist,
                     }});
                 }
             }
@@ -322,7 +344,6 @@ pub const FieldFormatter = struct {
         if (PreservedField.names.contains(name)) try writer.writeAll("_");
         try writer.print("{f}: ", .{IdFormatter{ .id = name }});
         if (field_size == 0) {
-            // FIXME: simd4f alignment
             try writer.print("{f}", .{TypeFormatter{
                 .type = field_type,
                 .nullable = true,
@@ -359,7 +380,6 @@ pub const SignalFormatter = struct {
     pub fn format(self: SignalFormatter, writer: *Writer) Writer.Error!void {
         const name = self.signal.getBase().name;
         const callable = &self.signal.callable;
-        // FIXME: patch for signal param
         try writer.print("{f}: core.Signal(fn {f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, CallableFormatter{
             .callable = callable,
             .container = self.container,
@@ -374,14 +394,9 @@ pub const VFuncFormatter = struct {
     container: ?*const gi.Base = null,
 
     pub fn format(self: VFuncFormatter, writer: *Writer) Writer.Error!void {
-        const name = self.vfunc.getBase().name;
-        const callable = &self.vfunc.callable;
-        try writer.print("{f}: core.VFunc(fn {f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, CallableFormatter{
-            .callable = callable,
-            .container = self.container,
-            .arg_name = false,
-            .arg_type = true,
-        }, name });
+        _ = self;
+        _ = writer;
+        unreachable;
     }
 };
 
@@ -510,7 +525,6 @@ pub const InterfaceFormatter = struct {
     context: *gi.Interface,
 
     pub fn format(self: InterfaceFormatter, writer: *Writer) Writer.Error!void {
-        // FIXME: opaque?
         try writer.print("pub const {s} = struct{{\n", .{self.context.getBase().name});
         try writer.writeAll("pub const Prerequistes = [_]type{");
         var first = true;
@@ -525,12 +539,6 @@ pub const InterfaceFormatter = struct {
         try writer.writeAll("_signals: struct {\n");
         for (self.context.signals.items) |*signal| try writer.print("{f}", .{SignalFormatter{
             .signal = signal,
-            .container = self.context.getBase(),
-        }});
-        try writer.writeAll("},\n");
-        try writer.writeAll("_vfuncs: struct {\n");
-        for (self.context.vfuncs.items) |*vfunc| try writer.print("{f}", .{VFuncFormatter{
-            .vfunc = vfunc,
             .container = self.context.getBase(),
         }});
         try writer.writeAll("},\n");
@@ -563,12 +571,6 @@ pub const ObjectFormatter = struct {
         try writer.writeAll("_signals: struct {\n");
         for (self.context.signals.items) |*signal| try writer.print("{f}", .{SignalFormatter{
             .signal = signal,
-            .container = self.context.getBase(),
-        }});
-        try writer.writeAll("},\n");
-        try writer.writeAll("_vfuncs: struct {\n");
-        for (self.context.vfuncs.items) |*vfunc| try writer.print("{f}", .{VFuncFormatter{
-            .vfunc = vfunc,
             .container = self.context.getBase(),
         }});
         try writer.writeAll("},\n");
@@ -616,7 +618,7 @@ pub const FunctionFormatter = struct {
         const allocator = fixed.allocator();
 
         const func_name = self.function.getBase().name;
-        try writer.print("pub fn {f}", .{IdFormatter{ .id = if (!std.mem.eql(u8, func_name, "self")) func_name else "_self" }});
+        try writer.print("pub fn {f}", .{CamelFormatter{ .id = if (!std.mem.eql(u8, func_name, "self")) func_name else "_self" }});
 
         const callable = &self.function.callable;
         const args = callable.args.items;
@@ -719,7 +721,7 @@ pub const FunctionFormatter = struct {
                     try writer.print("{f}", .{TypeFormatter{ .type = arg.type_info.?.param_type.? }});
                 } else if (closure_info[idx].is_func) {
                     // closure
-                    try writer.print("argC_{s}: *core.Closure({f}, {})", .{ arg_name, ArgFormatter{
+                    try writer.print("argC_{s}: core.Closure({f}, {})", .{ arg_name, ArgFormatter{
                         .arg = arg,
                         .arg_name = false,
                     }, arg.scope });
@@ -814,15 +816,16 @@ pub const FunctionFormatter = struct {
                 try writer.print("const {f} = @ptrCast(argS_{s});\n", .{ ArgFormatter{ .arg = arg }, arg_name });
             }
             if (closure_info[idx].is_func) {
-                try writer.print("const {f} = @ptrCast(argC_{s}.cCallback());\n", .{ ArgFormatter{ .arg = arg }, arg_name });
+                try writer.print("const {f} = @ptrCast(argC_{s}.callback());\n", .{ ArgFormatter{ .arg = arg }, arg_name });
+                if (arg.scope == .call) try writer.print("defer argC_{s}.deinit();\n", .{arg_name});
             }
             if (closure_info[idx].is_data) {
                 const func_arg_name = args[closure_info[idx].closure_func].getBase().name;
-                try writer.print("const {f} = @ptrCast(argC_{s}.cData());\n", .{ ArgFormatter{ .arg = arg }, func_arg_name });
+                try writer.print("const {f} = @ptrCast(argC_{s}.data());\n", .{ ArgFormatter{ .arg = arg }, func_arg_name });
             }
             if (closure_info[idx].is_destroy) {
                 const func_arg_name = args[closure_info[idx].closure_func].getBase().name;
-                try writer.print("const {f} = @ptrCast(argC_{s}.cDestroy());\n", .{ ArgFormatter{ .arg = arg }, func_arg_name });
+                try writer.print("const {f} = @ptrCast(argC_{s}.destroy());\n", .{ ArgFormatter{ .arg = arg }, func_arg_name });
             }
         }
         // prepare output
