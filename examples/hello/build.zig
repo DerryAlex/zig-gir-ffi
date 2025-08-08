@@ -6,26 +6,27 @@ pub fn build(b: *std.Build) !void {
         .preferred_optimize_mode = .ReleaseSafe,
     });
 
-    const gtk = b.dependency("gtk", .{});
+    const gi = b.dependency("gi", .{});
 
-    const exe_check = b.addExecutable(.{
-        .name = "example",
+    const root_module = b.addModule("example", .{
         .root_source_file = b.path("example.zig"),
         .optimize = optimize,
         .target = target,
     });
-    exe_check.root_module.addImport("gtk", gtk.module("gtk"));
+    const exe_check = b.addExecutable(.{
+        .name = "example",
+        .root_module = root_module,
+    });
+    exe_check.root_module.addImport("gi", gi.module("gi"));
     exe_check.linkLibC();
     const check = b.step("check", "Check if compiles");
     check.dependOn(&exe_check.step);
 
     const exe = b.addExecutable(.{
         .name = "example",
-        .root_source_file = b.path("example.zig"),
-        .optimize = optimize,
-        .target = target,
+        .root_module = root_module,
     });
-    exe.root_module.addImport("gtk", gtk.module("gtk"));
+    exe.root_module.addImport("gi", gi.module("gi"));
     exe.linkLibC();
     exe.linkSystemLibrary("gtk4");
     b.installArtifact(exe);

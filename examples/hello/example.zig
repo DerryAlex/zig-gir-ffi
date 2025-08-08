@@ -1,37 +1,40 @@
 const std = @import("std");
-const gtk = @import("gtk");
-const Application = gtk.Application;
-const ApplicationWindow = gtk.ApplicationWindow;
-const Box = gtk.Box;
-const Button = gtk.Button;
-const Widget = gtk.Widget;
-const Window = gtk.Window;
-const gio = gtk.gio;
-const GApplication = gio.Application;
+const gi = @import("gi");
+const GObject = gi.GObject;
+const Gio = gi.Gio;
+const Gtk = gi.Gtk;
+const Application = Gtk.Application;
+const ApplicationWindow = Gtk.ApplicationWindow;
+const Box = Gtk.Box;
+const Button = Gtk.Button;
+const Object = GObject.Object;
+const Widget = Gtk.Widget;
+const Window = Gtk.Window;
 
 pub fn printHello() void {
     std.log.info("Hello World", .{});
 }
 
-pub fn activate(app: *GApplication) void {
-    var window = ApplicationWindow.new(app.tryInto(Application).?).into(Window);
+pub fn activate(app: *Gio.Application) void {
+    var _window: *ApplicationWindow = .new(app.tryInto(Application).?);
+    var window = _window.into(Window);
     window.setTitle("Window");
     window.setDefaultSize(200, 200);
-    var box = Box.new(.vertical, 0);
-    var box_as_widget = box.into(Widget);
-    box_as_widget.setHalign(.center);
-    box_as_widget.setValign(.center);
-    window.setChild(box_as_widget);
+    var box: *Box = .new(.vertical, 0);
+    box.into(Widget).setHalign(.center);
+    box.into(Widget).setValign(.center);
+    window.setChild(box.into(Widget));
     var button = Button.newWithLabel("Hello, World");
-    _ = button.connectClicked(printHello, .{}, .{});
-    _ = button.connectClicked(Window.destroy, .{window}, .{ .swapped = true });
+    _ = button._signals.clicked.connect(.init(printHello, .{}), .{});
+    _ = button._signals.clicked.connect(.init(Window.destroy, .{window}), .{ .swapped = true });
     box.append(button.into(Widget));
     window.present();
 }
 
 pub fn main() u8 {
-    var app = Application.new("org.gtk.example", .{}).into(GApplication);
-    defer app.__call("unref", .{});
-    _ = app.connectActivate(activate, .{}, .{});
+    var _app: *Application = .new("org.gtk.example", .{});
+    var app = _app.into(Gio.Application);
+    defer app.into(Object).unref();
+    _ = app._signals.activate.connect(.init(activate, .{}), .{});
     return @intCast(app.run(@ptrCast(std.os.argv)));
 }

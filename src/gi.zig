@@ -327,12 +327,14 @@ pub const Constant = struct {
 
 pub const RegisteredType = struct {
     base: Base,
+    type_init: ?[]const u8 = null,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!RegisteredType {
         return .{ .base = try .init(allocator, name) };
     }
 
     pub fn deinit(self: *RegisteredType, allocator: Allocator) void {
+        if (self.type_init) |t| allocator.free(t);
         self.base.deinit(allocator);
     }
 };
@@ -389,6 +391,7 @@ pub const Flags = struct {
 /// `Interface` represents an interface type.
 pub const Interface = struct {
     base: RegisteredType,
+    iface: ?*Base = null,
     constants: ArrayListUnmanaged(Constant) = .empty,
     methods: ArrayListUnmanaged(Function) = .empty,
     prerequisites: ArrayListUnmanaged(Info) = .empty,
@@ -401,6 +404,10 @@ pub const Interface = struct {
     }
 
     pub fn deinit(self: *Interface, allocator: Allocator) void {
+        if (self.iface) |i| {
+            i.deinit(allocator);
+            allocator.destroy(i);
+        }
         for (self.constants.items) |*c| c.deinit(allocator);
         self.constants.deinit(allocator);
         for (self.methods.items) |*m| m.deinit(allocator);
@@ -602,6 +609,7 @@ pub const Type = struct {
     param_type: ?*Type = null,
     // interface information
     interface: ?*Base = null,
+    interface_is_callback: bool = false,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Type {
         return .{ .base = try .init(allocator, name) };

@@ -157,7 +157,9 @@ pub const TypeFormatter = struct {
             },
             .interface => {
                 const child_type = self.type.interface.?;
-                if (self.type.pointer) {
+                if (self.type.interface_is_callback) {
+                    if (self.nullable) try writer.writeAll("?");
+                } else if (self.type.pointer) {
                     if (self.nullable) try writer.writeAll("?");
                     try writer.writeAll("*");
                 }
@@ -401,6 +403,19 @@ pub const VFuncFormatter = struct {
 };
 
 // --- Enum, Flags, Struct, Union ---
+const RegisteredFormatter = struct {
+    registered: *gi.RegisteredType,
+
+    pub fn format(self: RegisteredFormatter, writer: *Writer) Writer.Error!void {
+        if (self.registered.type_init) |func| {
+            try writer.writeAll("pub fn gType() core.Type {\n");
+            try writer.print("const cFn = @extern(*const fn() callconv(.c) core.Type, .{{ .name = \"{s}\" }});\n", .{func});
+            try writer.writeAll("return cFn();\n");
+            try writer.writeAll("}\n");
+        }
+    }
+};
+
 pub const EnumFormatter = struct {
     context: *gi.Enum,
 
@@ -435,6 +450,8 @@ pub const EnumFormatter = struct {
             .function = method,
             .container = self.context.getBase(),
         }});
+
+        try writer.print("{f}", .{RegisteredFormatter{ .registered = &self.context.base }});
 
         try writer.writeAll("};\n");
     }
@@ -483,6 +500,8 @@ pub const FlagsFormatter = struct {
             .container = self.context.getBase(),
         }});
 
+        try writer.print("{f}", .{RegisteredFormatter{ .registered = &self.context.base.base }});
+
         try writer.writeAll("};\n");
     }
 };
@@ -500,6 +519,7 @@ pub const StructFormatter = struct {
             .function = method,
             .container = self.context.getBase(),
         }});
+        try writer.print("{f}", .{RegisteredFormatter{ .registered = &self.context.base }});
         try writer.writeAll("};\n");
     }
 };
@@ -516,11 +536,26 @@ pub const UnionFormatter = struct {
             .function = method,
             .container = self.context.getBase(),
         }});
+        try writer.print("{f}", .{RegisteredFormatter{ .registered = &self.context.base }});
         try writer.writeAll("};\n");
     }
 };
 
 // --- Interface and Object ---
+const ClassFormatter = struct {
+    object: bool = false,
+
+    pub fn format(self: ClassFormatter, writer: *Writer) Writer.Error!void {
+        try writer.writeAll(
+            \\const Ext = core.Extend(@This());
+            \\pub const into = Ext.into;
+            \\pub const tryInto = Ext.tryInto;
+            \\
+        );
+        if (self.object) try writer.writeAll("pub const getInterface = Ext.getInterface;\n");
+    }
+};
+
 pub const InterfaceFormatter = struct {
     context: *gi.Interface,
 
@@ -533,6 +568,7 @@ pub const InterfaceFormatter = struct {
             try writer.print("{f}", .{preq.getBase()});
         }
         try writer.writeAll("};\n");
+        if (self.context.iface) |iface| try writer.print("pub const Iface = {f};\n", .{iface});
         try writer.writeAll("_props: struct {\n");
         for (self.context.properties.items) |*prop| try writer.print("{f}", .{PropertyFormatter{ .property = prop }});
         try writer.writeAll("},\n");
@@ -547,6 +583,13 @@ pub const InterfaceFormatter = struct {
             .function = method,
             .container = self.context.getBase(),
         }});
+        try writer.print("{f}", .{RegisteredFormatter{ .registered = &self.context.base }});
+        try writer.writeAll(
+            \\const Ext = core.Extend(@This());
+            \\pub const into = Ext.into;
+            \\pub const tryInto = Ext.tryInto;
+            \\
+        );
         try writer.writeAll("};\n");
     }
 };
@@ -583,6 +626,15 @@ pub const ObjectFormatter = struct {
             .function = method,
             .container = self.context.getBase(),
         }});
+        try writer.print("{f}", .{RegisteredFormatter{ .registered = &self.context.base }});
+        try writer.writeAll(
+            \\const Ext = core.Extend(@This());
+            \\pub const into = Ext.into;
+            \\pub const tryInto = Ext.tryInto;
+            \\pub const getClass = Ext.getClass;
+            \\pub const getIface = Ext.getIface;
+            \\
+        );
         try writer.writeAll("};\n");
     }
 };

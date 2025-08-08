@@ -117,7 +117,7 @@ fn parseConstant(allocator: Allocator, info: *libgi.ConstantInfo) Allocator.Erro
 }
 
 fn parseEnum(allocator: Allocator, info: *libgi.EnumInfo) Allocator.Error!gi.Enum {
-    var _enum: gi.Enum = try .init(allocator, getFullName(info.into(libgi.BaseInfo)));
+    var _enum: gi.Enum = .{ .base = try parseRegistered(allocator, info.into(libgi.RegisteredTypeInfo)) };
     errdefer _enum.deinit(allocator);
     _enum.storage_type = info.getStorageType();
     const n_method = info.getNMethods();
@@ -134,7 +134,11 @@ fn parseFlags(allocator: Allocator, info: *libgi.FlagsInfo) Allocator.Error!gi.F
 }
 
 fn parseInterface(allocator: Allocator, info: *libgi.InterfaceInfo) Allocator.Error!gi.Interface {
-    var interface: gi.Interface = try .init(allocator, getFullName(info.into(libgi.BaseInfo)));
+    var interface: gi.Interface = .{ .base = try parseRegistered(allocator, info.into(libgi.RegisteredTypeInfo)) };
+    if (info.getIfaceStruct()) |iface| {
+        interface.iface = try allocator.create(gi.Base);
+        interface.iface.?.* = try parseBase(allocator, iface.into(libgi.BaseInfo));
+    }
     const n_constant = info.getNConstants();
     var idx: u32 = 0;
     while (idx < n_constant) : (idx += 1) try interface.constants.append(allocator, try parseConstant(allocator, info.getConstant(idx)));
@@ -157,7 +161,7 @@ fn parseInterface(allocator: Allocator, info: *libgi.InterfaceInfo) Allocator.Er
 }
 
 fn parseObject(allocator: Allocator, info: *libgi.ObjectInfo) Allocator.Error!gi.Object {
-    var object: gi.Object = try .init(allocator, getFullName(info.into(libgi.BaseInfo)));
+    var object: gi.Object = .{ .base = try parseRegistered(allocator, info.into(libgi.RegisteredTypeInfo)) };
     errdefer object.deinit(allocator);
     if (info.getClassStruct()) |class_struct| {
         object.class_struct = try allocator.create(gi.Base);
@@ -192,7 +196,7 @@ fn parseObject(allocator: Allocator, info: *libgi.ObjectInfo) Allocator.Error!gi
 }
 
 fn parseStruct(allocator: Allocator, info: *libgi.StructInfo) Allocator.Error!gi.Struct {
-    var _struct: gi.Struct = try .init(allocator, getFullName(info.into(libgi.BaseInfo)));
+    var _struct: gi.Struct = .{ .base = try parseRegistered(allocator, info.into(libgi.RegisteredTypeInfo)) };
     errdefer _struct.deinit(allocator);
     const n_field = info.getNFields();
     var idx: u32 = 0;
@@ -205,7 +209,7 @@ fn parseStruct(allocator: Allocator, info: *libgi.StructInfo) Allocator.Error!gi
 }
 
 fn parseUnion(allocator: Allocator, info: *libgi.UnionInfo) Allocator.Error!gi.Union {
-    var _union: gi.Union = try .init(allocator, getFullName(info.into(libgi.BaseInfo)));
+    var _union: gi.Union = .{ .base = try parseRegistered(allocator, info.into(libgi.RegisteredTypeInfo)) };
     errdefer _union.deinit(allocator);
     const n_field = info.getNFields();
     var idx: u32 = 0;
@@ -328,6 +332,16 @@ fn parseProperty(allocator: Allocator, info: *libgi.PropertyInfo) Allocator.Erro
     return property;
 }
 
+fn parseRegistered(allocator: Allocator, info: *libgi.RegisteredTypeInfo) Allocator.Error!gi.RegisteredType {
+    var registered: gi.RegisteredType = try .init(allocator, getFullName(info.into(libgi.BaseInfo)));
+    errdefer registered.deinit(allocator);
+    if (info.getTypeInitFunctionName()) |_func| {
+        const func = std.mem.span(_func);
+        if (!std.mem.eql(u8, func, "intern")) registered.type_init = try allocator.dupe(u8, func);
+    }
+    return registered;
+}
+
 fn parseSignal(allocator: Allocator, info: *libgi.SignalInfo) Allocator.Error!gi.Signal {
     var signal: gi.Signal = .{ .callable = try parseCallable(allocator, info.into(libgi.CallableInfo)) };
     const callable = info.into(libgi.CallableInfo);
@@ -364,6 +378,7 @@ fn parseType(allocator: Allocator, info: *libgi.TypeInfo) Allocator.Error!gi.Typ
         _type.interface = try allocator.create(gi.Base);
         const interface = info.getInterface().?;
         _type.interface.?.* = try parseBase(allocator, interface);
+        if (interface.tryInto(libgi.CallbackInfo)) |_| _type.interface_is_callback = true;
     }
     return _type;
 }
