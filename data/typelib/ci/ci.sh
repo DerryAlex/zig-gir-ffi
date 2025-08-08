@@ -1,17 +1,14 @@
 #!/usr/bin/bash
 
-gir_version="0.20.5"
-
 apt-get source glib2.0
-cd $(ls -F | grep 'glib2.0' | grep '/$')
+pushd $(ls -F | grep 'glib2.0' | grep '/$')
 patch girepository/girnode.c ../girnode.patch || exit 1
 meson setup build && cd build
 meson compile
 export PATH=$(pwd)/girepository/compiler:$(pwd)/girepository/decompiler:$(pwd)/girepository/inspector:${PATH}
-cd ../..
+popd
 
-git clone https://github.com/gtk-rs/gir-files.git && cd gir-files
-git checkout ${gir_version}
+pushd ../../gir
 
 # utf8
 sed -i 's/type name="utf8" c:type="gchar"/type name="gchar" c:type="gchar"/g' GLib-2.0.gir
@@ -31,12 +28,12 @@ sed -i 's/gconstpointer/gpointer/g' Pango-1.0.gir
 for gir in $(ls *.gir)
 do
     typelib=$(echo ${gir} | sed 's/.gir/.typelib/')
-    gi-compile-repository ${gir} -o ../../${typelib} --includedir .
+    gi-compile-repository ${gir} -o ../typelib/${typelib} --includedir .
 done
 
 # LLP64
 sed -i 's/glong/gint/g' GLib-2.0.gir
 sed -i 's/gulong/guint/g' GLib-2.0.gir
-gi-compile-repository GLib-2.0.gir -o ../../x86_64-windows/GLib-2.0.typelib --includedir .
+gi-compile-repository GLib-2.0.gir -o ../typelib/x86_64-windows/GLib-2.0.typelib --includedir .
 
-cd ..
+popd
