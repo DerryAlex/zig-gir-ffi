@@ -1,13 +1,12 @@
 const std = @import("std");
 const gi = @import("gi");
-const GObject = gi.GObject;
 const Gio = gi.Gio;
 const Gtk = gi.Gtk;
 const Application = Gtk.Application;
 const ApplicationWindow = Gtk.ApplicationWindow;
 const Box = Gtk.Box;
 const Button = Gtk.Button;
-const Object = GObject.Object;
+const Object = gi.GObject.Object;
 const Widget = Gtk.Widget;
 const Window = Gtk.Window;
 
