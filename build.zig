@@ -51,11 +51,12 @@ pub fn build(b: *std.Build) !void {
     if (b.args) |args| {
         run_cmd.addArgs(args);
     } else {
-        run_cmd.addArgs(&.{ "-o", "gtk4" });
+        run_cmd.addArgs(&.{ "-I", "data/gir" });
+        run_cmd.addArgs(&.{ "-I", "data/typelib" });
+        run_cmd.addArgs(&.{"Gtk"});
         // run_cmd.addArgs(&.{ "GLib", "GLibUnix", "GLibWin32" });
         // run_cmd.addArgs(&.{ "Gio", "GioUnix", "GioWin32" });
         // run_cmd.addArgs(&.{ "Gdk", "GdkWayland", "GdkX11", "GdkWin32", "GdkMacos" });
-        run_cmd.addArgs(&.{"Gtk-4.0"});
     }
 
     const run_step = b.step("run", "Run the app");
@@ -63,7 +64,7 @@ pub fn build(b: *std.Build) !void {
 
     // Dist step
     const run_tar = b.addSystemCommand(&.{ "tar", "cahf" });
-    run_tar.addArgs(&.{ "gtk4.tar.gz", "gtk4" });
+    run_tar.addArgs(&.{ "gi.tar.gz", "gi" });
     run_tar.step.dependOn(run_step);
 
     const dist_step = b.step("dist", "Generate release archive");
