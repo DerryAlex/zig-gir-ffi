@@ -1,11 +1,13 @@
 const std = @import("std");
-const gtk = @import("gtk");
-const core = gtk.core;
-const glib = gtk.glib;
+const gi = @import("gi");
+const core = gi.core;
+const GLib = gi.GLib;
+const Gio = gi.Gio;
 const ExampleApp = @import("example_app.zig").ExampleApp;
 
 pub fn main() u8 {
-    _ = glib.setenv("GSETTINGS_SCHEMA_DIR", ".", false);
-    var app = ExampleApp.new();
-    return @intCast(app.__call("run", .{@as([][*:0]const u8, @ptrCast(std.os.argv))}));
+    _ = GLib.setenv("GSETTINGS_SCHEMA_DIR", ".", false);
+    const _app: *ExampleApp = .new();
+    const app = _app.into(Gio.Application);
+    return @intCast(app.run(@ptrCast(std.os.argv)));
 }

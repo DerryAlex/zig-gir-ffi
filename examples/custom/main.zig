@@ -1,30 +1,33 @@
 const std = @import("std");
-const gtk = @import("gtk");
-const core = gtk.core;
+const gi = @import("gi");
+const core = gi.core;
+const Gio = gi.Gio;
+const Gtk = gi.Gtk;
 const CustomButton = @import("custom_button.zig").CustomButton;
-const Application = gtk.Application;
-const ApplicationWindow = gtk.ApplicationWindow;
-const Box = gtk.Box;
-const Widget = gtk.Widget;
-const gio = gtk.gio;
-const GApplication = gio.Application;
-const gobject = gtk.gobject;
-const ConnectFlags = gobject.ConnectFlags;
+const Application = Gtk.Application;
+const ApplicationWindow = Gtk.ApplicationWindow;
+const Box = Gtk.Box;
+const Button = Gtk.Button;
+const Object = gi.GObject.Object;
+const Widget = Gtk.Widget;
+const Window = Gtk.Window;
 
 pub fn main() u8 {
-    var app = Application.new("org.example.custom_button", .{});
-    defer app.__call("unref", .{});
-    _ = app.__call("connectActivate", .{ activate, .{}, ConnectFlags{} });
-    return @intCast(app.__call("run", .{@as([][*:0]const u8, @ptrCast(std.os.argv))}));
+    const _app: *Application = .new("org.example.custom_button", .{});
+    const app = _app.into(Gio.Application);
+    defer app.into(Object).unref();
+    _ = app._signals.activate.connect(.init(activate, .{}), .{});
+    return @intCast(app.run(@ptrCast(std.os.argv)));
 }
 
-pub fn activate(arg_app: *GApplication) void {
+pub fn activate(arg_app: *Gio.Application) void {
     const app = arg_app.tryInto(Application).?;
-    var window = ApplicationWindow.new(app);
-    var box = Box.new(.vertical, 12);
-    window.__call("setChild", .{box.into(Widget)});
-    var button = CustomButton.new();
-    _ = button.connectZeroReached(CustomButton.setNumber, .{10}, .{});
+    const _window: *ApplicationWindow = .new(app);
+    const window = _window.into(Window);
+    const box: *Box = .new(.vertical, 12);
+    window.setChild(box.into(Widget));
+    const button: *CustomButton = .new();
+    _ = button.zero_reached.connect(.init(CustomButton.setNumber, .{10}), .{});
     box.append(button.into(Widget));
-    window.__call("present", .{});
+    window.present();
 }

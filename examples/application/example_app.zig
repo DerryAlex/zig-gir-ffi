@@ -1,30 +1,21 @@
 const std = @import("std");
-const gtk = @import("gtk");
-const core = gtk.core;
-const gobject = gtk.gobject;
-const gio = gtk.gio;
-const meta = std.meta;
-const assert = std.debug.assert;
+const gi = @import("gi");
+const core = gi.core;
+const GObject = gi.GObject;
+const Gio = gi.Gio;
+const Gtk = gi.Gtk;
 const ExampleAppWindow = @import("example_app_window.zig").ExampleAppWindow;
 const ExampleAppPrefs = @import("example_app_prefs.zig").ExampleAppPrefs;
-const Action = gio.Action;
-const Application = gtk.Application;
-const ApplicationClass = gtk.ApplicationClass;
-const ApplicationFlags = gio.ApplicationFlags;
-const File = gio.File;
-const SimpleAction = gio.SimpleAction;
-const Value = gobject.Value;
-const GApplication = gio.Application;
-const GApplicationClass = gio.ApplicationClass;
+const Action = Gio.Action;
+const ActionMap = Gio.ActionMap;
+const Application = Gtk.Application;
+const File = Gio.File;
+const Object = GObject.Object;
+const SimpleAction = Gio.SimpleAction;
+const Window = Gtk.Window;
 
 pub const ExampleAppClass = extern struct {
-    parent_class: ApplicationClass,
-
-    pub var parent_class_ptr: ?*ApplicationClass = null;
-
-    pub fn init(class: *ExampleAppClass) void {
-        parent_class_ptr = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
-    }
+    parent_class: Application.Class,
 };
 
 pub const ExampleApp = extern struct {
@@ -34,62 +25,60 @@ pub const ExampleApp = extern struct {
     pub const Class = ExampleAppClass;
 
     const Ext = core.Extend(@This());
-    pub const __call = Ext.__call;
     pub const into = Ext.into;
     pub const tryInto = Ext.tryInto;
-    pub const property = Ext.property;
-    pub const signalConnect = Ext.signalConnect;
+    pub const getParentClass = Ext.getParentClass;
 
     pub const Override = struct {
-        pub fn activate(arg_app: *GApplication) callconv(.c) void {
-            const self = arg_app.tryInto(ExampleApp).?;
-            var win = ExampleAppWindow.new(self);
-            win.__call("present", .{});
+        pub fn activate(app: *Gio.Application) callconv(.c) void {
+            const self = app.tryInto(ExampleApp).?;
+            const win: *ExampleAppWindow = .new(self);
+            win.into(Gtk.Window).present();
         }
 
-        pub fn open(arg_app: *GApplication, arg_files: [*]*File, arg_n_files: i32, arg_hint: [*:0]const u8) callconv(.c) void {
-            var self = arg_app.tryInto(ExampleApp).?;
-            _ = arg_hint;
-            const windows = self.__call("getWindows", .{});
+        pub fn open(app: *Gio.Application, files: [*]*File, n_files: i32, hint: [*:0]const u8) callconv(.c) void {
+            _ = hint;
+            const self = app.tryInto(ExampleApp).?;
+            const windows = app.tryInto(Application).?.getWindows();
             const win = if (windows) |some| core.dynamicCast(ExampleAppWindow, some.data.?).? else ExampleAppWindow.new(self);
-            for (arg_files[0..@intCast(arg_n_files)]) |file| {
-                win.__call("open", .{file});
+            for (files[0..@intCast(n_files)]) |file| {
+                win.open(file);
             }
-            win.__call("present", .{});
+            win.into(Gtk.Window).present();
         }
 
-        pub fn startup(arg_app: *GApplication) callconv(.c) void {
-            var self = arg_app.tryInto(ExampleApp).?;
-            var action_preferences = SimpleAction.new("preferences", null);
-            defer action_preferences.__call("unref", .{});
-            _ = action_preferences.connectActivate(preferencesActivate, .{self}, .{ .swapped = true });
-            self.__call("addAction", .{action_preferences.into(Action)});
-            var action_quit = SimpleAction.new("quit", null);
-            defer action_quit.__call("unref", .{});
-            _ = action_quit.connectActivate(quitActivate, .{self}, .{ .swapped = true });
-            self.__call("addAction", .{action_quit.into(Action)});
+        pub fn startup(app: *Gio.Application) callconv(.c) void {
+            const self = app.tryInto(ExampleApp).?;
+            const act_pref: *SimpleAction = .new("preferences", null);
+            defer act_pref.into(Object).unref();
+            _ = act_pref._signals.activate.connect(.init(preferencesActivate, .{self}), .{});
+            self.into(ActionMap).addAction(act_pref.into(Action));
+            const act_quit: *SimpleAction = .new("quit", null);
+            defer act_quit.into(Object).unref();
+            _ = act_quit._signals.activate.connect(.init(quitActivate, .{self}), .{});
+            self.into(ActionMap).addAction(act_quit.into(Action));
             var quit_accels = [_:null]?[*:0]const u8{"<Ctrl>Q"};
-            self.__call("setAccelsForAction", .{ "app.quit", &quit_accels });
-            const p_class: *GApplicationClass = @ptrCast(Class.parent_class_ptr.?);
-            p_class.startup.?(arg_app);
+            self.into(Application).setAccelsForAction("app.quit", &quit_accels);
+            const p_class = self.getParentClass(Gio.Application);
+            p_class.startup.?(app);
         }
     };
 
     pub fn new() *ExampleApp {
-        return core.newObject(ExampleApp, .{
-            .@"application-id" = "org.gtk.example",
-            .flags = ApplicationFlags{ .handles_open = true },
-        });
+        const self = core.newObject(ExampleApp);
+        self.into(Gio.Application)._props.@"application-id".set("org.gtk.example");
+        self.into(Gio.Application)._props.flags.set(.{ .handles_open = true });
+        return self;
     }
 
     fn preferencesActivate(self: *ExampleApp) void {
-        const win = self.__call("getActiveWindow", .{}).?.tryInto(ExampleAppWindow).?;
-        var prefs = ExampleAppPrefs.new(win);
-        prefs.__call("present", .{});
+        const win = self.into(Application).getActiveWindow().?.tryInto(ExampleAppWindow).?;
+        const prefs: *ExampleAppPrefs = .new(win);
+        prefs.into(Window).present();
     }
 
     fn quitActivate(self: *ExampleApp) void {
-        self.__call("quit", .{});
+        self.into(Gio.Application).quit();
     }
 
     pub fn gType() core.Type {
