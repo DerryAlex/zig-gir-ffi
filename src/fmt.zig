@@ -315,7 +315,7 @@ const BitField = struct {
 
     pub fn end(writer: *Writer) Writer.Error!void {
         if (remaining) |r| {
-            try writer.print("_: u{},\n", .{r});
+            if (r > 0) try writer.print("_: u{},\n", .{r});
             try writer.writeAll("},\n");
         }
         remaining = null;
@@ -561,23 +561,29 @@ pub const InterfaceFormatter = struct {
 
     pub fn format(self: InterfaceFormatter, writer: *Writer) Writer.Error!void {
         try writer.print("pub const {s} = struct{{\n", .{self.context.getBase().name});
-        try writer.writeAll("pub const Prerequistes = [_]type{");
-        var first = true;
-        for (self.context.prerequisites.items) |*preq| {
-            if (!first) try writer.writeAll(", ") else first = false;
-            try writer.print("{f}", .{preq.getBase()});
+        if (self.context.prerequisites.items.len > 0) {
+            try writer.writeAll("pub const Prerequistes = [_]type{");
+            var first = true;
+            for (self.context.prerequisites.items) |*preq| {
+                if (!first) try writer.writeAll(", ") else first = false;
+                try writer.print("{f}", .{preq.getBase()});
+            }
+            try writer.writeAll("};\n");
         }
-        try writer.writeAll("};\n");
-        if (self.context.iface) |iface| try writer.print("pub const Iface = {f};\n", .{iface});
-        try writer.writeAll("_props: struct {\n");
-        for (self.context.properties.items) |*prop| try writer.print("{f}", .{PropertyFormatter{ .property = prop }});
-        try writer.writeAll("},\n");
-        try writer.writeAll("_signals: struct {\n");
-        for (self.context.signals.items) |*signal| try writer.print("{f}", .{SignalFormatter{
-            .signal = signal,
-            .container = self.context.getBase(),
-        }});
-        try writer.writeAll("},\n");
+        if (self.context.iface) |iface| try writer.print("pub const Class = {f};\n", .{iface});
+        if (self.context.properties.items.len > 0) {
+            try writer.writeAll("_props: struct {\n");
+            for (self.context.properties.items) |*prop| try writer.print("{f}", .{PropertyFormatter{ .property = prop }});
+            try writer.writeAll("},\n");
+        }
+        if (self.context.signals.items.len > 0) {
+            try writer.writeAll("_signals: struct {\n");
+            for (self.context.signals.items) |*signal| try writer.print("{f}", .{SignalFormatter{
+                .signal = signal,
+                .container = self.context.getBase(),
+            }});
+            try writer.writeAll("},\n");
+        }
         for (self.context.constants.items) |*constant| try writer.print("{f}", .{ConstantFormatter{ .constant = constant }});
         for (self.context.methods.items) |*method| try writer.print("{f}", .{FunctionFormatter{
             .function = method,
@@ -599,24 +605,30 @@ pub const ObjectFormatter = struct {
 
     pub fn format(self: ObjectFormatter, writer: *Writer) Writer.Error!void {
         try writer.print("pub const {s} = {s}{{\n", .{ self.context.getBase().name, if (self.context.fields.items.len != 0) "extern struct" else "struct" });
-        try writer.writeAll("pub const Interfaces = [_]type{");
-        var first = true;
-        for (self.context.interfaces.items) |*interface| {
-            if (!first) try writer.writeAll(", ") else first = false;
-            try writer.print("{f}", .{interface.getBase()});
+        if (self.context.interfaces.items.len > 0) {
+            try writer.writeAll("pub const Interfaces = [_]type{");
+            var first = true;
+            for (self.context.interfaces.items) |*interface| {
+                if (!first) try writer.writeAll(", ") else first = false;
+                try writer.print("{f}", .{interface.getBase()});
+            }
+            try writer.writeAll("};\n");
         }
-        try writer.writeAll("};\n");
         if (self.context.parent) |parent| try writer.print("pub const Parent = {f};\n", .{parent});
         if (self.context.class_struct) |class| try writer.print("pub const Class = {f};\n", .{class});
-        try writer.writeAll("_props: struct {\n");
-        for (self.context.properties.items) |*prop| try writer.print("{f}", .{PropertyFormatter{ .property = prop }});
-        try writer.writeAll("},\n");
-        try writer.writeAll("_signals: struct {\n");
-        for (self.context.signals.items) |*signal| try writer.print("{f}", .{SignalFormatter{
-            .signal = signal,
-            .container = self.context.getBase(),
-        }});
-        try writer.writeAll("},\n");
+        if (self.context.properties.items.len > 0) {
+            try writer.writeAll("_props: struct {\n");
+            for (self.context.properties.items) |*prop| try writer.print("{f}", .{PropertyFormatter{ .property = prop }});
+            try writer.writeAll("},\n");
+        }
+        if (self.context.signals.items.len > 0) {
+            try writer.writeAll("_signals: struct {\n");
+            for (self.context.signals.items) |*signal| try writer.print("{f}", .{SignalFormatter{
+                .signal = signal,
+                .container = self.context.getBase(),
+            }});
+            try writer.writeAll("},\n");
+        }
         for (self.context.methods.items) |*method| PreservedField.names.put(method.getBase().name, {}) catch @panic("Out Of Memory");
         defer PreservedField.names.clearAndFree();
         for (self.context.fields.items) |*field| try writer.print("{f}", .{FieldFormatter{ .field = field }});
@@ -631,8 +643,6 @@ pub const ObjectFormatter = struct {
             \\const Ext = core.Extend(@This());
             \\pub const into = Ext.into;
             \\pub const tryInto = Ext.tryInto;
-            \\pub const getClass = Ext.getClass;
-            \\pub const getIface = Ext.getIface;
             \\
         );
         try writer.writeAll("};\n");
@@ -773,10 +783,10 @@ pub const FunctionFormatter = struct {
                     try writer.print("{f}", .{TypeFormatter{ .type = arg.type_info.?.param_type.? }});
                 } else if (closure_info[idx].is_func) {
                     // closure
-                    try writer.print("argC_{s}: core.Closure({f}, {})", .{ arg_name, ArgFormatter{
+                    try writer.print("argC_{s}: core.Closure({f})", .{ arg_name, ArgFormatter{
                         .arg = arg,
                         .arg_name = false,
-                    }, arg.scope });
+                    } });
                 } else {
                     try writer.print("{f}", .{ArgFormatter{ .arg = arg }});
                 }
@@ -858,7 +868,7 @@ pub const FunctionFormatter = struct {
                     try writer.print("var argO_{s}: {f} = ", .{ arg_name, TypeFormatter{ .type = &arg_type } });
                 }
                 try writer.print("@intCast((argS_{s}", .{ptr_arg_name});
-                if (ptr_arg.optional) try writer.writeAll("orelse &.{}");
+                if (ptr_arg.optional) try writer.writeAll(" orelse &.{}");
                 try writer.writeAll(").len);\n");
                 if (arg.direction != .in) {
                     try writer.print("const {f} = &argO_{s};\n", .{ ArgFormatter{ .arg = arg }, arg_name });
@@ -870,6 +880,7 @@ pub const FunctionFormatter = struct {
             if (closure_info[idx].is_func) {
                 try writer.print("const {f} = @ptrCast(argC_{s}.callback());\n", .{ ArgFormatter{ .arg = arg }, arg_name });
                 if (arg.scope == .call) try writer.print("defer argC_{s}.deinit();\n", .{arg_name});
+                if (arg.scope == .async) try writer.print("argC_{s}.closure.once = true;\n", .{arg_name});
             }
             if (closure_info[idx].is_data) {
                 const func_arg_name = args[closure_info[idx].closure_func].getBase().name;
