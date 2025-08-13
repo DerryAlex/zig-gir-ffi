@@ -6,7 +6,7 @@ const Writer = std.Io.Writer;
 const gi = @import("../gi.zig");
 const Repository = gi.Repository;
 const fmt = @import("../fmt.zig");
-const TypeFormatter = fmt.TypeFormatter;
+const CallbackFormatter = fmt.CallbackFormatter;
 const libgi = @import("typelib/girepository-2.0.zig");
 
 var _repo: ?*libgi.Repository = null;
@@ -246,35 +246,10 @@ fn parseBase(allocator: Allocator, info: *libgi.BaseInfo) Allocator.Error!gi.Bas
     if (info.tryInto(libgi.CallbackInfo)) |cb| {
         const name = getName(info);
         if (!std.ascii.isUpper(name[0])) {
-            const callable = cb.into(libgi.CallableInfo);
+            var callback = try parseCallback(allocator, cb);
             var aw: Writer.Allocating = .init(allocator);
             errdefer aw.deinit();
-            aw.writer.writeAll("*const fn(") catch return error.OutOfMemory;
-            const n_arg = callable.getNArgs();
-            var idx: u32 = 0;
-            while (idx < n_arg) : (idx += 1) {
-                const arg_info = callable.getArg(idx);
-                const type_info = arg_info.getTypeInfo();
-                if (type_info.getTag() == .interface) {
-                    const interface = type_info.getInterface().?;
-                    if (interface.tryInto(libgi.CallbackInfo)) |_cb| {
-                        const _cb_name = getName(_cb.into(libgi.BaseInfo));
-                        assert(std.ascii.isUpper(_cb_name[0]));
-                    }
-                }
-                var _type = try parseType(allocator, type_info);
-                if (idx != 0) aw.writer.writeAll(", ") catch return error.OutOfMemory;
-                const arg_name = getName(arg_info.into(libgi.BaseInfo));
-                if (std.zig.isValidId(arg_name)) {
-                    aw.writer.print("{s}: ", .{arg_name}) catch return error.OutOfMemory;
-                } else {
-                    aw.writer.print("@\"{s}\": ", .{arg_name}) catch return error.OutOfMemory;
-                }
-                aw.writer.print("{f}", .{TypeFormatter{ .type = &_type }}) catch return error.OutOfMemory;
-            }
-            aw.writer.writeAll(") callconv(.c) ") catch return error.OutOfMemory;
-            var return_type = try parseType(allocator, callable.getReturnType());
-            aw.writer.print("{f}", .{TypeFormatter{ .type = &return_type }}) catch return error.OutOfMemory;
+            aw.writer.print("{f}", .{CallbackFormatter{ .callback = &callback }}) catch return error.OutOfMemory;
             return .{
                 .name = try aw.toOwnedSlice(),
                 .namespace = &.{},
@@ -293,6 +268,7 @@ fn parseArg(allocator: Allocator, info: *libgi.ArgInfo) Allocator.Error!gi.Arg {
     arg.ownership_transfer = info.getOwnershipTransfer();
     arg.caller_allocates = info.isCallerAllocates();
     arg.may_be_null = info.mayBeNull();
+    arg.optional = info.isOptional();
     arg.closure_index = info.getClosureIndex() orelse null;
     arg.destroy_index = info.getDestroyIndex() orelse null;
     arg.scope = info.getScope();
