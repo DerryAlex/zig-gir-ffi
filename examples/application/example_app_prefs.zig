@@ -53,7 +53,7 @@ fn fontDescToString(value: *Value, _: *VariantType, _: ?*anyopaque) callconv(.c)
         GLib.free(str);
     }
     Static.desc_str = GLib.strdup(s);
-    return Variant.newString(Static.desc_str.?);
+    return .newString(Static.desc_str.?);
 }
 
 fn transitionToPos(value: *Value, variant: *Variant, _: ?*anyopaque) callconv(.c) bool {
