@@ -654,7 +654,7 @@ pub const HandlerId = ULong;
 /// A simple implementation of signal and slot mechanism.
 pub fn SimpleSignal(comptime Fn: type) type {
     return extern struct {
-        slots: [8]?*ZigClosure = .{null} ** 8,
+        slots: [8]?*ZigClosure = @splat(null),
         n_slot: usize = 0,
 
         const Self = @This();
