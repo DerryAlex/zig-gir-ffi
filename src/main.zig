@@ -103,11 +103,11 @@ pub fn main() !void {
     fmt_argv.appendSliceAssumeCapacity(&.{ "zig", "fmt" });
     defer {
         for (fmt_argv.items[2..]) |arg| allocator.free(arg);
-        fmt_argv.deinit();
+        fmt_argv.deinit(allocator);
     }
     for (namespaces) |ns| {
         const file_name = try std.mem.concat(allocator, u8, &.{ ns.name, ".zig" });
-        try fmt_argv.append(file_name);
+        try fmt_argv.append(allocator, file_name);
     }
     var fmt_process: std.process.Child = .init(fmt_argv.items, allocator);
     fmt_process.cwd_dir = binding_dir;

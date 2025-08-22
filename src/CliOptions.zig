@@ -49,10 +49,10 @@ fn isValidDir(path: []const u8) bool {
 
 pub fn parse(allocator: Allocator, args: []const [:0]const u8) !CliOptions {
     var options: CliOptions = .{};
-    var namespaces: std.ArrayList(Namespace) = .init(allocator);
-    errdefer namespaces.deinit();
-    var include_dirs: std.ArrayList([]const u8) = .init(allocator);
-    errdefer include_dirs.deinit();
+    var namespaces: std.ArrayList(Namespace) = .empty;
+    errdefer namespaces.deinit(allocator);
+    var include_dirs: std.ArrayList([]const u8) = .empty;
+    errdefer include_dirs.deinit(allocator);
 
     var i: usize = 1;
     while (i < args.len) : (i += 1) {
@@ -70,26 +70,26 @@ pub fn parse(allocator: Allocator, args: []const [:0]const u8) !CliOptions {
                 if (i + 1 >= args.len) fatal("expected argument after '{s}'", .{arg});
                 i += 1;
                 const dir = args[i];
-                if (isValidDir(dir)) try include_dirs.append(dir);
+                if (isValidDir(dir)) try include_dirs.append(allocator, dir);
             } else {
                 fatal("unknown option: '{s}'", .{arg});
             }
         } else {
             if (std.mem.indexOfScalar(u8, arg, '-')) |pos| {
-                try namespaces.append(.{
+                try namespaces.append(allocator, .{
                     .name = arg[0..pos],
                     .version = arg[pos + 1 ..],
                 });
             } else {
-                try namespaces.append(.{
+                try namespaces.append(allocator, .{
                     .name = arg,
                 });
             }
         }
     }
 
-    options.namespaces = try namespaces.toOwnedSlice();
-    options.include_dirs = try include_dirs.toOwnedSlice();
+    options.namespaces = try namespaces.toOwnedSlice(allocator);
+    options.include_dirs = try include_dirs.toOwnedSlice(allocator);
     return options;
 }
 
