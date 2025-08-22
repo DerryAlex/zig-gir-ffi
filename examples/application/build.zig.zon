@@ -16,8 +16,8 @@
         "org.gtk.exampleapp.gschema.xml",
     },
     .dependencies = .{
-        .gtk = .{
-            .path = "../../gtk4/",
+        .gi = .{
+            .path = "../../gi/",
         },
     },
 }

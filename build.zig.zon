@@ -1,14 +1,9 @@
 .{
     .name = .gi,
-    .version = "0.11.1",
-    .minimum_zig_version = "0.14.0",
+    .version = "0.12.0-dev",
+    .minimum_zig_version = "0.15.0-dev.1218+bc8e1a74c",
     .fingerprint = 0x5f0b3663d8832352,
-    .dependencies = .{
-        .clap = .{
-            .url = "https://github.com/Hejsil/zig-clap/archive/refs/tags/0.10.0.tar.gz",
-            .hash = "clap-0.10.0-oBajB434AQBDh-Ei3YtoKIRxZacVPF1iSwp3IX_ZB8f0",
-        },
-    },
+    .dependencies = .{},
     .paths = .{
         "build.zig",
         "build.zig.zon",

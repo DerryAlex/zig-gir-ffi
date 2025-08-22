@@ -11,8 +11,8 @@
         "main.zig",
     },
     .dependencies = .{
-        .gtk = .{
-            .path = "../../gtk4/",
+        .gi = .{
+            .path = "../../gi/",
         },
     },
 }

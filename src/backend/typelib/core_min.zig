@@ -1,13 +1,4 @@
 const std = @import("std");
-const builtin = @import("builtin");
-const root = @import("root");
-
-pub fn deprecated(value: anytype) @TypeOf(value) {
-    if (@TypeOf(value) == void) {
-        @compileError("deprecated");
-    }
-    return value;
-}
 
 // ----------
 // type begin
@@ -38,9 +29,6 @@ pub const Type = enum(usize) {
     variant = 84,
     _,
 };
-
-/// UCS-4
-pub const Unichar = u32;
 
 // type end
 // --------
@@ -114,16 +102,6 @@ pub fn Extend(comptime Self: type) type {
 // ----------
 // GLib begin
 
-pub const Array = extern struct {
-    data: ?[*:0]const u8,
-    len: u32,
-};
-
-pub const ByteArray = extern struct {
-    data: ?*u8,
-    len: u32,
-};
-
 pub const Bytes = opaque {};
 
 pub const Data = opaque {};
@@ -132,19 +110,6 @@ pub const Error = extern struct {
     domain: u32,
     code: i32,
     message: ?[*:0]const u8,
-};
-
-pub const HashTable = opaque {};
-
-pub const List = extern struct {
-    data: ?*anyopaque,
-    next: ?*List,
-    prev: ?*List,
-};
-
-pub const PtrArray = extern struct {
-    pdata: ?*anyopaque,
-    len: u32,
 };
 
 pub const SList = extern struct {

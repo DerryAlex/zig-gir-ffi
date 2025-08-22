@@ -9,8 +9,8 @@
         "custom_button.zig",
     },
     .dependencies = .{
-        .gtk = .{
-            .path = "../../gtk4/",
+        .gi = .{
+            .path = "../../gi/",
         },
     },
 }

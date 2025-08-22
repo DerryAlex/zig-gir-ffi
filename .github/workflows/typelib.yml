@@ -6,8 +6,14 @@ name: typelib
 on:
   # Triggers the workflow on push or pull request events but only for the "master" branch
   push:
-    branches: [ "master" ]
-    paths: [ "lib/girepository-1.0/ci/ci.sh", "lib/girepository-1.0/girnode.patch", ".github/workflows/typelib.yml" ]
+    branches: ["master"]
+    paths:
+      [
+        "data/typelib/ci/ci.sh",
+        "data/typelib/ci/girnode.patch",
+        ".git/modules/data/gir/index",
+        ".github/workflows/typelib.yml",
+      ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -31,14 +37,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install gir1.2-girepository-3.0-dev
           sudo apt-get build-dep libglib2.0-dev-bin
-      
+
       - name: Generate typelibs
         run: |
-          cd lib/girepository-1.0/ci/
+          pushd data/typelib/ci/
           ./ci.sh
-          cd ../../..
+          popd
 
       - uses: peter-evans/create-pull-request@v7
         with:
-          add-paths: lib/girepository-1.0/*.typelib
+          add-paths: data/typelib/*.typelib
           commit-message: Update typelibs

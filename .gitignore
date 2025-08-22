@@ -1,5 +1,4 @@
 .zig-cache
 zig-cache
 zig-out
-gtk4/
-gi-output/
+gi/

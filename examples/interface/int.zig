@@ -1,14 +1,12 @@
 const std = @import("std");
-const gtk = @import("gtk");
-const core = gtk.core;
-const gobject = gtk.gobject;
-const Object = gobject.Object;
-const ObjectClass = gobject.ObjectClass;
+const gi = @import("gi");
+const core = gi.core;
+const Object = gi.GObject.Object;
 const PartialEq = @import("eq.zig").PartialEq;
 const PartialOrd = @import("ord.zig").PartialOrd;
 
 pub const TypedIntClass = extern struct {
-    parent_class: ObjectClass,
+    parent_class: Object.Class,
 };
 
 pub const TypeIntPrivate = struct {
@@ -25,11 +23,8 @@ pub const TypedInt = extern struct {
     pub const Interfaces = [_]type{ PartialEq, PartialOrd };
 
     const Ext = core.Extend(@This());
-    pub const __call = Ext.__call;
     pub const into = Ext.into;
     pub const tryInto = Ext.tryInto;
-    pub const property = Ext.property;
-    pub const signalConnect = Ext.signalConnect;
 
     pub const Override = struct {
         pub fn eq_fn(self: *PartialEq, rhs: *PartialEq) bool {
@@ -41,13 +36,13 @@ pub const TypedInt = extern struct {
         pub fn cmp_fn(self: *PartialOrd, rhs: *PartialOrd) PartialOrd.Order {
             const lhs_value = self.tryInto(TypedInt).?.private.value;
             const rhs_value = rhs.tryInto(TypedInt).?.private.value;
-            if (lhs_value == rhs_value) return .Eq;
-            return if (lhs_value < rhs_value) .Lt else .Gt;
+            if (lhs_value == rhs_value) return .eq;
+            return if (lhs_value < rhs_value) .lt else .gt;
         }
     };
 
     pub fn new(value: i32) *TypedInt {
-        var object = core.newObject(TypedInt, .{});
+        var object = core.newObject(TypedInt);
         object.private.value = value;
         return object;
     }

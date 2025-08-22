@@ -1,42 +1,40 @@
 const std = @import("std");
-const gtk = @import("gtk");
-const core = gtk.core;
-const glib = gtk.glib;
-const gobject = gtk.gobject;
-const gio = gtk.gio;
-const template = gtk.template;
-const meta = std.meta;
-const assert = std.debug.assert;
+const gi = @import("gi");
+const core = gi.core;
+const GLib = gi.GLib;
+const GObject = gi.GObject;
+const Gio = gi.Gio;
+const Gtk = gi.Gtk;
 const ExampleApp = @import("example_app.zig").ExampleApp;
-const Action = gio.Action;
-const Application = gtk.Application;
-const ApplicationWindow = gtk.ApplicationWindow;
-const ApplicationWindowClass = gtk.ApplicationWindowClass;
-const Builder = gtk.Builder;
-const Button = gtk.Button;
-const Entry = gtk.Entry;
-const File = gio.File;
-const Label = gtk.Label;
-const ListBox = gtk.ListBox;
-const MenuButton = gtk.MenuButton;
-const MenuModel = gio.MenuModel;
-const BindingFlags = gobject.BindingFlags;
-const Object = gobject.Object;
-const ObjectClass = gobject.ObjectClass;
-const ParamSpec = gobject.ParamSpec;
-const PropertyAction = gio.PropertyAction;
-const Revealer = gtk.Revealer;
-const ScrolledWindow = gtk.ScrolledWindow;
-const SearchBar = gtk.SearchBar;
-const SearchEntry = gtk.SearchEntry;
-const Settings = gio.Settings;
-const Stack = gtk.Stack;
-const TextIter = gtk.TextIter;
-const TextTag = gtk.TextTag;
-const TextView = gtk.TextView;
-const ToggleButton = gtk.ToggleButton;
-const Widget = gtk.Widget;
-const WidgetClass = gtk.WidgetClass;
+const Action = Gio.Action;
+const ActionMap = Gio.ActionMap;
+const Application = Gtk.Application;
+const ApplicationWindow = Gtk.ApplicationWindow;
+const Builder = Gtk.Builder;
+const Button = Gtk.Button;
+const Editable = Gtk.Editable;
+const Entry = Gtk.Entry;
+const Error = GLib.Error;
+const File = Gio.File;
+const Label = Gtk.Label;
+const ListBox = Gtk.ListBox;
+const MenuButton = Gtk.MenuButton;
+const MenuModel = Gio.MenuModel;
+const Object = GObject.Object;
+const ParamSpec = GObject.ParamSpec;
+const PropertyAction = Gio.PropertyAction;
+const Revealer = Gtk.Revealer;
+const ScrolledWindow = Gtk.ScrolledWindow;
+const SearchBar = Gtk.SearchBar;
+const SearchEntry = Gtk.SearchEntry;
+const Settings = Gio.Settings;
+const Stack = Gtk.Stack;
+const TextIter = Gtk.TextIter;
+const TextTag = Gtk.TextTag;
+const TextView = Gtk.TextView;
+const ToggleButton = Gtk.ToggleButton;
+const Widget = Gtk.Widget;
+const Window = Gtk.Window;
 
 pub const CstrContext = struct {
     pub fn hash(_: CstrContext, key: [*:0]u8) u64 {
@@ -49,39 +47,31 @@ pub const CstrContext = struct {
 };
 
 pub const ExampleAppWindowClass = extern struct {
-    parent_class: ApplicationWindowClass,
-
-    pub var parent_class_ptr: ?*ApplicationWindowClass = null;
+    parent_class: ApplicationWindow.Class,
 
     pub fn init(class: *ExampleAppWindowClass) void {
-        parent_class_ptr = @ptrCast(gobject.TypeClass.peekParent(@ptrCast(class)));
-        var widget_class: *WidgetClass = @ptrCast(class);
+        const widget_class: *Widget.Class = @ptrCast(class);
         widget_class.setTemplateFromResource("/org/gtk/exampleapp/window.ui");
-        template.bindChild(widget_class, ExampleAppWindow, &[_]template.BindingZ{
-            .{ .name = "stack" },
-            .{ .name = "gears" },
-            .{ .name = "search" },
-            .{ .name = "searchbar" },
-            .{ .name = "searchentry" },
-            .{ .name = "sidebar" },
-            .{ .name = "words" },
-            .{ .name = "lines" },
-            .{ .name = "lines_label" },
-        }, null);
-        template.bindCallback(widget_class, ExampleAppWindowClass, &[_]template.BindingZ{
-            .{
-                .name = "search_text_changed",
-                .symbol = "searchTextChanged",
-            },
-            .{
-                .name = "visible_child_changed",
-                .symbol = "visibleChildChanged",
-            },
-        });
+        const children: []const [:0]const u8 = &.{
+            "stack",
+            "gears",
+            "search",
+            "searchbar",
+            "searchentry",
+            "sidebar",
+            "words",
+            "lines",
+            "lines_label",
+        };
+        inline for (children) |child| {
+            widget_class.bindTemplateChildFull(child, false, @offsetOf(ExampleAppWindow, child));
+        }
+        widget_class.bindTemplateCallbackFull("search_text_changed", @ptrCast(&searchTextChanged));
+        widget_class.bindTemplateCallbackFull("visible_child_changed", @ptrCast(&visibleChildChanged));
     }
 
-    pub fn searchTextChanged(entry: *Entry, self: *ExampleAppWindow) callconv(.c) void {
-        const text = entry.__call("getText", .{});
+    fn searchTextChanged(entry: *Entry, self: *ExampleAppWindow) callconv(.c) void {
+        const text = entry.into(Editable).getText();
         if (text[0] == 0) return;
         var tab = self.stack.getVisibleChild().?.tryInto(ScrolledWindow).?;
         var view = tab.getChild().?.tryInto(TextView).?;
@@ -96,8 +86,8 @@ pub const ExampleAppWindowClass = extern struct {
         }
     }
 
-    pub fn visibleChildChanged(stack: *Stack, _: *ParamSpec, self: *ExampleAppWindow) callconv(.c) void {
-        if (stack.__call("inDestruction", .{})) return;
+    fn visibleChildChanged(stack: *Stack, _: *ParamSpec, self: *ExampleAppWindow) callconv(.c) void {
+        if (stack.into(Widget).inDestruction()) return;
         self.searchbar.setSearchMode(false);
         self.updateWords();
         self.updateLines();
@@ -121,68 +111,66 @@ pub const ExampleAppWindow = extern struct {
     pub const Class = ExampleAppWindowClass;
 
     const Ext = core.Extend(@This());
-    pub const __call = Ext.__call;
     pub const into = Ext.into;
     pub const tryInto = Ext.tryInto;
-    pub const property = Ext.property;
-    pub const signalConnect = Ext.signalConnect;
+    pub const getParentClass = Ext.getParentClass;
 
     pub const Override = struct {
-        pub fn dispose(arg_object: *Object) callconv(.c) void {
-            var self = arg_object.tryInto(ExampleAppWindow).?;
-            self.settings.__call("unref", .{});
-            self.__call("disposeTemplate", .{ExampleAppWindow.gType()});
-            const p_class: *ObjectClass = @ptrCast(Class.parent_class_ptr.?);
-            p_class.dispose.?(arg_object);
+        pub fn dispose(object: *Object) callconv(.c) void {
+            const self = object.tryInto(ExampleAppWindow).?;
+            self.settings.into(Object).unref();
+            self.into(Widget).disposeTemplate(gType());
+            const p_class = self.getParentClass(Object);
+            p_class.dispose.?(object);
         }
     };
 
     pub fn init(self: *ExampleAppWindow) void {
-        self.__call("initTemplate", .{});
-        var builder = Builder.newFromResource("/org/gtk/exampleapp/gears-menu.ui");
-        defer builder.__call("unref", .{});
+        self.into(Widget).initTemplate();
+        const builder: *Builder = .newFromResource("/org/gtk/exampleapp/gears-menu.ui");
+        defer builder.into(Object).unref();
         const menu = builder.getObject("menu").?.tryInto(MenuModel).?;
         self.gears.setMenuModel(menu);
         self.settings = Settings.new("org.gtk.exampleapp");
         self.settings.bind("transition", self.stack.into(Object), "transition-type", .{});
         self.settings.bind("show-words", self.sidebar.into(Object), "reveal-child", .{});
-        _ = self.search.__call("bindProperty", .{ "active", self.searchbar.into(Object), "search-mode-enabled", gobject.BindingFlags{ .bidirectional = true } });
-        _ = self.sidebar.signalConnect("notify::reveal-child", updateWords, .{self}, .{ .swapped = true }, fn (*gobject.Object, *gobject.ParamSpec) void);
+        _ = self.search.into(Object).bindProperty("active", self.searchbar.into(Object), "search-mode-enabled", .{ .bidirectional = true });
+        _ = self.sidebar._props.@"reveal-child".connectNotify(.init(updateWords, .{self}), .{});
         const action_show_words = self.settings.createAction("show-words");
         defer core.unsafeCast(Object, action_show_words).unref();
-        self.__call("addAction", .{action_show_words});
-        var action_show_lines = PropertyAction.new("show-lines", self.lines.into(Object), "visible");
-        defer action_show_lines.__call("unref", .{});
-        self.__call("addAction", .{action_show_lines.into(Action)});
-        _ = self.lines.__call("bindProperty", .{ "visible", self.lines_label.into(Object), "visible", BindingFlags{} });
+        self.into(ActionMap).addAction(action_show_words);
+        const action_show_lines: *PropertyAction = .new("show-lines", self.lines.into(Object), "visible");
+        defer action_show_lines.into(Object).unref();
+        self.into(ActionMap).addAction(action_show_lines.into(Action));
+        _ = self.lines.into(Object).bindProperty("visible", self.lines_label.into(Object), "visible", .{});
     }
 
     pub fn new(app: *ExampleApp) *ExampleAppWindow {
-        return core.newObject(ExampleAppWindow, .{
-            .application = app.into(Application),
-        });
+        const self = core.newObject(ExampleAppWindow);
+        self.into(Window)._props.application.set(app.into(Application));
+        return self;
     }
 
     pub fn open(self: *ExampleAppWindow, file: *File) void {
         const basename = file.getBasename().?;
-        defer glib.free(basename);
+        defer GLib.free(basename);
         var scrolled = ScrolledWindow.new();
-        scrolled.__call("setHexpand", .{true});
-        scrolled.__call("setVexpand", .{true});
-        var view = TextView.new();
+        scrolled.into(Widget).setHexpand(true);
+        scrolled.into(Widget).setVexpand(true);
+        const view: *TextView = .new();
         view.setEditable(false);
         view.setCursorVisible(false);
         scrolled.setChild(view.into(Widget));
         _ = self.stack.addTitled(scrolled.into(Widget), basename, basename);
         var buffer = view.getBuffer();
-        var err: ?*core.Error = null;
+        var err: ?*Error = null;
         const result = file.loadContents(null, &err) catch {
             defer err.?.free();
             std.log.warn("{s}", .{err.?.message.?});
             return;
         };
-        defer glib.free(result.contents.ptr);
-        defer glib.free(result.etag_out);
+        defer GLib.free(result.contents.ptr);
+        defer GLib.free(result.etag_out);
         buffer.setText(@ptrCast(result.contents.ptr), @intCast(result.contents.len));
         var tag = TextTag.new(null);
         _ = buffer.getTagTable().add(tag);
@@ -192,19 +180,19 @@ pub const ExampleAppWindow = extern struct {
         buffer.getStartIter(&start_iter);
         buffer.getEndIter(&end_iter);
         buffer.applyTag(tag, &start_iter, &end_iter);
-        self.search.__call("setSensitive", .{true});
+        self.search.into(Widget).setSensitive(true);
         self.updateWords();
         self.updateLines();
     }
 
     fn findWord(button: *Button, self: *ExampleAppWindow) void {
         const word = button.getLabel().?;
-        self.searchentry.__call("setText", .{word});
+        self.searchentry.into(Editable).setText(word);
     }
 
     pub fn updateWords(self: *ExampleAppWindow) void {
         var tab = if (self.stack.getVisibleChild()) |some| some.tryInto(ScrolledWindow).? else return;
-        var view = tab.getChild().?.tryInto(gtk.TextView).?;
+        var view = tab.getChild().?.tryInto(Gtk.TextView).?;
         var buffer = view.getBuffer();
         var start: TextIter = undefined;
         var end: TextIter = undefined;
@@ -214,7 +202,7 @@ pub const ExampleAppWindow = extern struct {
         defer {
             var iter = strings.keyIterator();
             while (iter.next()) |some| {
-                glib.free(some.*);
+                GLib.free(some.*);
             }
             strings.deinit();
         }
@@ -225,12 +213,12 @@ pub const ExampleAppWindow = extern struct {
             end = start;
             if (!end.forwardWordEnd()) break :outer;
             const word = buffer.getText(&start, &end, false);
-            defer glib.free(word);
-            strings.put(glib.utf8Strdown(word, -1), {}) catch @panic("");
+            defer GLib.free(word);
+            strings.put(GLib.utf8Strdown(word, -1), {}) catch @panic("");
             start = end;
         }
         while (true) {
-            const child = self.words.__call("getFirstChild", .{});
+            const child = self.words.into(Widget).getFirstChild();
             if (child) |some| {
                 self.words.remove(some);
             } else {
@@ -239,8 +227,8 @@ pub const ExampleAppWindow = extern struct {
         }
         var iter = strings.keyIterator();
         while (iter.next()) |some| {
-            var row = Button.newWithLabel(some.*);
-            _ = row.connectClicked(findWord, .{self}, .{});
+            var row: *Button = .newWithLabel(some.*);
+            _ = row._signals.clicked.connect(.init(findWord, .{self}), .{});
             self.words.insert(row.into(Widget), -1);
         }
     }
@@ -251,7 +239,7 @@ pub const ExampleAppWindow = extern struct {
         var buffer = view.getBuffer();
         const count = buffer.getLineCount();
         var buf: [22]u8 = undefined;
-        _ = std.fmt.bufPrintZ(buf[0..], "{d}", .{count}) catch @panic("");
+        _ = std.fmt.bufPrintZ(&buf, "{d}", .{count}) catch unreachable;
         self.lines.setText(@ptrCast(&buf));
     }
 

@@ -6,16 +6,20 @@ pub fn build(b: *std.Build) !void {
         .preferred_optimize_mode = .ReleaseSafe,
     });
 
-    const gtk = b.dependency("gtk", .{});
-
-    const exe_check = b.addExecutable(.{
-        .name = "application",
+    const gi = b.dependency("gi", .{});
+    const root_module = b.createModule(.{
         .root_source_file = b.path("application.zig"),
         .optimize = optimize,
         .target = target,
     });
-    exe_check.root_module.addImport("gtk", gtk.module("gtk"));
-    exe_check.linkLibC();
+    root_module.addImport("gi", gi.module("gi"));
+    root_module.link_libc = true;
+    root_module.linkSystemLibrary("gtk4", .{});
+
+    const exe_check = b.addExecutable(.{
+        .name = "application",
+        .root_module = root_module,
+    });
     const check = b.step("check", "Check if compiles");
     check.dependOn(&exe_check.step);
 
@@ -24,17 +28,12 @@ pub fn build(b: *std.Build) !void {
 
     const exe = b.addExecutable(.{
         .name = "application",
-        .root_source_file = b.path("application.zig"),
-        .optimize = optimize,
-        .target = target,
+        .root_module = root_module,
     });
-    exe.root_module.addImport("gtk", gtk.module("gtk"));
     exe.addCSourceFile(.{
         .file = b.path("resources.c"),
         .flags = &[_][]const u8{},
     });
-    exe.linkLibC();
-    exe.linkSystemLibrary("gtk4");
     exe.step.dependOn(&compile_resource.step);
     exe.step.dependOn(&compile_schema.step);
     b.installArtifact(exe);

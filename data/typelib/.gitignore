@@ -1,0 +1,4 @@
+*.typelib
+!GLib-*.typelib
+!GObject-*.typelib
+!Pango-*.typelib
