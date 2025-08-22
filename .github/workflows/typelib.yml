@@ -11,6 +11,7 @@ on:
       [
         "data/typelib/ci/ci.sh",
         "data/typelib/ci/girnode.patch",
+        ".git/modules/data/gir/index",
         ".github/workflows/typelib.yml",
       ]
 
