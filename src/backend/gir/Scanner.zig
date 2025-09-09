@@ -31,6 +31,8 @@ pub const Token = union(enum) {
             try writer.print("tag {s}", .{self.opening_tag.name});
         } else if (self == .attribute) {
             try writer.print("attr {s}=\"{s}\"", .{ self.attribute.name, self.attribute.value });
+        } else if (self == .closing_tag and self.closing_tag.name.len > 0) {
+            try writer.print("closing_tag {s}", .{self.closing_tag.name});
         } else {
             try writer.print("{t}", .{self});
         }
@@ -71,8 +73,6 @@ pub fn next(self: *Scanner) Error!Token {
                 error.StreamTooLong => self.reader.peekGreedy(1) catch unreachable,
                 else => return err,
             };
-            // EndOfStream is treated as delimiter
-            if (self.reader.seek == self.reader.end) return .end_of_document;
             self.reader.toss(text.len);
             // text
             for (text) |c| {
@@ -80,17 +80,17 @@ pub fn next(self: *Scanner) Error!Token {
                     return .{ .text = text };
                 }
             }
-            // StreamTooLong must be text
-            assert(text.len != self.reader.end - self.reader.seek);
+            _ = self.reader.peekByte() catch |err| switch (err) {
+                error.EndOfStream => return .end_of_document,
+                else => return err,
+            };
 
             // element
             self.reader.toss(1); // skip '<'
-            self.state = .element;
             var is_prolog = false;
             switch (try self.reader.peekByte()) {
                 '/' => {
                     // closing
-                    self.state = .init;
                     const name = try self.reader.takeDelimiterInclusive('>');
                     return .{ .closing_tag = .{
                         .name = name[1 .. name.len - 1],
@@ -110,7 +110,11 @@ pub fn next(self: *Scanner) Error!Token {
                 },
                 else => {},
             }
-            const name = try self.reader.peekDelimiterExclusive(' ');
+            self.state = .element;
+            const tag = try self.reader.peekDelimiterExclusive('>');
+            var name: []const u8 = std.mem.sliceTo(tag, ' ');
+            if (name[name.len - 1] == '>') name = name[0 .. name.len - 1];
+            if (name[name.len - 1] == '/') name = name[0 .. name.len - 1];
             self.reader.toss(name.len);
             return .{ .opening_tag = .{
                 .name = name,
