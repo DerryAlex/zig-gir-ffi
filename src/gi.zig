@@ -2,8 +2,8 @@
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const ArrayListUnmanaged = std.ArrayListUnmanaged;
-const StringArrayHashMapUnmanaged = std.StringArrayHashMapUnmanaged;
+const ArrayList = std.ArrayList;
+const StringArrayHashMap = std.StringArrayHashMapUnmanaged;
 const Writer = std.Io.Writer;
 const fmt = @import("fmt.zig");
 
@@ -11,8 +11,8 @@ const fmt = @import("fmt.zig");
 pub const Repository = struct {
     allocator: Allocator,
     vtable: VTable,
-    _search_paths: ArrayListUnmanaged([]const u8) = .empty,
-    namespaces: StringArrayHashMapUnmanaged(Namespace) = .empty,
+    search_paths: ArrayList([]const u8) = .empty,
+    namespaces: StringArrayHashMap(Namespace) = .empty,
 
     pub const Error = Allocator.Error || error{FileNotFound};
 
@@ -58,7 +58,7 @@ pub const Repository = struct {
 
     /// Append `dir` to search path.
     pub fn appendSearchPath(self: *Repository, dir: []const u8) Allocator.Error!void {
-        try self._search_paths.append(self.allocator, dir);
+        try self.search_paths.append(self.allocator, dir);
     }
 
     /// Load `namespace` if it isn't ready.
@@ -70,8 +70,8 @@ pub const Repository = struct {
 
 pub const Namespace = struct {
     name: []const u8,
-    dependencies: ArrayListUnmanaged([]const u8) = .empty,
-    infos: ArrayListUnmanaged(Info) = .empty,
+    dependencies: ArrayList([]const u8) = .empty,
+    infos: ArrayList(Info) = .empty,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Namespace {
         return .{ .name = try allocator.dupe(u8, name) };
@@ -189,7 +189,7 @@ pub const Arg = struct {
 
 pub const Callable = struct {
     base: Base,
-    args: ArrayListUnmanaged(Arg) = .empty,
+    args: ArrayList(Arg) = .empty,
     return_type: ?*Type = null,
     // basic information
     can_throw_gerror: bool = false,
@@ -343,8 +343,8 @@ pub const RegisteredType = struct {
 pub const Enum = struct {
     base: RegisteredType,
     storage_type: TypeTag = .void,
-    values: ArrayListUnmanaged(Value) = .empty,
-    methods: ArrayListUnmanaged(Function) = .empty,
+    values: ArrayList(Value) = .empty,
+    methods: ArrayList(Function) = .empty,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Enum {
         return .{ .base = try .init(allocator, name) };
@@ -392,12 +392,12 @@ pub const Flags = struct {
 pub const Interface = struct {
     base: RegisteredType,
     iface: ?*Base = null,
-    constants: ArrayListUnmanaged(Constant) = .empty,
-    methods: ArrayListUnmanaged(Function) = .empty,
-    prerequisites: ArrayListUnmanaged(Info) = .empty,
-    properties: ArrayListUnmanaged(Property) = .empty,
-    signals: ArrayListUnmanaged(Signal) = .empty,
-    vfuncs: ArrayListUnmanaged(VFunc) = .empty,
+    constants: ArrayList(Constant) = .empty,
+    methods: ArrayList(Function) = .empty,
+    prerequisites: ArrayList(Info) = .empty,
+    properties: ArrayList(Property) = .empty,
+    signals: ArrayList(Signal) = .empty,
+    vfuncs: ArrayList(VFunc) = .empty,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Interface {
         return .{ .base = try .init(allocator, name) };
@@ -437,13 +437,13 @@ pub const Object = struct {
     base: RegisteredType,
     class_struct: ?*Base = null,
     parent: ?*Base = null,
-    constants: ArrayListUnmanaged(Constant) = .empty,
-    fields: ArrayListUnmanaged(Field) = .empty,
-    interfaces: ArrayListUnmanaged(Interface) = .empty,
-    methods: ArrayListUnmanaged(Function) = .empty,
-    properties: ArrayListUnmanaged(Property) = .empty,
-    signals: ArrayListUnmanaged(Signal) = .empty,
-    vfuncs: ArrayListUnmanaged(VFunc) = .empty,
+    constants: ArrayList(Constant) = .empty,
+    fields: ArrayList(Field) = .empty,
+    interfaces: ArrayList(Interface) = .empty,
+    methods: ArrayList(Function) = .empty,
+    properties: ArrayList(Property) = .empty,
+    signals: ArrayList(Signal) = .empty,
+    vfuncs: ArrayList(VFunc) = .empty,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Object {
         return .{ .base = try .init(allocator, name) };
@@ -485,8 +485,8 @@ pub const Object = struct {
 /// `Struct` represents a generic C structure type.
 pub const Struct = struct {
     base: RegisteredType,
-    fields: ArrayListUnmanaged(Field) = .empty,
-    methods: ArrayListUnmanaged(Function) = .empty,
+    fields: ArrayList(Field) = .empty,
+    methods: ArrayList(Function) = .empty,
     size: usize = 0,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Struct {
@@ -513,8 +513,8 @@ pub const Struct = struct {
 /// `Union` represents a union type.
 pub const Union = struct {
     base: RegisteredType,
-    fields: ArrayListUnmanaged(Field) = .empty,
-    methods: ArrayListUnmanaged(Function) = .empty,
+    fields: ArrayList(Field) = .empty,
+    methods: ArrayList(Function) = .empty,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Union {
         return .{ .base = try .init(allocator, name) };
@@ -607,6 +607,7 @@ pub const Type = struct {
     array_length_index: ?usize = null,
     zero_terminated: bool = false,
     param_type: ?*Type = null,
+    param_type_2: ?*Type = null,
     // interface information
     interface: ?*Base = null,
     interface_is_callback: bool = false,
@@ -617,6 +618,10 @@ pub const Type = struct {
 
     pub fn deinit(self: *Type, allocator: Allocator) void {
         if (self.param_type) |p| {
+            p.deinit(allocator);
+            allocator.destroy(p);
+        }
+        if (self.param_type_2) |p| {
             p.deinit(allocator);
             allocator.destroy(p);
         }
