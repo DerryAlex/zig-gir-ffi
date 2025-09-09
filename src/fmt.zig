@@ -98,13 +98,54 @@ pub const TypeFormatter = struct {
                     try writer.writeAll("void");
                 }
             },
-            .boolean, .int8, .uint8, .int16, .uint16, .int32, .uint32, .int64, .uint64, .float, .double, .glist, .gslist, .ghash, .gtype, .@"error", .unichar => {
+            .boolean, .int8, .uint8, .int16, .uint16, .int32, .uint32, .int64, .uint64, .float, .double, .gtype, .@"error", .unichar => {
                 if (self.type.pointer) {
                     if (self.nullable) try writer.writeAll("?");
                     try writer.writeAll("*");
                 }
                 const tag = formatTypeTag(self.type.tag);
                 try writer.writeAll(tag);
+            },
+            .glist, .gslist => {
+                if (self.type.pointer) {
+                    if (self.nullable) try writer.writeAll("?");
+                    try writer.writeAll("*");
+                }
+
+                const p = self.type.param_type.?;
+                if (p.tag != .void) {
+                    const tag = switch (self.type.tag) {
+                        .glist => "List",
+                        .gslist => "SList",
+                        else => unreachable,
+                    };
+                    try writer.print("core.{s}({f})", .{ tag, TypeFormatter{
+                        .type = p,
+                        .mutable = true,
+                    } });
+                } else {
+                    const tag = formatTypeTag(self.type.tag);
+                    try writer.writeAll(tag);
+                }
+            },
+            .ghash => {
+                if (self.type.pointer) {
+                    if (self.nullable) try writer.writeAll("?");
+                    try writer.writeAll("*");
+                }
+                const p = self.type.param_type.?;
+                const p2 = self.type.param_type_2.?;
+                if (!(p.tag == .void and p2.tag == .void)) {
+                    try writer.print("core.HashTable({f}, {f})", .{ TypeFormatter{
+                        .type = p,
+                    }, TypeFormatter{
+                        .type = p2,
+                        .mutable = true,
+                    } });
+                } else {
+                    const tag = formatTypeTag(self.type.tag);
+                    try writer.writeAll(tag);
+                }
             },
             .utf8, .filename => {
                 assert(self.type.pointer);
@@ -144,7 +185,29 @@ pub const TypeFormatter = struct {
                             .nullable = child_nullable,
                         }});
                     },
-                    .array, .ptr_array, .byte_array => {
+                    .array, .ptr_array => {
+                        if (!self.out) {
+                            if (self.type.pointer) {
+                                if (self.nullable) try writer.writeAll("?");
+                                try writer.writeAll("*");
+                            }
+                        }
+                        const p = self.type.param_type.?;
+                        if (p.tag != .void) {
+                            const tag = switch (self.type.array_type) {
+                                .array => "Array",
+                                .ptr_array => "PtrArray",
+                                else => unreachable,
+                            };
+                            try writer.print("core.{s}({f})", .{ tag, TypeFormatter{
+                                .type = p,
+                                .mutable = true,
+                            } });
+                        } else {
+                            try writer.writeAll(formatArrayType(self.type.array_type));
+                        }
+                    },
+                    .byte_array => {
                         if (!self.out) {
                             if (self.type.pointer) {
                                 if (self.nullable) try writer.writeAll("?");

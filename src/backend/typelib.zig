@@ -20,12 +20,13 @@ pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repo
     var repo = _repo.?;
 
     const allocator = self.allocator;
-    for (self._search_paths.items) |path| {
+    const _path = repo.getSearchPath();
+    for (self.search_paths.items[_path.n_paths_out..]) |path| {
         const c_path = try allocator.dupeZ(u8, path);
         defer allocator.free(c_path);
         repo.prependSearchPath(c_path);
     }
-    self._search_paths.clearRetainingCapacity();
+    self.search_paths.clearRetainingCapacity();
 
     const c_namespace = try allocator.dupeZ(u8, namespace);
     defer allocator.free(c_namespace);
@@ -342,6 +343,16 @@ fn parseType(allocator: Allocator, info: *libgi.TypeInfo) Allocator.Error!gi.Typ
     errdefer _type.deinit(allocator);
     _type.tag = info.getTag();
     _type.pointer = info.isPointer();
+    if (_type.tag == .glist or _type.tag == .gslist) {
+        _type.param_type = try allocator.create(gi.Type);
+        _type.param_type.?.* = try parseType(allocator, info.getParamType(0).?);
+    }
+    if (_type.tag == .ghash) {
+        _type.param_type = try allocator.create(gi.Type);
+        _type.param_type_2 = try allocator.create(gi.Type);
+        _type.param_type.?.* = try parseType(allocator, info.getParamType(0).?);
+        _type.param_type_2.?.* = try parseType(allocator, info.getParamType(1).?);
+    }
     if (_type.tag == .array) {
         _type.array_type = info.getArrayType();
         _type.array_fixed_size = info.getArrayFixedSize() orelse null;

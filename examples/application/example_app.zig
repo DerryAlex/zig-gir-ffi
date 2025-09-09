@@ -40,7 +40,7 @@ pub const ExampleApp = extern struct {
             _ = hint;
             const self = app.tryInto(ExampleApp).?;
             const windows = app.tryInto(Application).?.getWindows();
-            const win = if (windows) |some| core.dynamicCast(ExampleAppWindow, some.data.?).? else ExampleAppWindow.new(self);
+            const win = if (windows) |w| w.data.tryInto(ExampleAppWindow).? else ExampleAppWindow.new(self);
             for (files[0..@intCast(n_files)]) |file| {
                 win.open(file);
             }
