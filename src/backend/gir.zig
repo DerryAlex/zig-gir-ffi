@@ -10,14 +10,15 @@ pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repo
     if (!options.has_gir) return error.FileNotFound;
 
     const default_search_path = "/usr/share/gir-1.0/";
-    try self.search_paths.append(self.allocator, default_search_path);
-    defer _ = self.search_paths.pop();
+    var search_paths = try self.search_paths.clone(self.allocator);
+    defer search_paths.deinit(self.allocator);
+    try search_paths.append(self.allocator, default_search_path);
 
     const namespace_ = try std.mem.concat(self.allocator, u8, &.{ namespace, "-" });
     defer self.allocator.free(namespace_);
 
     const cwd = std.fs.cwd();
-    for (self.search_paths.items) |search_path| {
+    for (search_paths.items) |search_path| {
         var dir = cwd.openDir(search_path, .{ .iterate = true }) catch continue;
         defer dir.close();
         var version_buffer: [8]u8 = undefined;
@@ -45,7 +46,7 @@ pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repo
         var reader = file.reader(&buffer);
         var scanner: Scanner = .init(&reader.interface);
         var parser: Parser = .init(&scanner);
-        parser.parse(self.allocator) catch return error.FileNotFound;
+        parser.parse(self.allocator, self) catch return error.FileNotFound;
         return;
     }
     return error.FileNotFound;

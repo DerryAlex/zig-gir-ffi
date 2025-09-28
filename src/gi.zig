@@ -13,6 +13,7 @@ pub const Repository = struct {
     vtable: VTable,
     search_paths: ArrayList([]const u8) = .empty,
     namespaces: StringArrayHashMap(Namespace) = .empty,
+    _search_paths_used: usize = 0, // typelib backend only
 
     pub const Error = Allocator.Error || error{FileNotFound};
 
@@ -733,6 +734,8 @@ pub const TypeTag = enum(u32) {
     ghash = 19,
     @"error" = 20,
     unichar = 21,
+    // TODO
+    va_list = 100,
 };
 
 pub const ScopeType = enum(u32) {

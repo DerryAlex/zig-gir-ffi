@@ -20,13 +20,12 @@ pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repo
     var repo = _repo.?;
 
     const allocator = self.allocator;
-    const _path = repo.getSearchPath();
-    for (self.search_paths.items[_path.n_paths_out..]) |path| {
+    for (self.search_paths.items[self._search_paths_used..]) |path| {
         const c_path = try allocator.dupeZ(u8, path);
         defer allocator.free(c_path);
         repo.prependSearchPath(c_path);
     }
-    self.search_paths.clearRetainingCapacity();
+    self._search_paths_used = self.search_paths.items.len;
 
     const c_namespace = try allocator.dupeZ(u8, namespace);
     defer allocator.free(c_namespace);

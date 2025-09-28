@@ -8,6 +8,7 @@ const StaticStringMap = std.StaticStringMap;
 const assert = std.debug.assert;
 const fatal = std.process.fatal;
 const Scanner = @import("Scanner.zig");
+const gi = @import("../../gi.zig");
 
 scanner: *Scanner,
 
@@ -17,7 +18,7 @@ pub fn init(scanner: *Scanner) Parser {
     };
 }
 
-pub const Error = Scanner.Error || error{ParseGirFailed};
+pub const Error = Scanner.Error || Allocator.Error || error{ParseGirFailed};
 
 fn fail(token: Scanner.Token) error{ParseGirFailed} {
     std.log.err("unexpected token {f}", .{token});
@@ -46,6 +47,8 @@ fn discardTag(self: *Parser) Error!void {
     }
 }
 
+fn discardAttr(_: Scanner.Attribute) void {}
+
 fn parseXmlProlog(self: *Parser) Error!void {
     while (true) {
         const token = try self.scanner.next();
@@ -53,7 +56,7 @@ fn parseXmlProlog(self: *Parser) Error!void {
             .closing_tag => break,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "version")) {
-                    // no op
+                    discardAttr(attr);
                 } else return fail(token);
             },
             else => return fail(token),
@@ -61,14 +64,15 @@ fn parseXmlProlog(self: *Parser) Error!void {
     }
 }
 
-fn parseDoc(self: *Parser) Error!void {
+fn parseDoc(self: *Parser, allocator: Allocator) Error!void {
+    _ = allocator;
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
             .opening_tag_end => break,
             .attribute => |attr| {
                 if (std.mem.startsWith(u8, attr.name, "xml:") or std.mem.eql(u8, attr.name, "filename") or std.mem.eql(u8, attr.name, "line")) {
-                    // no op
+                    discardAttr(attr);
                 } else return fail(token);
             },
             else => return fail(token),
@@ -87,8 +91,7 @@ fn parseDoc(self: *Parser) Error!void {
     }
 }
 
-pub fn parse(self: *Parser, allocator: Allocator) Error!void {
-    _ = allocator;
+pub fn parse(self: *Parser, allocator: Allocator, root: *gi.Repository) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -96,7 +99,7 @@ pub fn parse(self: *Parser, allocator: Allocator) Error!void {
                 if (std.mem.eql(u8, tag.name, "xml")) {
                     try self.parseXmlProlog();
                 } else if (std.mem.eql(u8, tag.name, "repository")) {
-                    try self.parseRepository();
+                    try self.parseRepository(allocator, root);
                 } else return fail(token);
             },
             .comment => {},
@@ -106,14 +109,14 @@ pub fn parse(self: *Parser, allocator: Allocator) Error!void {
     }
 }
 
-fn parseRepository(self: *Parser) Error!void {
+fn parseRepository(self: *Parser, allocator: Allocator, root: *gi.Repository) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
             .opening_tag_end => break,
             .attribute => |attr| {
                 if (std.mem.startsWith(u8, attr.name, "xmlns") or std.mem.eql(u8, attr.name, "version")) {
-                    // no op
+                    discardAttr(attr);
                 } else return fail(token);
             },
             else => return fail(token),
@@ -125,9 +128,9 @@ fn parseRepository(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "include")) {
-                    try self.parseInclude();
+                    try self.parseInclude(allocator, root);
                 } else if (std.mem.eql(u8, tag.name, "namespace")) {
-                    try self.parseNamespace();
+                    try self.parseNamespace(allocator);
                 } else if (std.mem.eql(u8, tag.name, "package") or std.mem.startsWith(u8, tag.name, "c:") or std.mem.startsWith(u8, tag.name, "doc:")) {
                     try self.discardTag();
                 } else return fail(token);
@@ -138,24 +141,32 @@ fn parseRepository(self: *Parser) Error!void {
     }
 }
 
-fn parseInclude(self: *Parser) Error!void {
+fn parseInclude(self: *Parser, allocator: Allocator, root: *gi.Repository) Error!void {
+    var name: []const u8 = &.{};
+    defer allocator.free(name);
+    var version: ?[]const u8 = null;
+    defer if (version) |v| allocator.free(v);
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
             .closing_tag => break,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name")) {
-                    // TODO
+                    name = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "version")) {
-                    // TODO
+                    version = try allocator.dupe(u8, attr.value);
                 } else return fail(token);
             },
             else => return fail(token),
         }
     }
+    root.load(name, version) catch |err| switch (err) {
+        error.OutOfMemory => |e| return e,
+        else => return error.ParseGirFailed,
+    };
 }
 
-fn parseNamespace(self: *Parser) Error!void {
+fn parseNamespace(self: *Parser, allocator: Allocator) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -178,23 +189,23 @@ fn parseNamespace(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "alias")) {
-                    try self.parseAlias();
+                    try self.parseAlias(allocator);
                 } else if (std.mem.eql(u8, tag.name, "bitfield") or std.mem.eql(u8, tag.name, "enumeration")) {
-                    try self.parseEnum();
+                    try self.parseEnum(allocator);
                 } else if (std.mem.eql(u8, tag.name, "callback")) {
-                    try self.parseCallable();
+                    try self.parseCallable(allocator);
                 } else if (std.mem.eql(u8, tag.name, "class")) {
-                    try self.parseClass();
+                    try self.parseClass(allocator);
                 } else if (std.mem.eql(u8, tag.name, "constant")) {
-                    try self.parseConstant();
+                    try self.parseConstant(allocator);
                 } else if (std.mem.eql(u8, tag.name, "function")) {
-                    try self.parseCallable();
+                    try self.parseCallable(allocator);
                 } else if (std.mem.eql(u8, tag.name, "interface")) {
-                    try self.parseInterface();
+                    try self.parseInterface(allocator);
                 } else if (std.mem.eql(u8, tag.name, "record") or std.mem.eql(u8, tag.name, "glib:boxed")) {
-                    try self.parseRecord();
+                    try self.parseRecord(allocator);
                 } else if (std.mem.eql(u8, tag.name, "union")) {
-                    try self.parseUnion();
+                    try self.parseUnion(allocator);
                 } else if (std.mem.eql(u8, tag.name, "docsection") or std.mem.eql(u8, tag.name, "function-inline") or std.mem.eql(u8, tag.name, "function-macro")) {
                     try self.discardTag();
                 } else return fail(token);
@@ -207,7 +218,7 @@ fn parseNamespace(self: *Parser) Error!void {
 
 // -----
 
-fn parseAlias(self: *Parser) Error!void {
+fn parseAlias(self: *Parser, allocator: Allocator) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -215,8 +226,12 @@ fn parseAlias(self: *Parser) Error!void {
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name")) {
                     // TODO
+                } else if (std.mem.eql(u8, attr.name, "deprecated")) {
+                    // TODO
+                } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
+                    // TODO
                 } else if (std.mem.startsWith(u8, attr.name, "c:")) {
-                    // no op
+                    discardAttr(attr);
                 } else return fail(token);
             },
             else => return fail(token),
@@ -227,10 +242,10 @@ fn parseAlias(self: *Parser) Error!void {
         switch (token) {
             .closing_tag => break,
             .opening_tag => |tag| {
-                if (std.mem.eql(u8, tag.name, "doc")) {
-                    try self.parseDoc();
+                if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
+                    try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "type")) {
-                    try self.parseType();
+                    _ = try self.parseType(allocator);
                 } else if (std.mem.eql(u8, tag.name, "source-position")) {
                     try self.discardTag();
                 } else return fail(token);
@@ -241,7 +256,7 @@ fn parseAlias(self: *Parser) Error!void {
     }
 }
 
-fn parseArg(self: *Parser) Error!void {
+fn parseArg(self: *Parser, allocator: Allocator) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -265,6 +280,8 @@ fn parseArg(self: *Parser) Error!void {
                     // TODO
                 } else if (std.mem.eql(u8, attr.name, "scope")) {
                     // TODO
+                } else if (std.mem.eql(u8, attr.name, "skip")) {
+                    // TODO
                 } else if (std.mem.eql(u8, attr.name, "transfer-ownership")) {
                     // TODO
                 } else return fail(token);
@@ -278,13 +295,13 @@ fn parseArg(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc")) {
-                    try self.parseDoc();
+                    try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "type")) {
-                    try self.parseType();
+                    _ = try self.parseType(allocator);
                 } else if (std.mem.eql(u8, tag.name, "array")) {
-                    try self.parseArray();
+                    _ = try self.parseArray(allocator);
                 } else if (std.mem.eql(u8, tag.name, "attribute")) {
-                    try self.parseAttribute();
+                    try self.parseAttribute(allocator);
                 } else if (std.mem.eql(u8, tag.name, "varargs")) {
                     try self.discardTag();
                 } else return fail(token);
@@ -295,7 +312,7 @@ fn parseArg(self: *Parser) Error!void {
     }
 }
 
-fn parseArgs(self: *Parser) Error!void {
+fn parseArgs(self: *Parser, allocator: Allocator) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -313,7 +330,7 @@ fn parseArgs(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "parameter") or std.mem.eql(u8, tag.name, "instance-parameter")) {
-                    try self.parseArg();
+                    try self.parseArg(allocator);
                 } else return fail(token);
             },
             .comment => {},
@@ -322,22 +339,32 @@ fn parseArgs(self: *Parser) Error!void {
     }
 }
 
-fn parseArray(self: *Parser) Error!void {
+fn parseArray(self: *Parser, allocator: Allocator) Error!gi.Type {
+    var _type: gi.Type = try .init(allocator, "type");
+    errdefer _type.deinit(allocator);
+    _type.tag = .array;
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
             .opening_tag_end => break,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name")) {
-                    // TODO
+                    const name = attr.value;
+                    if (std.mem.eql(u8, name, "GLib.Array")) {
+                        _type.array_type = .array;
+                    } else if (std.mem.eql(u8, name, "GLib.ByteArray")) {
+                        _type.array_type = .byte_array;
+                    } else if (std.mem.eql(u8, name, "GLib.PtrArray")) {
+                        _type.array_type = .ptr_array;
+                    } else unreachable;
                 } else if (std.mem.eql(u8, attr.name, "fixed-size")) {
-                    // TODO
+                    _type.array_fixed_size = std.fmt.parseInt(usize, attr.value, 10) catch unreachable;
                 } else if (std.mem.eql(u8, attr.name, "length")) {
-                    // TODO
+                    _type.array_length_index = std.fmt.parseInt(usize, attr.value, 10) catch unreachable;
                 } else if (std.mem.eql(u8, attr.name, "zero-terminated")) {
-                    // TODO
+                    _type.zero_terminated = 0 != (std.fmt.parseInt(u1, attr.value, 10) catch unreachable);
                 } else if (std.mem.eql(u8, attr.name, "c:type")) {
-                    // TODO
+                    discardAttr(attr);
                 } else return fail(token);
             },
             else => return fail(token),
@@ -349,18 +376,20 @@ fn parseArray(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "array")) {
-                    try self.parseArray();
+                    _ = try self.parseArray(allocator);
                 } else if (std.mem.eql(u8, tag.name, "type")) {
-                    try self.parseType();
+                    _ = try self.parseType(allocator);
                 } else return fail(token);
             },
             .comment => {},
             else => return fail(token),
         }
     }
+    return _type;
 }
 
-fn parseAttribute(self: *Parser) Error!void {
+fn parseAttribute(self: *Parser, allocator: Allocator) Error!void {
+    _ = allocator;
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -377,7 +406,7 @@ fn parseAttribute(self: *Parser) Error!void {
     }
 }
 
-fn parseCallable(self: *Parser) Error!void {
+fn parseCallable(self: *Parser, allocator: Allocator) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -428,13 +457,13 @@ fn parseCallable(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc();
+                    try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "attribute")) {
-                    try self.parseAttribute();
+                    try self.parseAttribute(allocator);
                 } else if (std.mem.eql(u8, tag.name, "return-value")) {
-                    try self.parseArg();
+                    try self.parseArg(allocator);
                 } else if (std.mem.eql(u8, tag.name, "parameters")) {
-                    try self.parseArgs();
+                    try self.parseArgs(allocator);
                 } else if (std.mem.eql(u8, tag.name, "source-position")) {
                     try self.discardTag();
                 } else return fail(token);
@@ -445,7 +474,7 @@ fn parseCallable(self: *Parser) Error!void {
     }
 }
 
-fn parseClass(self: *Parser) Error!void {
+fn parseClass(self: *Parser, allocator: Allocator) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -490,17 +519,17 @@ fn parseClass(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc();
+                    try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "constructor") or std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method") or std.mem.eql(u8, tag.name, "virtual-method")) {
-                    try self.parseCallable();
+                    try self.parseCallable(allocator);
                 } else if (std.mem.eql(u8, tag.name, "field")) {
-                    try self.parseField();
+                    try self.parseField(allocator);
                 } else if (std.mem.eql(u8, tag.name, "implements")) {
                     try self.discardTag(); // TODO
                 } else if (std.mem.eql(u8, tag.name, "property")) {
-                    try self.parseProperty();
+                    try self.parseProperty(allocator);
                 } else if (std.mem.eql(u8, tag.name, "glib:signal")) {
-                    try self.parseSignal();
+                    try self.parseSignal(allocator);
                 } else if (std.mem.eql(u8, tag.name, "source-position")) {
                     try self.discardTag();
                 } else return fail(token);
@@ -511,7 +540,7 @@ fn parseClass(self: *Parser) Error!void {
     }
 }
 
-fn parseConstant(self: *Parser) Error!void {
+fn parseConstant(self: *Parser, allocator: Allocator) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -540,9 +569,9 @@ fn parseConstant(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc();
+                    try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "type")) {
-                    try self.parseType();
+                    _ = try self.parseType(allocator);
                 } else if (std.mem.eql(u8, tag.name, "source-position")) {
                     try self.discardTag();
                 } else return fail(token);
@@ -553,7 +582,7 @@ fn parseConstant(self: *Parser) Error!void {
     }
 }
 
-fn parseEnum(self: *Parser) Error!void {
+fn parseEnum(self: *Parser, allocator: Allocator) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -564,6 +593,8 @@ fn parseEnum(self: *Parser) Error!void {
                 } else if (std.mem.eql(u8, attr.name, "deprecated")) {
                     // TODO
                 } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
+                    // TODO
+                } else if (std.mem.eql(u8, attr.name, "introspectable")) {
                     // TODO
                 } else if (std.mem.eql(u8, attr.name, "version")) {
                     // TODO
@@ -584,11 +615,11 @@ fn parseEnum(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc();
+                    try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "function")) {
-                    try self.parseCallable();
+                    try self.parseCallable(allocator);
                 } else if (std.mem.eql(u8, tag.name, "member")) {
-                    try self.parseMember();
+                    try self.parseMember(allocator);
                 } else if (std.mem.eql(u8, tag.name, "source-position")) {
                     try self.discardTag();
                 } else return fail(token);
@@ -599,7 +630,7 @@ fn parseEnum(self: *Parser) Error!void {
     }
 }
 
-fn parseField(self: *Parser) Error!void {
+fn parseField(self: *Parser, allocator: Allocator) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -628,13 +659,13 @@ fn parseField(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc")) {
-                    try self.parseDoc();
+                    try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "type")) {
-                    try self.parseType();
+                    _ = try self.parseType(allocator);
                 } else if (std.mem.eql(u8, tag.name, "array")) {
-                    try self.parseArray();
+                    _ = try self.parseArray(allocator);
                 } else if (std.mem.eql(u8, tag.name, "callback")) {
-                    try self.parseCallable();
+                    try self.parseCallable(allocator);
                 } else return fail(token);
             },
             .comment => {},
@@ -643,7 +674,7 @@ fn parseField(self: *Parser) Error!void {
     }
 }
 
-fn parseInterface(self: *Parser) Error!void {
+fn parseInterface(self: *Parser, allocator: Allocator) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -674,17 +705,17 @@ fn parseInterface(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc();
+                    try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method") or std.mem.eql(u8, tag.name, "virtual-method")) {
-                    try self.parseCallable();
+                    try self.parseCallable(allocator);
                 } else if (std.mem.eql(u8, tag.name, "field")) {
-                    try self.parseField();
+                    try self.parseField(allocator);
                 } else if (std.mem.eql(u8, tag.name, "prerequisite")) {
                     try self.discardTag(); // TODO
                 } else if (std.mem.eql(u8, tag.name, "property")) {
-                    try self.parseProperty();
+                    try self.parseProperty(allocator);
                 } else if (std.mem.eql(u8, tag.name, "glib:signal")) {
-                    try self.parseSignal();
+                    try self.parseSignal(allocator);
                 } else if (std.mem.eql(u8, tag.name, "source-position")) {
                     try self.discardTag();
                 } else return fail(token);
@@ -695,7 +726,7 @@ fn parseInterface(self: *Parser) Error!void {
     }
 }
 
-fn parseMember(self: *Parser) Error!void {
+fn parseMember(self: *Parser, allocator: Allocator) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -724,7 +755,7 @@ fn parseMember(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc();
+                    try self.parseDoc(allocator);
                 } else return fail(token);
             },
             .comment => {},
@@ -733,7 +764,7 @@ fn parseMember(self: *Parser) Error!void {
     }
 }
 
-fn parseProperty(self: *Parser) Error!void {
+fn parseProperty(self: *Parser, allocator: Allocator) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -776,13 +807,13 @@ fn parseProperty(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc();
+                    try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "array")) {
-                    try self.parseArray();
+                    _ = try self.parseArray(allocator);
                 } else if (std.mem.eql(u8, tag.name, "attribute")) {
-                    try self.parseAttribute();
+                    try self.parseAttribute(allocator);
                 } else if (std.mem.eql(u8, tag.name, "type")) {
-                    try self.parseType();
+                    _ = try self.parseType(allocator);
                 } else return fail(token);
             },
             .comment => {},
@@ -791,7 +822,7 @@ fn parseProperty(self: *Parser) Error!void {
     }
 }
 
-fn parseRecord(self: *Parser) Error!void {
+fn parseRecord(self: *Parser, allocator: Allocator) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -799,13 +830,21 @@ fn parseRecord(self: *Parser) Error!void {
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name") or std.mem.eql(u8, attr.name, "glib:name")) {
                     // TODO
+                } else if (std.mem.eql(u8, attr.name, "copy-function")) {
+                    // TODO
                 } else if (std.mem.eql(u8, attr.name, "deprecated")) {
                     // TODO
                 } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
                     // TODO
+                } else if (std.mem.eql(u8, attr.name, "introspectable")) {
+                    // TODO
+                } else if (std.mem.eql(u8, attr.name, "free-function")) {
+                    // TODO
                 } else if (std.mem.eql(u8, attr.name, "disguised")) {
                     // TODO
                 } else if (std.mem.eql(u8, attr.name, "opaque")) {
+                    // TODO
+                } else if (std.mem.eql(u8, attr.name, "pointer")) {
                     // TODO
                 } else if (std.mem.eql(u8, attr.name, "version")) {
                     // TODO
@@ -826,14 +865,14 @@ fn parseRecord(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc();
+                    try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "field")) {
-                    try self.parseField();
+                    try self.parseField(allocator);
                 } else if (std.mem.eql(u8, tag.name, "constructor") or std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method")) {
-                    try self.parseCallable();
+                    try self.parseCallable(allocator);
                 } else if (std.mem.eql(u8, tag.name, "union")) {
-                    try self.parseUnion();
-                } else if (std.mem.eql(u8, tag.name, "source-position")) {
+                    try self.parseUnion(allocator);
+                } else if (std.mem.eql(u8, tag.name, "method-inline") or std.mem.eql(u8, tag.name, "source-position")) {
                     try self.discardTag();
                 } else return fail(token);
             },
@@ -843,7 +882,7 @@ fn parseRecord(self: *Parser) Error!void {
     }
 }
 
-fn parseSignal(self: *Parser) Error!void {
+fn parseSignal(self: *Parser, allocator: Allocator) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -880,11 +919,11 @@ fn parseSignal(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc();
+                    try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "return-value")) {
-                    try self.parseArg();
+                    try self.parseArg(allocator);
                 } else if (std.mem.eql(u8, tag.name, "parameters")) {
-                    try self.parseArgs();
+                    try self.parseArgs(allocator);
                 } else if (std.mem.eql(u8, tag.name, "source-position")) {
                     try self.discardTag();
                 } else return fail(token);
@@ -895,17 +934,129 @@ fn parseSignal(self: *Parser) Error!void {
     }
 }
 
-fn parseType(self: *Parser) Error!void {
+fn parseType(self: *Parser, allocator: Allocator) Error!gi.Type {
+    var _type: gi.Type = try .init(allocator, "type");
+    errdefer _type.deinit(allocator);
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
-            .closing_tag => return,
+            .closing_tag => return _type,
             .opening_tag_end => break,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name")) {
-                    // TODO
+                    const name = attr.value;
+                    if (std.mem.eql(u8, name, "none")) {
+                        _type.tag = .void;
+                    } else if (std.mem.eql(u8, name, "gpointer")) {
+                        _type.tag = .void;
+                        _type.pointer = true;
+                    } else if (std.mem.eql(u8, name, "gboolean")) {
+                        _type.tag = .boolean;
+                    } else if (std.mem.eql(u8, name, "gint8")) {
+                        _type.tag = .int8;
+                    } else if (std.mem.eql(u8, name, "guint8")) {
+                        _type.tag = .uint8;
+                    } else if (std.mem.eql(u8, name, "gint16")) {
+                        _type.tag = .int16;
+                    } else if (std.mem.eql(u8, name, "guint16")) {
+                        _type.tag = .uint16;
+                    } else if (std.mem.eql(u8, name, "gint32")) {
+                        _type.tag = .int32;
+                    } else if (std.mem.eql(u8, name, "guint32")) {
+                        _type.tag = .uint32;
+                    } else if (std.mem.eql(u8, name, "gint64")) {
+                        _type.tag = .int64;
+                    } else if (std.mem.eql(u8, name, "guint64")) {
+                        _type.tag = .uint64;
+                    } else if (std.mem.eql(u8, name, "gchar")) {
+                        _type.tag = .int8;
+                    } else if (std.mem.eql(u8, name, "guchar")) {
+                        _type.tag = .uint8;
+                    } else if (std.mem.eql(u8, name, "gshort")) {
+                        _type.tag = switch (@sizeOf(c_short)) {
+                            2 => .int16,
+                            else => unreachable,
+                        };
+                    } else if (std.mem.eql(u8, name, "gushort")) {
+                        _type.tag = switch (@sizeOf(c_ushort)) {
+                            2 => .uint16,
+                            else => unreachable,
+                        };
+                    } else if (std.mem.eql(u8, name, "gint")) {
+                        _type.tag = switch (@sizeOf(c_int)) {
+                            4 => .int32,
+                            else => unreachable,
+                        };
+                    } else if (std.mem.eql(u8, name, "guint")) {
+                        _type.tag = switch (@sizeOf(c_uint)) {
+                            4 => .uint32,
+                            else => unreachable,
+                        };
+                    } else if (std.mem.eql(u8, name, "glong")) {
+                        _type.tag = switch (@sizeOf(c_long)) {
+                            4 => .int32,
+                            8 => .int64,
+                            else => unreachable,
+                        };
+                    } else if (std.mem.eql(u8, name, "gulong")) {
+                        _type.tag = switch (@sizeOf(c_ulong)) {
+                            4 => .uint32,
+                            8 => .uint64,
+                            else => unreachable,
+                        };
+                    } else if (std.mem.eql(u8, name, "gssize") or std.mem.eql(u8, name, "gintptr")) {
+                        _type.tag = switch (@sizeOf(isize)) {
+                            4 => .int32,
+                            8 => .int64,
+                            else => unreachable,
+                        };
+                    } else if (std.mem.eql(u8, name, "gsize") or std.mem.eql(u8, name, "guintptr")) {
+                        _type.tag = switch (@sizeOf(usize)) {
+                            4 => .uint32,
+                            8 => .uint64,
+                            else => unreachable,
+                        };
+                    } else if (std.mem.eql(u8, name, "time_t")) {
+                        _type.tag = switch (@sizeOf(std.c.time_t)) {
+                            4 => .int32,
+                            8 => .int64,
+                            else => unreachable,
+                        };
+                    } else if (std.mem.eql(u8, name, "gfloat")) {
+                        _type.tag = .float;
+                    } else if (std.mem.eql(u8, name, "gdouble")) {
+                        _type.tag = .double;
+                    } else if (std.mem.eql(u8, name, "long double")) {
+                        _type.tag = .double; // TODO
+                    } else if (std.mem.eql(u8, name, "utf8")) {
+                        _type.tag = .utf8;
+                    } else if (std.mem.eql(u8, name, "filename")) {
+                        _type.tag = .filename;
+                    } else if (std.mem.eql(u8, name, "GLib.List")) {
+                        _type.tag = .glist;
+                    } else if (std.mem.eql(u8, name, "GLib.SList")) {
+                        _type.tag = .gslist;
+                    } else if (std.mem.eql(u8, name, "GLib.HashTable")) {
+                        _type.tag = .ghash;
+                    } else if (std.mem.eql(u8, name, "GLib.Error") or std.mem.eql(u8, name, "Error")) {
+                        _type.tag = .@"error";
+                    } else if (std.mem.eql(u8, name, "gunichar")) {
+                        _type.tag = .unichar;
+                    } else if (std.mem.eql(u8, name, "va_list")) {
+                        _type.tag = .va_list;
+                    } else {
+                        if (std.ascii.isLower(name[0]) and !std.mem.endsWith(u8, name, "_t")) {
+                            std.log.warn("unknown type name {s}", .{name});
+                        }
+                        _type.tag = .interface;
+                        _type.interface = try allocator.create(gi.Base);
+                        _type.interface.?.* = try .init(allocator, name);
+                    }
                 } else if (std.mem.eql(u8, attr.name, "c:type")) {
-                    // TODO
+                    const c_type = attr.value;
+                    if (std.mem.endsWith(u8, c_type, "*")) {
+                        _type.pointer = true;
+                    }
                 } else return fail(token);
             },
             else => return fail(token),
@@ -917,18 +1068,31 @@ fn parseType(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "array")) {
-                    try self.parseArray();
+                    if (_type.param_type == null) {
+                        _type.param_type = try allocator.create(gi.Type);
+                        _type.param_type.?.* = try self.parseArray(allocator);
+                    } else if (_type.param_type_2 == null) {
+                        _type.param_type_2 = try allocator.create(gi.Type);
+                        _type.param_type_2.?.* = try self.parseArray(allocator);
+                    } else unreachable;
                 } else if (std.mem.eql(u8, tag.name, "type")) {
-                    try self.parseType();
+                    if (_type.param_type == null) {
+                        _type.param_type = try allocator.create(gi.Type);
+                        _type.param_type.?.* = try self.parseType(allocator);
+                    } else if (_type.param_type_2 == null) {
+                        _type.param_type_2 = try allocator.create(gi.Type);
+                        _type.param_type_2.?.* = try self.parseType(allocator);
+                    } else unreachable;
                 } else return fail(token);
             },
             .comment => {},
             else => return fail(token),
         }
     }
+    return _type;
 }
 
-fn parseUnion(self: *Parser) Error!void {
+fn parseUnion(self: *Parser, allocator: Allocator) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -953,13 +1117,13 @@ fn parseUnion(self: *Parser) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc();
+                    try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "field")) {
-                    try self.parseField();
+                    try self.parseField(allocator);
                 } else if (std.mem.eql(u8, tag.name, "constructor") or std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method")) {
-                    try self.parseCallable();
+                    try self.parseCallable(allocator);
                 } else if (std.mem.eql(u8, tag.name, "record")) {
-                    try self.parseRecord();
+                    try self.parseRecord(allocator);
                 } else if (std.mem.eql(u8, tag.name, "source-position")) {
                     try self.discardTag();
                 } else return fail(token);
