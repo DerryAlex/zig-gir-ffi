@@ -4,7 +4,9 @@ const Parser = @This();
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const Reader = std.Io.Reader;
 const StaticStringMap = std.StaticStringMap;
+const Writer = std.Io.Writer;
 const assert = std.debug.assert;
 const fatal = std.process.fatal;
 const Scanner = @import("Scanner.zig");
@@ -64,8 +66,9 @@ fn parseXmlProlog(self: *Parser) Error!void {
     }
 }
 
-fn parseDoc(self: *Parser, allocator: Allocator) Error!void {
-    _ = allocator;
+fn parseDoc(self: *Parser, allocator: Allocator) Error![]const u8 {
+    var aw: Writer.Allocating = .init(allocator);
+    errdefer aw.deinit();
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -82,13 +85,36 @@ fn parseDoc(self: *Parser, allocator: Allocator) Error!void {
         const token = try self.scanner.next();
         switch (token) {
             .closing_tag => break,
-            .text => {
-                // TODO
+            .text => |s| {
+                var reader: Reader = .fixed(s);
+                while (true) {
+                    _ = reader.streamDelimiterEnding(&aw.writer, '&') catch |err| switch (err) {
+                        error.WriteFailed => return error.OutOfMemory,
+                        else => |e| return e,
+                    };
+                    _ = reader.peekByte() catch |err| switch (err) {
+                        error.EndOfStream => break,
+                        else => |e| return e,
+                    };
+                    const esc_seq = try reader.takeDelimiterInclusive(';');
+                    if (std.mem.eql(u8, esc_seq, "&lt;")) {
+                        aw.writer.writeAll("<") catch return error.OufOfMemory;
+                    } else if (std.mem.eql(u8, esc_seq, "&gt;")) {
+                        aw.writer.writeAll(">") catch return error.OufOfMemory;
+                    } else if (std.mem.eql(u8, esc_seq, "&amp;")) {
+                        aw.writer.writeAll("&") catch return error.OufOfMemory;
+                    } else if (std.mem.eql(u8, esc_seq, "&quot;")) {
+                        aw.writer.writeAll("\"") catch return error.OufOfMemory;
+                    } else if (std.mem.eql(u8, esc_seq, "&apos;")) {
+                        aw.writer.writeAll("'") catch return error.OufOfMemory;
+                    } else return fail(token);
+                }
             },
             .comment => {},
             else => return fail(token),
         }
     }
+    return try aw.toOwnedSlice();
 }
 
 pub fn parse(self: *Parser, allocator: Allocator, root: *gi.Repository) Error!void {
@@ -177,7 +203,7 @@ fn parseNamespace(self: *Parser, allocator: Allocator) Error!void {
                 } else if (std.mem.eql(u8, attr.name, "version")) {
                     // TODO
                 } else if (std.mem.startsWith(u8, attr.name, "c:") or std.mem.eql(u8, attr.name, "shared-library")) {
-                    // no op
+                    discardAttr(attr);
                 } else return fail(token);
             },
             else => return fail(token),

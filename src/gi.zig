@@ -130,6 +130,7 @@ pub const Info = union(enum) {
 pub const Base = struct {
     name: []const u8,
     namespace: []const u8 = &.{},
+    doc: []const u8 = &.{},
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Base {
         if (std.mem.indexOfScalar(u8, name, '.')) |pos| return .{
@@ -142,6 +143,7 @@ pub const Base = struct {
     pub fn deinit(self: *Base, allocator: Allocator) void {
         allocator.free(self.name);
         allocator.free(self.namespace);
+        allocator.free(self.doc);
     }
 
     pub fn format(self: *const Base, writer: *Writer) Writer.Error!void {
@@ -227,6 +229,7 @@ pub const Callback = struct {
     }
 
     pub fn format(self: *Callback, writer: *Writer) Writer.Error!void {
+        try writer.print("{f}", .{fmt.CallableDocFormatter{ .callable = &self.callable }});
         try writer.print("pub const {s} = {f};\n", .{ self.getBase().name, fmt.CallbackFormatter{ .callback = self } });
     }
 };

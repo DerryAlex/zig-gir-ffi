@@ -1,6 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const AutoHashMap = std.AutoHashMap;
+const Reader = std.Io.Reader;
 const StringHashMap = std.StringHashMap;
 const Writer = std.Io.Writer;
 const gi = @import("gi.zig");
@@ -70,6 +71,34 @@ const CamelFormatter = struct {
             }
         } else {
             try writer.print("{f}", .{IdFormatter{ .id = self.id }});
+        }
+    }
+};
+
+const DocFormatter = struct {
+    doc: []const u8,
+    top_level: bool = false,
+    custom_header: bool = false,
+
+    pub fn format(self: DocFormatter, writer: *Writer) Writer.Error!void {
+        if (self.doc.len == 0) return;
+        var reader: Reader = .fixed(self.doc);
+        var has_header: bool = self.custom_header;
+        while (true) {
+            if (!has_header) {
+                try writer.writeAll(if (self.top_level) "//! " else "/// ");
+            } else {
+                has_header = false;
+            }
+            _ = reader.streamDelimiterEnding(writer, '\n') catch |err| switch (err) {
+                error.ReadFailed => unreachable,
+                else => |e| return e,
+            };
+            try writer.writeAll("\n");
+            _ = reader.peekByte() catch |err| switch (err) {
+                error.ReadFailed => unreachable,
+                error.EndOfStream => break,
+            };
         }
     }
 };
@@ -310,6 +339,25 @@ pub const CallableFormatter = struct {
     }
 };
 
+pub const CallableDocFormatter = struct {
+    callable: *gi.Callable,
+
+    pub fn format(self: CallableDocFormatter, writer: *Writer) Writer.Error!void {
+        try writer.print("{f}", .{DocFormatter{ .doc = self.callable.base.doc }});
+        for (self.callable.args.items) |*arg| {
+            if (arg.getBase().doc.len != 0) try writer.print("/// @param {s}: {f}", .{ arg.getBase().name, DocFormatter{
+                .doc = arg.getBase().doc,
+                .custom_header = true,
+            } });
+        }
+        const r = self.callable.return_type.?;
+        if (r.getBase().doc.len != 0) try writer.print("/// @returns: {f}", .{DocFormatter{
+            .doc = r.getBase().doc,
+            .custom_header = true,
+        }});
+    }
+};
+
 pub const CallbackFormatter = struct {
     callback: *gi.Callback,
 
@@ -327,6 +375,7 @@ pub const ConstantFormatter = struct {
     constant: *gi.Constant,
 
     pub fn format(self: ConstantFormatter, writer: *Writer) Writer.Error!void {
+        try writer.print("{f}", .{DocFormatter{ .doc = self.constant.getBase().doc }});
         try writer.print("pub const {s} = ", .{self.constant.getBase().name});
         const value = self.constant.value;
         switch (self.constant.type_tag) {
@@ -406,6 +455,7 @@ pub const FieldFormatter = struct {
         } else {
             try BitField.end(writer);
         }
+        try writer.print("{f}", .{DocFormatter{ .doc = self.field.getBase().doc }});
         const name = self.field.getBase().name;
         if (PreservedField.names.contains(name)) try writer.writeAll("_");
         try writer.print("{f}: ", .{IdFormatter{ .id = name }});
@@ -435,6 +485,7 @@ pub const PropertyFormatter = struct {
     pub fn format(self: PropertyFormatter, writer: *Writer) Writer.Error!void {
         const name = self.property.getBase().name;
         const type_info = self.property.type_info.?;
+        try writer.print("{f}", .{DocFormatter{ .doc = self.property.getBase().doc }});
         try writer.print("{f}: core.Property({f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, TypeFormatter{ .type = type_info }, name });
     }
 };
@@ -446,6 +497,7 @@ pub const SignalFormatter = struct {
     pub fn format(self: SignalFormatter, writer: *Writer) Writer.Error!void {
         const name = self.signal.getBase().name;
         const callable = &self.signal.callable;
+        try writer.print("{f}", .{CallableDocFormatter{ .callable = callable }});
         try writer.print("{f}: core.Signal(fn {f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, CallableFormatter{
             .callable = callable,
             .container = self.container,
@@ -485,6 +537,7 @@ pub const EnumFormatter = struct {
 
     pub fn format(self: EnumFormatter, writer: *Writer) Writer.Error!void {
         const storage_type = self.context.storage_type;
+        try writer.print("{f}", .{DocFormatter{ .doc = self.context.getBase().doc }});
         try writer.print("pub const {s} = enum({s}) {{\n", .{ self.context.getBase().name, formatTypeTag(storage_type) });
 
         var arena: std.heap.ArenaAllocator = .init(std.heap.smp_allocator);
@@ -526,6 +579,7 @@ pub const FlagsFormatter = struct {
 
     pub fn format(self: FlagsFormatter, writer: *Writer) Writer.Error!void {
         const storage_type = self.context.base.storage_type;
+        try writer.print("{f}", .{DocFormatter{ .doc = self.context.getBase().doc }});
         try writer.print("pub const {s} = packed struct({s}) {{\n", .{ self.context.getBase().name, formatTypeTag(storage_type) });
 
         var arena: std.heap.ArenaAllocator = .init(std.heap.smp_allocator);
@@ -574,6 +628,7 @@ pub const StructFormatter = struct {
     context: *gi.Struct,
 
     pub fn format(self: StructFormatter, writer: *Writer) Writer.Error!void {
+        try writer.print("{f}", .{DocFormatter{ .doc = self.context.getBase().doc }});
         try writer.print("pub const {s} = {s}{{\n", .{ self.context.getBase().name, if (self.context.size != 0) "extern struct" else "opaque" });
         for (self.context.methods.items) |*method| PreservedField.names.put(method.getBase().name, {}) catch @panic("Out Of Memory");
         defer PreservedField.names.clearAndFree();
@@ -592,6 +647,7 @@ pub const UnionFormatter = struct {
     context: *gi.Union,
 
     pub fn format(self: UnionFormatter, writer: *Writer) Writer.Error!void {
+        try writer.print("{f}", .{DocFormatter{ .doc = self.context.getBase().doc }});
         try writer.print("pub const {s} = extern union{{\n", .{self.context.getBase().name});
         for (self.context.methods.items) |*method| PreservedField.names.put(method.getBase().name, {}) catch @panic("Out Of Memory");
         defer PreservedField.names.clearAndFree();
@@ -624,6 +680,7 @@ pub const InterfaceFormatter = struct {
     context: *gi.Interface,
 
     pub fn format(self: InterfaceFormatter, writer: *Writer) Writer.Error!void {
+        try writer.print("{f}", .{DocFormatter{ .doc = self.context.getBase().doc }});
         try writer.print("pub const {s} = struct{{\n", .{self.context.getBase().name});
         if (self.context.prerequisites.items.len > 0) {
             try writer.writeAll("pub const Prerequistes = [_]type{");
@@ -668,6 +725,7 @@ pub const ObjectFormatter = struct {
     context: *gi.Object,
 
     pub fn format(self: ObjectFormatter, writer: *Writer) Writer.Error!void {
+        try writer.print("{f}", .{DocFormatter{ .doc = self.context.getBase().doc }});
         try writer.print("pub const {s} = {s}{{\n", .{ self.context.getBase().name, if (self.context.fields.items.len != 0) "extern struct" else "struct" });
         if (self.context.interfaces.items.len > 0) {
             try writer.writeAll("pub const Interfaces = [_]type{");
@@ -743,10 +801,11 @@ pub const FunctionFormatter = struct {
         var fixed: std.heap.FixedBufferAllocator = .init(&buffer);
         const allocator = fixed.allocator();
 
+        const callable = &self.function.callable;
+        try writer.print("{f}", .{CallableDocFormatter{ .callable = callable }});
         const func_name = self.function.getBase().name;
         try writer.print("pub fn {f}", .{CamelFormatter{ .id = if (!std.mem.eql(u8, func_name, "self")) func_name else "_self" }});
 
-        const callable = &self.function.callable;
         const args = callable.args.items;
         // initialize slice info and closure info
         var slice_info = allocator.alloc(SliceInfo, args.len) catch @panic("Out of Memory");
