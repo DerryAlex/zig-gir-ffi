@@ -26,6 +26,8 @@ fn formatTypeTag(tag: gi.TypeTag) []const u8 {
         .@"error" => "GLib.Error",
         .unichar => "u32", // UTF-32 or UCS-4
         .va_list => "std.builtin.VaList",
+        .va_args => "...",
+        .long_double => "c_longdouble",
         else => unreachable,
     };
 }
@@ -128,7 +130,7 @@ pub const TypeFormatter = struct {
                     try writer.writeAll("void");
                 }
             },
-            .boolean, .int8, .uint8, .int16, .uint16, .int32, .uint32, .int64, .uint64, .float, .double, .gtype, .@"error", .unichar, .va_list => {
+            .boolean, .int8, .uint8, .int16, .uint16, .int32, .uint32, .int64, .uint64, .float, .double, .gtype, .@"error", .unichar, .va_list, .va_args, .long_double => {
                 if (self.type.pointer) {
                     if (self.nullable) try writer.writeAll("?");
                     try writer.writeAll("*");

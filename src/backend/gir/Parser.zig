@@ -98,15 +98,15 @@ fn parseDoc(self: *Parser, allocator: Allocator) Error![]const u8 {
                     };
                     const esc_seq = try reader.takeDelimiterInclusive(';');
                     if (std.mem.eql(u8, esc_seq, "&lt;")) {
-                        aw.writer.writeAll("<") catch return error.OufOfMemory;
+                        aw.writer.writeAll("<") catch return error.OutOfMemory;
                     } else if (std.mem.eql(u8, esc_seq, "&gt;")) {
-                        aw.writer.writeAll(">") catch return error.OufOfMemory;
+                        aw.writer.writeAll(">") catch return error.OutOfMemory;
                     } else if (std.mem.eql(u8, esc_seq, "&amp;")) {
-                        aw.writer.writeAll("&") catch return error.OufOfMemory;
+                        aw.writer.writeAll("&") catch return error.OutOfMemory;
                     } else if (std.mem.eql(u8, esc_seq, "&quot;")) {
-                        aw.writer.writeAll("\"") catch return error.OufOfMemory;
+                        aw.writer.writeAll("\"") catch return error.OutOfMemory;
                     } else if (std.mem.eql(u8, esc_seq, "&apos;")) {
-                        aw.writer.writeAll("'") catch return error.OufOfMemory;
+                        aw.writer.writeAll("'") catch return error.OutOfMemory;
                     } else return fail(token);
                 }
             },
@@ -269,7 +269,7 @@ fn parseAlias(self: *Parser, allocator: Allocator) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc(allocator);
+                    _ = try self.parseDoc(allocator); // TODO
                 } else if (std.mem.eql(u8, tag.name, "type")) {
                     _ = try self.parseType(allocator);
                 } else if (std.mem.eql(u8, tag.name, "source-position")) {
@@ -321,7 +321,7 @@ fn parseArg(self: *Parser, allocator: Allocator) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc")) {
-                    try self.parseDoc(allocator);
+                    _ = try self.parseDoc(allocator); // TODO
                 } else if (std.mem.eql(u8, tag.name, "type")) {
                     _ = try self.parseType(allocator);
                 } else if (std.mem.eql(u8, tag.name, "array")) {
@@ -483,7 +483,7 @@ fn parseCallable(self: *Parser, allocator: Allocator) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc(allocator);
+                    _ = try self.parseDoc(allocator); // TODO
                 } else if (std.mem.eql(u8, tag.name, "attribute")) {
                     try self.parseAttribute(allocator);
                 } else if (std.mem.eql(u8, tag.name, "return-value")) {
@@ -545,7 +545,7 @@ fn parseClass(self: *Parser, allocator: Allocator) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc(allocator);
+                    _ = try self.parseDoc(allocator); // TODO
                 } else if (std.mem.eql(u8, tag.name, "constructor") or std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method") or std.mem.eql(u8, tag.name, "virtual-method")) {
                     try self.parseCallable(allocator);
                 } else if (std.mem.eql(u8, tag.name, "field")) {
@@ -595,7 +595,7 @@ fn parseConstant(self: *Parser, allocator: Allocator) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc(allocator);
+                    _ = try self.parseDoc(allocator); // TODO
                 } else if (std.mem.eql(u8, tag.name, "type")) {
                     _ = try self.parseType(allocator);
                 } else if (std.mem.eql(u8, tag.name, "source-position")) {
@@ -641,7 +641,7 @@ fn parseEnum(self: *Parser, allocator: Allocator) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc(allocator);
+                    _ = try self.parseDoc(allocator); // TODO
                 } else if (std.mem.eql(u8, tag.name, "function")) {
                     try self.parseCallable(allocator);
                 } else if (std.mem.eql(u8, tag.name, "member")) {
@@ -685,7 +685,7 @@ fn parseField(self: *Parser, allocator: Allocator) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc")) {
-                    try self.parseDoc(allocator);
+                    _ = try self.parseDoc(allocator); // TODO
                 } else if (std.mem.eql(u8, tag.name, "type")) {
                     _ = try self.parseType(allocator);
                 } else if (std.mem.eql(u8, tag.name, "array")) {
@@ -731,7 +731,7 @@ fn parseInterface(self: *Parser, allocator: Allocator) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc(allocator);
+                    _ = try self.parseDoc(allocator); // TODO
                 } else if (std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method") or std.mem.eql(u8, tag.name, "virtual-method")) {
                     try self.parseCallable(allocator);
                 } else if (std.mem.eql(u8, tag.name, "field")) {
@@ -781,7 +781,7 @@ fn parseMember(self: *Parser, allocator: Allocator) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc(allocator);
+                    _ = try self.parseDoc(allocator); // TODO
                 } else return fail(token);
             },
             .comment => {},
@@ -833,7 +833,7 @@ fn parseProperty(self: *Parser, allocator: Allocator) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc(allocator);
+                    _ = try self.parseDoc(allocator); // TODO
                 } else if (std.mem.eql(u8, tag.name, "array")) {
                     _ = try self.parseArray(allocator);
                 } else if (std.mem.eql(u8, tag.name, "attribute")) {
@@ -891,7 +891,7 @@ fn parseRecord(self: *Parser, allocator: Allocator) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc(allocator);
+                    _ = try self.parseDoc(allocator); // TODO
                 } else if (std.mem.eql(u8, tag.name, "field")) {
                     try self.parseField(allocator);
                 } else if (std.mem.eql(u8, tag.name, "constructor") or std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method")) {
@@ -945,7 +945,7 @@ fn parseSignal(self: *Parser, allocator: Allocator) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc(allocator);
+                    _ = try self.parseDoc(allocator); // TODO
                 } else if (std.mem.eql(u8, tag.name, "return-value")) {
                     try self.parseArg(allocator);
                 } else if (std.mem.eql(u8, tag.name, "parameters")) {
@@ -1053,7 +1053,7 @@ fn parseType(self: *Parser, allocator: Allocator) Error!gi.Type {
                     } else if (std.mem.eql(u8, name, "gdouble")) {
                         _type.tag = .double;
                     } else if (std.mem.eql(u8, name, "long double")) {
-                        _type.tag = .double; // TODO
+                        _type.tag = .long_double;
                     } else if (std.mem.eql(u8, name, "utf8")) {
                         _type.tag = .utf8;
                     } else if (std.mem.eql(u8, name, "filename")) {
@@ -1143,7 +1143,7 @@ fn parseUnion(self: *Parser, allocator: Allocator) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    try self.parseDoc(allocator);
+                    _ = try self.parseDoc(allocator); // TODO
                 } else if (std.mem.eql(u8, tag.name, "field")) {
                     try self.parseField(allocator);
                 } else if (std.mem.eql(u8, tag.name, "constructor") or std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method")) {

@@ -737,8 +737,10 @@ pub const TypeTag = enum(u32) {
     ghash = 19,
     @"error" = 20,
     unichar = 21,
-    // TODO
+    // extension
     va_list = 100,
+    va_args = 101,
+    long_double = 102,
 };
 
 pub const ScopeType = enum(u32) {
