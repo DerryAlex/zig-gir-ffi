@@ -14,6 +14,9 @@ pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repo
     defer search_paths.deinit(self.allocator);
     try search_paths.append(self.allocator, default_search_path);
 
+    try self.namespaces.put(self.allocator, namespace, .{ .name = &.{} });
+    errdefer _ = self.namespaces.swapRemove(namespace);
+
     const namespace_ = try std.mem.concat(self.allocator, u8, &.{ namespace, "-" });
     defer self.allocator.free(namespace_);
 
