@@ -14,9 +14,6 @@ pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repo
     defer search_paths.deinit(self.allocator);
     try search_paths.append(self.allocator, default_search_path);
 
-    try self.namespaces.put(self.allocator, namespace, .{ .name = &.{} });
-    errdefer _ = self.namespaces.swapRemove(namespace);
-
     const namespace_ = try std.mem.concat(self.allocator, u8, &.{ namespace, "-" });
     defer self.allocator.free(namespace_);
 
@@ -49,8 +46,17 @@ pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repo
         var reader = file.reader(&buffer);
         var scanner: Scanner = .init(&reader.interface);
         var parser: Parser = .init(&scanner);
-        parser.parse(self.allocator, self) catch return error.FileNotFound;
+        const loaded_namespace = parser.parse(self.allocator) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => {
+                std.log.debug("gir backend: fail to load {s}", .{namespace});
+                return error.FileNotFound;
+            },
+        };
+        try self.namespaces.put(self.allocator, namespace, loaded_namespace);
+        for (loaded_namespace.dependencies.items) |dep| try self.load(dep, null);
         return;
     }
+    std.log.debug("gir backend: fail to load {s}", .{namespace});
     return error.FileNotFound;
 }

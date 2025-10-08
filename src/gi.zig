@@ -89,6 +89,7 @@ pub const Namespace = struct {
 
 /// Closed interface for Info structs.
 pub const Info = union(enum) {
+    alias: Alias,
     arg: Arg,
     callback: Callback,
     function: Function,
@@ -131,6 +132,7 @@ pub const Base = struct {
     name: []const u8,
     namespace: []const u8 = &.{},
     doc: []const u8 = &.{},
+    deprecated: bool = false,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Base {
         if (std.mem.indexOfScalar(u8, name, '.')) |pos| return .{
@@ -149,6 +151,32 @@ pub const Base = struct {
     pub fn format(self: *const Base, writer: *Writer) Writer.Error!void {
         if (self.namespace.len > 0) try writer.print("{s}.", .{self.namespace});
         try writer.print("{s}", .{self.name});
+    }
+};
+
+pub const Alias = struct {
+    base: Base,
+    type_info: ?*Type = null,
+
+    pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Alias {
+        return .{ .base = try .init(allocator, name) };
+    }
+
+    pub fn deinit(self: *Alias, allocator: Allocator) void {
+        if (self.type_info) |t| {
+            t.deinit(allocator);
+            allocator.destroy(t);
+        }
+        self.base.deinit(allocator);
+    }
+
+    pub fn getBase(self: *Alias) *const Base {
+        return @ptrCast(self);
+    }
+
+    pub fn format(self: *Alias, writer: *Writer) Writer.Error!void {
+        try writer.print("{f}", .{fmt.DocFormatter{ .doc = self.getBase().doc }});
+        try writer.print("pub const {s} = {f};\n", .{ self.getBase().name, fmt.TypeFormatter{ .type = self.type_info.? } });
     }
 };
 

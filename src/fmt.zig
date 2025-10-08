@@ -77,7 +77,7 @@ const CamelFormatter = struct {
     }
 };
 
-const DocFormatter = struct {
+pub const DocFormatter = struct {
     doc: []const u8,
     top_level: bool = false,
     custom_header: bool = false,
@@ -97,7 +97,7 @@ const DocFormatter = struct {
                 else => |e| return e,
             };
             try writer.writeAll("\n");
-            _ = reader.peekByte() catch |err| switch (err) {
+            _ = reader.takeByte() catch |err| switch (err) {
                 error.ReadFailed => unreachable,
                 error.EndOfStream => break,
             };
