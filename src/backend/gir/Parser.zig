@@ -697,6 +697,7 @@ fn parseClass(self: *Parser, allocator: Allocator) Error!gi.Object {
         const token = try self.scanner.next();
         switch (token) {
             .opening_tag_end => break,
+            .closing_tag => return object,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name")) {
                     object.base.base.name = try allocator.dupe(u8, attr.value);
@@ -1632,6 +1633,7 @@ fn parseUnion(self: *Parser, allocator: Allocator, namespace: *gi.Namespace, pre
         const token = try self.scanner.next();
         switch (token) {
             .opening_tag_end => break,
+            .closing_tag => return _union,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name")) {
                     if (prefix.len == 0) {
