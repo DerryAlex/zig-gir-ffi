@@ -275,7 +275,7 @@ fn parseNamespace(self: *Parser, allocator: Allocator, namespace: *gi.Namespace)
                         try namespace.infos.append(allocator, .{ .@"enum" = _enum });
                     }
                 } else if (std.mem.eql(u8, tag.name, "callback")) {
-                    var callable = try self.parseCallable(allocator);
+                    var callable = (try self.parseCallable(allocator)).?;
                     errdefer callable.deinit(allocator);
                     try namespace.infos.append(allocator, .{ .callback = .{ .callable = callable } });
                 } else if (std.mem.eql(u8, tag.name, "class")) {
@@ -287,19 +287,21 @@ fn parseNamespace(self: *Parser, allocator: Allocator, namespace: *gi.Namespace)
                     errdefer constant.deinit(allocator);
                     try namespace.infos.append(allocator, .{ .constant = constant });
                 } else if (std.mem.eql(u8, tag.name, "function")) {
-                    var callable = try self.parseCallable(allocator);
-                    errdefer callable.deinit(allocator);
-                    try namespace.infos.append(allocator, .{ .function = .{ .callable = callable } });
+                    var _callable = try self.parseCallable(allocator);
+                    if (_callable) |*callable| {
+                        errdefer callable.deinit(allocator);
+                        try namespace.infos.append(allocator, .{ .function = .{ .callable = callable.* } });
+                    }
                 } else if (std.mem.eql(u8, tag.name, "interface")) {
                     var interface = try self.parseInterface(allocator);
                     errdefer interface.deinit(allocator);
                     try namespace.infos.append(allocator, .{ .interface = interface });
                 } else if (std.mem.eql(u8, tag.name, "record") or std.mem.eql(u8, tag.name, "glib:boxed")) {
-                    var _struct = try self.parseRecord(allocator);
+                    var _struct = try self.parseRecord(allocator, namespace, "");
                     errdefer _struct.deinit(allocator);
                     try namespace.infos.append(allocator, .{ .@"struct" = _struct });
                 } else if (std.mem.eql(u8, tag.name, "union")) {
-                    var _union = try self.parseUnion(allocator);
+                    var _union = try self.parseUnion(allocator, namespace, "");
                     errdefer _union.deinit(allocator);
                     try namespace.infos.append(allocator, .{ .@"union" = _union });
                 } else if (std.mem.eql(u8, tag.name, "docsection")) {
@@ -551,7 +553,7 @@ fn parseAttribute(self: *Parser, allocator: Allocator) Error!void {
     }
 }
 
-fn parseCallable(self: *Parser, allocator: Allocator) Error!gi.Callable {
+fn parseCallable(self: *Parser, allocator: Allocator) Error!?gi.Callable {
     var callable: gi.Callable = try .init(allocator, "");
     errdefer callable.deinit(allocator);
     var deprecated_doc: []const u8 = &.{};
@@ -560,6 +562,7 @@ fn parseCallable(self: *Parser, allocator: Allocator) Error!gi.Callable {
     defer allocator.free(version);
     var deprecated_version: []const u8 = &.{};
     defer allocator.free(deprecated_version);
+    var shadowed = false;
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -576,17 +579,13 @@ fn parseCallable(self: *Parser, allocator: Allocator) Error!gi.Callable {
                 } else if (std.mem.eql(u8, attr.name, "invoker")) {
                     discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "moved-to")) {
-                    if (std.mem.indexOfScalar(u8, attr.value, '.')) |_| {
-                        // TODO
-                    } else {
-                        allocator.free(callable.base.name);
-                        callable.base.name = &.{};
-                        callable.base.name = try allocator.dupe(u8, attr.value);
-                    }
+                    shadowed = true;
                 } else if (std.mem.eql(u8, attr.name, "shadowed-by")) {
-                    // TODO: move to
+                    shadowed = true;
                 } else if (std.mem.eql(u8, attr.name, "shadows")) {
-                    // TODO: move to
+                    allocator.free(callable.base.name);
+                    callable.base.name = &.{};
+                    callable.base.name = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "throws")) {
                     callable.can_throw_gerror = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "version")) {
@@ -644,6 +643,10 @@ fn parseCallable(self: *Parser, allocator: Allocator) Error!gi.Callable {
         .deprecated_version = deprecated_version,
         .deprecated_doc = deprecated_doc,
     });
+    if (shadowed) {
+        callable.deinit(allocator);
+        return null;
+    }
     return callable;
 }
 
@@ -711,14 +714,16 @@ fn parseClass(self: *Parser, allocator: Allocator) Error!gi.Object {
                     const is_constructor = std.mem.eql(u8, tag.name, "constructor");
                     const is_method = std.mem.eql(u8, tag.name, "method");
                     const is_virtual = std.mem.eql(u8, tag.name, "virtual-method");
-                    var callable = try self.parseCallable(allocator);
-                    errdefer callable.deinit(allocator);
-                    if (is_constructor) callable.flags.is_constructor = true;
-                    if (is_method) callable.flags.is_method = true;
-                    if (is_virtual) {
-                        try object.vfuncs.append(allocator, .{ .callable = callable });
-                    } else {
-                        try object.methods.append(allocator, .{ .callable = callable });
+                    var _callable = try self.parseCallable(allocator);
+                    if (_callable) |*callable| {
+                        errdefer callable.deinit(allocator);
+                        if (is_constructor) callable.flags.is_constructor = true;
+                        if (is_method) callable.flags.is_method = true;
+                        if (is_virtual) {
+                            try object.vfuncs.append(allocator, .{ .callable = callable.* });
+                        } else {
+                            try object.methods.append(allocator, .{ .callable = callable.* });
+                        }
                     }
                 } else if (std.mem.eql(u8, tag.name, "field")) {
                     var field = try self.parseField(allocator);
@@ -895,7 +900,7 @@ fn parseEnum(self: *Parser, allocator: Allocator) Error!gi.Enum {
                 } else if (std.mem.eql(u8, tag.name, "doc-deprecated")) {
                     deprecated_doc = try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "function")) {
-                    var callable = try self.parseCallable(allocator);
+                    var callable = (try self.parseCallable(allocator)).?;
                     errdefer callable.deinit(allocator);
                     try _enum.methods.append(allocator, .{ .callable = callable });
                 } else if (std.mem.eql(u8, tag.name, "member")) {
@@ -957,7 +962,7 @@ fn parseField(self: *Parser, allocator: Allocator) Error!gi.Field {
                     field.type_info = try allocator.create(gi.Type);
                     field.type_info.?.* = _type;
                 } else if (std.mem.eql(u8, tag.name, "callback")) {
-                    var callable = try self.parseCallable(allocator);
+                    var callable = (try self.parseCallable(allocator)).?;
                     defer callable.deinit(allocator);
                     var callback: gi.Callback = .{ .callable = callable };
                     var aw: Writer.Allocating = .init(allocator);
@@ -1033,13 +1038,15 @@ fn parseInterface(self: *Parser, allocator: Allocator) Error!gi.Interface {
                 } else if (std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method") or std.mem.eql(u8, tag.name, "virtual-method")) {
                     const is_method = std.mem.eql(u8, tag.name, "method");
                     const is_virtual = std.mem.eql(u8, tag.name, "virtual-method");
-                    var callable = try self.parseCallable(allocator);
-                    errdefer callable.deinit(allocator);
-                    if (is_method) callable.flags.is_method = true;
-                    if (is_virtual) {
-                        try interface.vfuncs.append(allocator, .{ .callable = callable });
-                    } else {
-                        try interface.methods.append(allocator, .{ .callable = callable });
+                    var _callable = try self.parseCallable(allocator);
+                    if (_callable) |*callable| {
+                        errdefer callable.deinit(allocator);
+                        if (is_method) callable.flags.is_method = true;
+                        if (is_virtual) {
+                            try interface.vfuncs.append(allocator, .{ .callable = callable.* });
+                        } else {
+                            try interface.methods.append(allocator, .{ .callable = callable.* });
+                        }
                     }
                 } else if (std.mem.eql(u8, tag.name, "field")) {
                     try self.discardTag(); // TODO
@@ -1193,7 +1200,7 @@ fn parseProperty(self: *Parser, allocator: Allocator) Error!gi.Property {
     return property;
 }
 
-fn parseRecord(self: *Parser, allocator: Allocator) Error!gi.Struct {
+fn parseRecord(self: *Parser, allocator: Allocator, namespace: *gi.Namespace, prefix: []const u8) Error!gi.Struct {
     var _struct: gi.Struct = try .init(allocator, "");
     errdefer _struct.deinit(allocator);
     var deprecated_doc: []const u8 = &.{};
@@ -1209,7 +1216,12 @@ fn parseRecord(self: *Parser, allocator: Allocator) Error!gi.Struct {
             .closing_tag => return _struct,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name") or std.mem.eql(u8, attr.name, "glib:name")) {
-                    _struct.base.base.name = try allocator.dupe(u8, attr.value);
+                    if (prefix.len == 0) {
+                        @branchHint(.likely);
+                        _struct.base.base.name = try allocator.dupe(u8, attr.value);
+                    } else {
+                        _struct.base.base.name = try std.fmt.allocPrint(allocator, "{s}__{s}", .{ prefix, attr.value });
+                    }
                 } else if (std.mem.eql(u8, attr.name, "copy-function") or std.mem.eql(u8, attr.name, "free-function")) {
                     discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "deprecated")) {
@@ -1241,6 +1253,14 @@ fn parseRecord(self: *Parser, allocator: Allocator) Error!gi.Struct {
             else => return fail(token),
         }
     }
+    if (_struct.base.base.name.len == 0) {
+        @branchHint(.unlikely);
+        if (prefix.len != 0) {
+            _struct.base.base.name = try std.fmt.allocPrint(allocator, "{s}__{s}", .{ prefix, "s" });
+        } else {
+            _struct.base.base.name = try allocator.dupe(u8, "s");
+        }
+    }
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -1257,13 +1277,38 @@ fn parseRecord(self: *Parser, allocator: Allocator) Error!gi.Struct {
                 } else if (std.mem.eql(u8, tag.name, "constructor") or std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method")) {
                     const is_constructor = std.mem.eql(u8, tag.name, "constructor");
                     const is_method = std.mem.eql(u8, tag.name, "method");
-                    var callable = try self.parseCallable(allocator);
-                    errdefer callable.deinit(allocator);
-                    if (is_constructor) callable.flags.is_constructor = true;
-                    if (is_method) callable.flags.is_method = true;
-                    try _struct.methods.append(allocator, .{ .callable = callable });
+                    var _callable = try self.parseCallable(allocator);
+                    if (_callable) |*callable| {
+                        errdefer callable.deinit(allocator);
+                        if (is_constructor) callable.flags.is_constructor = true;
+                        if (is_method) callable.flags.is_method = true;
+                        try _struct.methods.append(allocator, .{ .callable = callable.* });
+                    }
                 } else if (std.mem.eql(u8, tag.name, "union")) {
-                    try self.discardTag(); // TODO: unnamed type
+                    var _union = try self.parseUnion(allocator, namespace, _struct.base.base.name);
+                    {
+                        errdefer _union.deinit(allocator);
+                        try namespace.infos.append(allocator, .{ .@"union" = _union });
+                    }
+
+                    const type_name = _union.base.base.name;
+                    const field_name = type_name[_struct.base.base.name.len + 2 ..];
+                    var field: gi.Field = try .init(allocator, field_name);
+                    errdefer field.deinit(allocator);
+                    {
+                        var _type: gi.Type = try .init(allocator, "type");
+                        errdefer _type.deinit(allocator);
+                        {
+                            var _interface: gi.Base = try .init(allocator, type_name);
+                            errdefer _interface.deinit(allocator);
+                            _type.tag = .interface;
+                            _type.interface = try allocator.create(gi.Base);
+                            _type.interface.?.* = _interface;
+                        }
+                        field.type_info = try allocator.create(gi.Type);
+                        field.type_info.?.* = _type;
+                    }
+                    try _struct.fields.append(allocator, field);
                 } else if (std.mem.eql(u8, tag.name, "method-inline") or std.mem.eql(u8, tag.name, "source-position")) {
                     try self.discardTag();
                 } else return fail(token);
@@ -1485,6 +1530,7 @@ fn parseType(self: *Parser, allocator: Allocator) Error!gi.Type {
                         _type.tag = .interface;
                         _type.interface = try allocator.create(gi.Base);
                         _type.interface.?.* = _interface;
+                        if (std.mem.endsWith(u8, type_name, "Func") or std.mem.endsWith(u8, type_name, "Notify")) _type.interface_is_callback = true;
                     }
                 } else if (std.mem.eql(u8, attr.name, "c:type")) {
                     const c_type = attr.value;
@@ -1529,7 +1575,7 @@ fn parseType(self: *Parser, allocator: Allocator) Error!gi.Type {
     return _type;
 }
 
-fn parseUnion(self: *Parser, allocator: Allocator) Error!gi.Union {
+fn parseUnion(self: *Parser, allocator: Allocator, namespace: *gi.Namespace, prefix: []const u8) Error!gi.Union {
     var _union: gi.Union = try .init(allocator, "");
     errdefer _union.deinit(allocator);
     var deprecated_doc: []const u8 = &.{};
@@ -1542,7 +1588,12 @@ fn parseUnion(self: *Parser, allocator: Allocator) Error!gi.Union {
             .opening_tag_end => break,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name")) {
-                    _union.base.base.name = try allocator.dupe(u8, attr.value);
+                    if (prefix.len == 0) {
+                        @branchHint(.likely);
+                        _union.base.base.name = try allocator.dupe(u8, attr.value);
+                    } else {
+                        _union.base.base.name = try std.fmt.allocPrint(allocator, "{s}__{s}", .{ prefix, attr.value });
+                    }
                 } else if (std.mem.eql(u8, attr.name, "deprecated")) {
                     _union.base.base.deprecated = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
@@ -1552,6 +1603,14 @@ fn parseUnion(self: *Parser, allocator: Allocator) Error!gi.Union {
                 } else return fail(token);
             },
             else => return fail(token),
+        }
+    }
+    if (_union.base.base.name.len == 0) {
+        @branchHint(.unlikely);
+        if (prefix.len != 0) {
+            _union.base.base.name = try std.fmt.allocPrint(allocator, "{s}__{s}", .{ prefix, "u" });
+        } else {
+            _union.base.base.name = try allocator.dupe(u8, "u");
         }
     }
     while (true) {
@@ -1570,13 +1629,36 @@ fn parseUnion(self: *Parser, allocator: Allocator) Error!gi.Union {
                 } else if (std.mem.eql(u8, tag.name, "constructor") or std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method")) {
                     const is_constructor = std.mem.eql(u8, tag.name, "constructor");
                     const is_method = std.mem.eql(u8, tag.name, "method");
-                    var callable = try self.parseCallable(allocator);
+                    var callable = (try self.parseCallable(allocator)).?;
                     errdefer callable.deinit(allocator);
                     if (is_constructor) callable.flags.is_constructor = true;
                     if (is_method) callable.flags.is_method = true;
                     try _union.methods.append(allocator, .{ .callable = callable });
                 } else if (std.mem.eql(u8, tag.name, "record")) {
-                    try self.discardTag(); // TODO: unnamed type
+                    var _struct = try self.parseRecord(allocator, namespace, _union.base.base.name);
+                    {
+                        errdefer _struct.deinit(allocator);
+                        try namespace.infos.append(allocator, .{ .@"struct" = _struct });
+                    }
+
+                    const type_name = _struct.base.base.name;
+                    const field_name = type_name[_union.base.base.name.len + 2 ..];
+                    var field: gi.Field = try .init(allocator, field_name);
+                    errdefer field.deinit(allocator);
+                    {
+                        var _type: gi.Type = try .init(allocator, "type");
+                        errdefer _type.deinit(allocator);
+                        {
+                            var _interface: gi.Base = try .init(allocator, type_name);
+                            errdefer _interface.deinit(allocator);
+                            _type.tag = .interface;
+                            _type.interface = try allocator.create(gi.Base);
+                            _type.interface.?.* = _interface;
+                        }
+                        field.type_info = try allocator.create(gi.Type);
+                        field.type_info.?.* = _type;
+                    }
+                    try _union.fields.append(allocator, field);
                 } else if (std.mem.eql(u8, tag.name, "source-position")) {
                     try self.discardTag();
                 } else return fail(token);

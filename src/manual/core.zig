@@ -609,7 +609,7 @@ pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: GObject.T
     const class_init = struct {
         fn trampoline(class: *Class) callconv(.c) void {
             if (typeTag(Object).private_offset != 0) {
-                _ = GObject.typeClassAdjustPrivateOffset(class, &typeTag(Object).private_offset);
+                _ = GObject.TypeClass.adjustPrivateOffset(class, &typeTag(Object).private_offset);
             }
             initStruct(Class, class);
             if (comptime @hasDecl(Object, "Override")) {
@@ -632,7 +632,7 @@ pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: GObject.T
             }
         }
     }.trampoline;
-    if (GLib.onceInitEnter(&typeTag(Object).type_id)) {
+    if (GLib.Once.initEnter(&typeTag(Object).type_id)) {
         var info: GObject.TypeInfo = .{
             .class_size = @sizeOf(Class),
             .base_init = null,
@@ -654,7 +654,7 @@ pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: GObject.T
                 overrideInterface(Interface, Object.Override, type_id);
             }
         }
-        GLib.onceInitLeave(&typeTag(Object).type_id, @intFromEnum(type_id));
+        GLib.Once.initLeave(&typeTag(Object).type_id, @intFromEnum(type_id));
     }
     return typeTag(Object).type_id;
 }
@@ -742,7 +742,7 @@ pub fn registerInterface(comptime Interface: type, name: [*:0]const u8) Type {
             }
         }
     }.trampoline;
-    if (GLib.onceInitEnter(&typeTag(Interface).type_id)) {
+    if (GLib.Once.initEnter(&typeTag(Interface).type_id)) {
         var info: GObject.TypeInfo = .{
             .class_size = @sizeOf(Class),
             .base_init = null,
@@ -758,10 +758,10 @@ pub fn registerInterface(comptime Interface: type, name: [*:0]const u8) Type {
         const type_id = GObject.typeRegisterStatic(.interface, name, &info, .{});
         if (comptime @hasDecl(Interface, "Prerequisites")) {
             inline for (Interface.Prerequisites) |Prerequisite| {
-                GObject.typeInterfaceAddPrerequisite(type_id, .from(Prerequisite));
+                GObject.TypeInterface.addPrerequisite(type_id, .from(Prerequisite));
             }
         }
-        GLib.onceInitLeave(&typeTag(Interface).type_id, @intFromEnum(type_id));
+        GLib.Once.initLeave(&typeTag(Interface).type_id, @intFromEnum(type_id));
     }
     return typeTag(Interface).type_id;
 }
