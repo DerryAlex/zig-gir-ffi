@@ -487,7 +487,7 @@ pub const ZigClosure = extern struct {
             @field(args, std.fmt.comptimePrint("{}", .{n_param + idx})) = @field(user_data, std.fmt.comptimePrint("{}", .{idx}));
         }
         self.c_closure.marshal = @ptrCast(&marshal);
-        self.c_closure._0.derivative_flag = true; // makes `data` first parameter
+        self.c_closure._1.derivative_flag = true; // makes `data` first parameter
         self.c_callback = &cInvoke(Fn);
         self.n_param = n_param;
         self.c_closure.data = self;

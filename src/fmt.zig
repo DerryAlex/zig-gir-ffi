@@ -28,6 +28,9 @@ fn formatTypeTag(tag: gi.TypeTag) []const u8 {
         .va_list => "std.builtin.VaList",
         .va_args => "...",
         .long_double => "c_longdouble",
+        .time_t => "std.posix.time_t",
+        .pid_t => "std.posix.pid_t",
+        .uid_t => "std.posix.uid_t",
         else => unreachable,
     };
 }
@@ -130,7 +133,7 @@ pub const TypeFormatter = struct {
                     try writer.writeAll("void");
                 }
             },
-            .boolean, .int8, .uint8, .int16, .uint16, .int32, .uint32, .int64, .uint64, .float, .double, .gtype, .@"error", .unichar, .va_list, .va_args, .long_double => {
+            .boolean, .int8, .uint8, .int16, .uint16, .int32, .uint32, .int64, .uint64, .float, .double, .gtype, .@"error", .unichar, .va_list, .va_args, .long_double, .time_t, .pid_t, .uid_t => {
                 if (self.type.pointer) {
                     if (self.nullable) try writer.writeAll("?");
                     try writer.writeAll("*");
@@ -347,7 +350,7 @@ pub const CallableDocFormatter = struct {
     pub fn format(self: CallableDocFormatter, writer: *Writer) Writer.Error!void {
         try writer.print("{f}", .{DocFormatter{ .doc = self.callable.base.doc }});
         for (self.callable.args.items) |*arg| {
-            if (arg.getBase().doc.len != 0) try writer.print("/// @param {s}: {f}", .{ arg.getBase().name, DocFormatter{
+            if (arg.getBase().doc.len != 0) try writer.print("/// @param {s} {f}", .{ arg.getBase().name, DocFormatter{
                 .doc = arg.getBase().doc,
                 .custom_header = true,
             } });
@@ -418,12 +421,14 @@ pub const ValueFormatter = struct {
 // --- Field ---
 const BitField = struct {
     var remaining: ?usize = null;
+    var count: usize = 0;
 
-    pub fn consume(writer: *Writer, bits: usize, container_size: usize, container_offset: usize) Writer.Error!void {
+    pub fn consume(writer: *Writer, bits: usize, container_size: usize) Writer.Error!void {
         if ((remaining orelse 0) < bits) {
             try end(writer);
             remaining = container_size;
-            try writer.print("_{}: packed struct(u{}) {{\n", .{ container_offset, container_size });
+            count += 1;
+            try writer.print("_{}: packed struct(u{}) {{\n", .{ count, container_size });
         }
         remaining.? -= bits;
     }
@@ -434,6 +439,11 @@ const BitField = struct {
             try writer.writeAll("},\n");
         }
         remaining = null;
+    }
+
+    pub fn reset() void {
+        remaining = null;
+        count = 0;
     }
 };
 
@@ -447,13 +457,12 @@ pub const FieldFormatter = struct {
     pub fn format(self: FieldFormatter, writer: *Writer) Writer.Error!void {
         const field_type = self.field.type_info.?;
         const field_size = self.field.size;
-        const field_offset = self.field.offset;
         if (field_size != 0) {
             const container_size = switch (field_type.tag) {
                 .int32, .uint32 => 32,
                 else => unreachable,
             };
-            try BitField.consume(writer, field_size, container_size, field_offset);
+            try BitField.consume(writer, field_size, container_size);
         } else {
             try BitField.end(writer);
         }
@@ -634,6 +643,7 @@ pub const StructFormatter = struct {
         try writer.print("pub const {s} = {s}{{\n", .{ self.context.getBase().name, if (self.context.size != 0) "extern struct" else "opaque" });
         for (self.context.methods.items) |*method| PreservedField.names.put(method.getBase().name, {}) catch @panic("Out Of Memory");
         defer PreservedField.names.clearAndFree();
+        BitField.reset();
         for (self.context.fields.items) |*field| try writer.print("{f}", .{FieldFormatter{ .field = field }});
         try BitField.end(writer);
         for (self.context.methods.items) |*method| try writer.print("{f}", .{FunctionFormatter{
@@ -755,6 +765,7 @@ pub const ObjectFormatter = struct {
         }
         for (self.context.methods.items) |*method| PreservedField.names.put(method.getBase().name, {}) catch @panic("Out Of Memory");
         defer PreservedField.names.clearAndFree();
+        BitField.reset();
         for (self.context.fields.items) |*field| try writer.print("{f}", .{FieldFormatter{ .field = field }});
         try BitField.end(writer);
         for (self.context.constants.items) |*constant| try writer.print("{f}", .{ConstantFormatter{ .constant = constant }});
@@ -799,6 +810,10 @@ pub const FunctionFormatter = struct {
     };
 
     pub fn format(self: FunctionFormatter, writer: *Writer) Writer.Error!void {
+        // TODO: support va args
+        const _args = self.function.callable.args.items;
+        if (_args.len > 0 and _args[_args.len - 1].type_info.?.tag == .va_args) return;
+
         var buffer: [4096]u8 = undefined;
         var fixed: std.heap.FixedBufferAllocator = .init(&buffer);
         const allocator = fixed.allocator();
@@ -817,7 +832,7 @@ pub const FunctionFormatter = struct {
 
         // analyse parameters
         const is_method = callable.is_method;
-        const is_constructor = self.function.flags.is_constructor;
+        const is_constructor = callable.flags.is_constructor;
         var n_out_param: usize = 0;
         for (args, 0..) |*arg, idx| {
             // collect slice info
@@ -932,7 +947,7 @@ pub const FunctionFormatter = struct {
                 if (n_out > 1) try writer.writeAll("ret: ");
                 if (return_bool) {
                     try writer.writeAll("bool");
-                } else if (self.function.flags.is_constructor) {
+                } else if (callable.flags.is_constructor) {
                     const container = self.container.?;
                     if (self.function.callable.may_return_null) try writer.writeAll("?");
                     try writer.print("*{s}", .{container.name});
@@ -1038,7 +1053,7 @@ pub const FunctionFormatter = struct {
             .c_callconv = true,
             .constructor = is_constructor,
         }});
-        try writer.print(", .{{ .name = \"{s}\"}});\n", .{self.function.symbol.?});
+        try writer.print(", .{{ .name = \"{s}\"}});\n", .{callable.symbol.?});
         try writer.writeAll("const ret = cFn");
         try writer.print("{f}", .{CallableFormatter{
             .callable = &self.function.callable,

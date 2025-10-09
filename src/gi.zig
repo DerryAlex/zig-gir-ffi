@@ -186,10 +186,11 @@ pub const Arg = struct {
     type_info: ?*Type = null,
     // basic information
     direction: Direction = .in,
-    ownership_transfer: Transfer = .nothing,
+    ownership_transfer: Transfer = .none,
     caller_allocates: bool = false,
     may_be_null: bool = false,
     optional: bool = false,
+    skip: bool = false,
     // closure information
     closure_index: ?usize = null,
     destroy_index: ?usize = null,
@@ -227,6 +228,9 @@ pub const Callable = struct {
     is_method: bool = false,
     may_return_null: bool = false,
     skip_return: bool = false,
+    // function information
+    symbol: ?[]const u8 = null,
+    flags: FunctionFlags = .{},
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Callable {
         return .{ .base = try .init(allocator, name) };
@@ -237,6 +241,7 @@ pub const Callable = struct {
         self.args.deinit(allocator);
         if (self.return_type) |r| r.deinit(allocator);
         self.base.deinit(allocator);
+        if (self.symbol) |s| allocator.free(s);
     }
 };
 
@@ -265,8 +270,6 @@ pub const Callback = struct {
 /// `Function` represents a function, method or constructor.
 pub const Function = struct {
     callable: Callable,
-    symbol: ?[]const u8 = null,
-    flags: FunctionFlags = .{},
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Function {
         return .{ .callable = try .init(allocator, name) };
@@ -274,9 +277,6 @@ pub const Function = struct {
 
     pub fn deinit(self: *Function, allocator: Allocator) void {
         self.callable.deinit(allocator);
-        if (self.symbol) |s| {
-            allocator.free(s);
-        }
     }
 
     pub fn getBase(self: *Function) *const Base {
@@ -737,9 +737,9 @@ pub const Direction = enum(u32) {
 };
 
 pub const Transfer = enum(u32) {
-    nothing = 0,
+    none = 0,
     container = 1,
-    everything = 2,
+    full = 2,
 };
 
 pub const TypeTag = enum(u32) {
@@ -769,6 +769,9 @@ pub const TypeTag = enum(u32) {
     va_list = 100,
     va_args = 101,
     long_double = 102,
+    time_t = 103,
+    pid_t = 104,
+    uid_t = 105,
 };
 
 pub const ScopeType = enum(u32) {

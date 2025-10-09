@@ -1,4 +1,5 @@
 const std = @import("std");
+const StringArrayHashMap = std.StringArrayHashMapUnmanaged;
 const options = @import("options");
 const gi = @import("../gi.zig");
 const Repository = gi.Repository;
@@ -55,6 +56,19 @@ pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repo
         };
         try self.namespaces.put(self.allocator, namespace, loaded_namespace);
         for (loaded_namespace.dependencies.items) |dep| try self.load(dep, null);
+        // transive dependency
+        var dependencies: StringArrayHashMap(void) = try .init(self.allocator, loaded_namespace.dependencies.items, &.{});
+        defer dependencies.deinit(self.allocator);
+        var idx: usize = 0;
+        while (idx < dependencies.count()) : (idx += 1) {
+            const dep = dependencies.keys()[idx];
+            const dep_ns = self.namespaces.get(dep).?;
+            for (dep_ns.dependencies.items) |d| {
+                if (!dependencies.contains(d)) try dependencies.put(self.allocator, d, {});
+            }
+        }
+        var namespace_ptr = self.namespaces.getPtr(namespace).?;
+        try namespace_ptr.dependencies.appendSlice(self.allocator, dependencies.keys()[namespace_ptr.dependencies.items.len..]);
         return;
     }
     std.log.debug("gir backend: fail to load {s}", .{namespace});

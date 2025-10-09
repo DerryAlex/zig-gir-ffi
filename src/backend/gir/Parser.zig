@@ -4,6 +4,7 @@ const Parser = @This();
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const ArrayList = std.ArrayList;
 const Reader = std.Io.Reader;
 const StaticStringMap = std.StaticStringMap;
 const Writer = std.Io.Writer;
@@ -11,6 +12,8 @@ const assert = std.debug.assert;
 const fatal = std.process.fatal;
 const Scanner = @import("Scanner.zig");
 const gi = @import("../../gi.zig");
+const fmt = @import("../../fmt.zig");
+const CallbackFormatter = fmt.CallbackFormatter;
 
 scanner: *Scanner,
 
@@ -25,6 +28,20 @@ pub const Error = Scanner.Error || Allocator.Error || error{ParseGirFailed};
 fn fail(token: Scanner.Token) error{ParseGirFailed} {
     std.log.err("unexpected token {f}", .{token});
     return error.ParseGirFailed;
+}
+
+fn discardAttr(_: Scanner.Attribute) void {}
+
+fn parseAttrBool(value: []const u8) bool {
+    return 0 != @as(u1, @intCast(parseAttrInt(value)));
+}
+
+fn parseAttrInt(value: []const u8) usize {
+    return std.fmt.parseInt(usize, value, 10) catch unreachable;
+}
+
+fn parseAttrEnum(comptime T: type, value: []const u8) T {
+    return std.meta.stringToEnum(T, value).?;
 }
 
 fn discardTag(self: *Parser) Error!void {
@@ -49,8 +66,6 @@ fn discardTag(self: *Parser) Error!void {
     }
 }
 
-fn discardAttr(_: Scanner.Attribute) void {}
-
 fn parseXmlProlog(self: *Parser) Error!void {
     while (true) {
         const token = try self.scanner.next();
@@ -74,7 +89,9 @@ fn parseDoc(self: *Parser, allocator: Allocator) Error![]const u8 {
         switch (token) {
             .opening_tag_end => break,
             .attribute => |attr| {
-                if (std.mem.startsWith(u8, attr.name, "xml:") or std.mem.eql(u8, attr.name, "filename") or std.mem.eql(u8, attr.name, "line")) {
+                if (std.mem.eql(u8, attr.name, "filename") or std.mem.eql(u8, attr.name, "line")) {
+                    discardAttr(attr);
+                } else if (std.mem.startsWith(u8, attr.name, "xml:")) {
                     discardAttr(attr);
                 } else return fail(token);
             },
@@ -121,6 +138,27 @@ fn parseDoc(self: *Parser, allocator: Allocator) Error![]const u8 {
     return try aw.toOwnedSlice();
 }
 
+fn generateFullDoc(base: *gi.Base, allocator: Allocator, config: struct {
+    version: []const u8,
+    deprecated_version: []const u8,
+    deprecated_doc: []const u8,
+}) Allocator.Error!void {
+    var aw: Writer.Allocating = .initOwnedSlice(allocator, @constCast(base.doc));
+    defer aw.deinit();
+    base.doc = &.{};
+    if (config.version.len != 0) {
+        if (aw.written().len != 0) aw.writer.writeAll("\n") catch return error.OutOfMemory;
+        aw.writer.print("@since {s}", .{config.version}) catch return error.OutOfMemory;
+    }
+    if (base.deprecated) {
+        if (aw.written().len != 0) aw.writer.writeAll("\n") catch return error.OutOfMemory;
+        aw.writer.writeAll("@deprecated") catch return error.OutOfMemory;
+        if (config.deprecated_version.len != 0) aw.writer.print("(since = {s})", .{config.deprecated_version}) catch return error.OutOfMemory;
+        aw.writer.print(" {s}", .{config.deprecated_doc}) catch return error.OutOfMemory;
+    }
+    base.doc = try aw.toOwnedSlice();
+}
+
 pub fn parse(self: *Parser, allocator: Allocator) Error!gi.Namespace {
     var namespace: gi.Namespace = .{ .name = &.{} };
     while (true) {
@@ -162,10 +200,13 @@ fn parseRepository(self: *Parser, allocator: Allocator) Error!gi.Namespace {
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "include")) {
                     const dep = try self.parseInclude(allocator);
+                    errdefer allocator.free(dep);
                     try namespace.dependencies.append(allocator, dep);
                 } else if (std.mem.eql(u8, tag.name, "namespace")) {
                     try self.parseNamespace(allocator, &namespace);
-                } else if (std.mem.eql(u8, tag.name, "package") or std.mem.startsWith(u8, tag.name, "c:") or std.mem.startsWith(u8, tag.name, "doc:")) {
+                } else if (std.mem.eql(u8, tag.name, "package")) {
+                    try self.discardTag();
+                } else if (std.mem.startsWith(u8, tag.name, "c:") or std.mem.startsWith(u8, tag.name, "doc:")) {
                     try self.discardTag();
                 } else return fail(token);
             },
@@ -187,7 +228,7 @@ fn parseInclude(self: *Parser, allocator: Allocator) Error![]const u8 {
                 if (std.mem.eql(u8, attr.name, "name")) {
                     name = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "version")) {
-                    discardAttr(attr); // TODO
+                    // TODO: namespace version
                 } else return fail(token);
             },
             else => return fail(token),
@@ -204,9 +245,11 @@ fn parseNamespace(self: *Parser, allocator: Allocator, namespace: *gi.Namespace)
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name")) {
                     namespace.name = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "shared-library")) {
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "version")) {
-                    discardAttr(attr); // TODO
-                } else if (std.mem.startsWith(u8, attr.name, "c:") or std.mem.eql(u8, attr.name, "shared-library")) {
+                    // TODO: namespace version
+                } else if (std.mem.startsWith(u8, attr.name, "c:")) {
                     discardAttr(attr);
                 } else return fail(token);
             },
@@ -219,25 +262,49 @@ fn parseNamespace(self: *Parser, allocator: Allocator, namespace: *gi.Namespace)
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "alias")) {
-                    const alias = try self.parseAlias(allocator);
+                    var alias = try self.parseAlias(allocator);
+                    errdefer alias.deinit(allocator);
                     try namespace.infos.append(allocator, .{ .alias = alias });
                 } else if (std.mem.eql(u8, tag.name, "bitfield") or std.mem.eql(u8, tag.name, "enumeration")) {
-                    try self.parseEnum(allocator);
+                    const is_flag = std.mem.eql(u8, tag.name, "bitfield");
+                    var _enum = try self.parseEnum(allocator);
+                    errdefer _enum.deinit(allocator);
+                    if (is_flag) {
+                        try namespace.infos.append(allocator, .{ .flags = .{ .base = _enum } });
+                    } else {
+                        try namespace.infos.append(allocator, .{ .@"enum" = _enum });
+                    }
                 } else if (std.mem.eql(u8, tag.name, "callback")) {
-                    try self.parseCallable(allocator);
+                    var callable = try self.parseCallable(allocator);
+                    errdefer callable.deinit(allocator);
+                    try namespace.infos.append(allocator, .{ .callback = .{ .callable = callable } });
                 } else if (std.mem.eql(u8, tag.name, "class")) {
-                    try self.parseClass(allocator);
+                    var object = try self.parseClass(allocator);
+                    errdefer object.deinit(allocator);
+                    try namespace.infos.append(allocator, .{ .object = object });
                 } else if (std.mem.eql(u8, tag.name, "constant")) {
-                    try self.parseConstant(allocator);
+                    var constant = try self.parseConstant(allocator);
+                    errdefer constant.deinit(allocator);
+                    try namespace.infos.append(allocator, .{ .constant = constant });
                 } else if (std.mem.eql(u8, tag.name, "function")) {
-                    try self.parseCallable(allocator);
+                    var callable = try self.parseCallable(allocator);
+                    errdefer callable.deinit(allocator);
+                    try namespace.infos.append(allocator, .{ .function = .{ .callable = callable } });
                 } else if (std.mem.eql(u8, tag.name, "interface")) {
-                    try self.parseInterface(allocator);
+                    var interface = try self.parseInterface(allocator);
+                    errdefer interface.deinit(allocator);
+                    try namespace.infos.append(allocator, .{ .interface = interface });
                 } else if (std.mem.eql(u8, tag.name, "record") or std.mem.eql(u8, tag.name, "glib:boxed")) {
-                    try self.parseRecord(allocator);
+                    var _struct = try self.parseRecord(allocator);
+                    errdefer _struct.deinit(allocator);
+                    try namespace.infos.append(allocator, .{ .@"struct" = _struct });
                 } else if (std.mem.eql(u8, tag.name, "union")) {
-                    try self.parseUnion(allocator);
-                } else if (std.mem.eql(u8, tag.name, "docsection") or std.mem.eql(u8, tag.name, "function-inline") or std.mem.eql(u8, tag.name, "function-macro")) {
+                    var _union = try self.parseUnion(allocator);
+                    errdefer _union.deinit(allocator);
+                    try namespace.infos.append(allocator, .{ .@"union" = _union });
+                } else if (std.mem.eql(u8, tag.name, "docsection")) {
+                    try self.discardTag();
+                } else if (std.mem.eql(u8, tag.name, "function-inline") or std.mem.eql(u8, tag.name, "function-macro")) {
                     try self.discardTag();
                 } else return fail(token);
             },
@@ -250,27 +317,23 @@ fn parseNamespace(self: *Parser, allocator: Allocator, namespace: *gi.Namespace)
 // -----
 
 fn parseAlias(self: *Parser, allocator: Allocator) Error!gi.Alias {
-    var name: []const u8 = &.{};
-    defer allocator.free(name);
-    var doc: []const u8 = &.{};
-    defer allocator.free(doc);
+    var alias: gi.Alias = try .init(allocator, "");
+    errdefer alias.deinit(allocator);
     var deprecated_doc: []const u8 = &.{};
     defer allocator.free(deprecated_doc);
-    var deprecated = false;
-    var deprecated_version: f32 = 0.0;
+    var deprecated_version: []const u8 = &.{};
+    defer allocator.free(deprecated_version);
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
             .opening_tag_end => break,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name")) {
-                    name = try allocator.dupe(u8, attr.value);
+                    alias.base.name = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "deprecated")) {
-                    if (std.mem.eql(u8, attr.value, "1")) {
-                        deprecated = true;
-                    } else return fail(token);
+                    alias.base.deprecated = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
-                    deprecated_version = std.fmt.parseFloat(f32, attr.value) catch unreachable;
+                    deprecated_version = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.startsWith(u8, attr.name, "c:")) {
                     discardAttr(attr);
                 } else return fail(token);
@@ -278,21 +341,20 @@ fn parseAlias(self: *Parser, allocator: Allocator) Error!gi.Alias {
             else => return fail(token),
         }
     }
-    var alias: gi.Alias = try .init(allocator, name);
-    errdefer alias.deinit(allocator);
-    alias.base.deprecated = deprecated;
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc")) {
-                    doc = try self.parseDoc(allocator);
+                    alias.base.doc = try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "doc-deprecated")) {
                     deprecated_doc = try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "type")) {
+                    var _type = try self.parseType(allocator);
+                    errdefer _type.deinit(allocator);
                     alias.type_info = try allocator.create(gi.Type);
-                    alias.type_info.?.* = try self.parseType(allocator);
+                    alias.type_info.?.* = _type;
                 } else if (std.mem.eql(u8, tag.name, "source-position")) {
                     try self.discardTag();
                 } else return fail(token);
@@ -301,47 +363,48 @@ fn parseAlias(self: *Parser, allocator: Allocator) Error!gi.Alias {
             else => return fail(token),
         }
     }
-    if (deprecated) {
-        alias.base.doc = try std.fmt.allocPrint(allocator,
-            \\{s}
-            \\
-            \\@deprecated(since = {}) {s}
-        , .{ doc, deprecated_version, deprecated_doc });
-    } else {
-        alias.base.doc = doc;
-        doc = &.{};
-    }
+    try generateFullDoc(&alias.base, allocator, .{
+        .version = "",
+        .deprecated_version = deprecated_version,
+        .deprecated_doc = deprecated_doc,
+    });
     return alias;
 }
 
-fn parseArg(self: *Parser, allocator: Allocator) Error!void {
+fn parseArg(self: *Parser, allocator: Allocator) Error!struct { gi.Arg, bool } {
+    var arg: gi.Arg = try .init(allocator, "");
+    errdefer arg.deinit(allocator);
+    var skip = false;
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
             .opening_tag_end => break,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name")) {
-                    // TODO
+                    arg.base.name = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "allow-none")) {
-                    // TODO
+                    if (parseAttrBool(attr.value)) {
+                        arg.may_be_null = true;
+                        arg.optional = true;
+                    }
                 } else if (std.mem.eql(u8, attr.name, "caller-allocates")) {
-                    // TODO
+                    arg.caller_allocates = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "closure")) {
-                    // TODO
+                    arg.closure_index = parseAttrInt(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "direction")) {
-                    // TODO
+                    arg.direction = parseAttrEnum(gi.Direction, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "destroy")) {
-                    // TODO
+                    arg.destroy_index = parseAttrInt(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "nullable")) {
-                    // TODO
+                    arg.may_be_null = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "optional")) {
-                    // TODO
+                    arg.optional = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "scope")) {
-                    // TODO
+                    arg.scope = parseAttrEnum(gi.ScopeType, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "skip")) {
-                    // TODO
+                    skip = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "transfer-ownership")) {
-                    // TODO
+                    arg.ownership_transfer = parseAttrEnum(gi.Transfer, attr.value);
                 } else return fail(token);
             },
             else => return fail(token),
@@ -353,32 +416,40 @@ fn parseArg(self: *Parser, allocator: Allocator) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc")) {
-                    _ = try self.parseDoc(allocator); // TODO
+                    arg.base.doc = try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "type")) {
-                    _ = try self.parseType(allocator);
+                    var _type = try self.parseType(allocator);
+                    errdefer _type.deinit(allocator);
+                    arg.type_info = try allocator.create(gi.Type);
+                    arg.type_info.?.* = _type;
                 } else if (std.mem.eql(u8, tag.name, "array")) {
-                    _ = try self.parseArray(allocator);
+                    var _type = try self.parseArray(allocator);
+                    errdefer _type.deinit(allocator);
+                    arg.type_info = try allocator.create(gi.Type);
+                    arg.type_info.?.* = _type;
                 } else if (std.mem.eql(u8, tag.name, "attribute")) {
                     try self.parseAttribute(allocator);
                 } else if (std.mem.eql(u8, tag.name, "varargs")) {
                     try self.discardTag();
+                    var _type: gi.Type = try .init(allocator, "type");
+                    errdefer _type.deinit(allocator);
+                    _type.tag = .va_args;
+                    arg.type_info = try allocator.create(gi.Type);
+                    arg.type_info.?.* = _type;
                 } else return fail(token);
             },
             .comment => {},
             else => return fail(token),
         }
     }
+    return .{ arg, skip };
 }
 
-fn parseArgs(self: *Parser, allocator: Allocator) Error!void {
+fn parseArgs(self: *Parser, allocator: Allocator, callable: *gi.Callable) Error!void {
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
             .opening_tag_end => break,
-            .attribute => |attr| {
-                _ = attr;
-                return fail(token);
-            },
             else => return fail(token),
         }
     }
@@ -387,8 +458,13 @@ fn parseArgs(self: *Parser, allocator: Allocator) Error!void {
         switch (token) {
             .closing_tag => break,
             .opening_tag => |tag| {
-                if (std.mem.eql(u8, tag.name, "parameter") or std.mem.eql(u8, tag.name, "instance-parameter")) {
-                    try self.parseArg(allocator);
+                if (std.mem.eql(u8, tag.name, "instance-parameter")) {
+                    try self.discardTag();
+                    callable.is_method = true;
+                } else if (std.mem.eql(u8, tag.name, "parameter")) {
+                    var arg, _ = try self.parseArg(allocator);
+                    errdefer arg.deinit(allocator);
+                    try callable.args.append(allocator, arg);
                 } else return fail(token);
             },
             .comment => {},
@@ -416,11 +492,11 @@ fn parseArray(self: *Parser, allocator: Allocator) Error!gi.Type {
                         _type.array_type = .ptr_array;
                     } else unreachable;
                 } else if (std.mem.eql(u8, attr.name, "fixed-size")) {
-                    _type.array_fixed_size = std.fmt.parseInt(usize, attr.value, 10) catch unreachable;
+                    _type.array_fixed_size = parseAttrInt(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "length")) {
-                    _type.array_length_index = std.fmt.parseInt(usize, attr.value, 10) catch unreachable;
+                    _type.array_length_index = parseAttrInt(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "zero-terminated")) {
-                    _type.zero_terminated = 0 != (std.fmt.parseInt(u1, attr.value, 10) catch unreachable);
+                    _type.zero_terminated = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "c:type")) {
                     discardAttr(attr);
                 } else return fail(token);
@@ -428,15 +504,26 @@ fn parseArray(self: *Parser, allocator: Allocator) Error!gi.Type {
             else => return fail(token),
         }
     }
+    if (_type.array_fixed_size == null) _type.pointer = true;
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "array")) {
-                    _ = try self.parseArray(allocator);
+                    var subtype = try self.parseArray(allocator);
+                    errdefer subtype.deinit(allocator);
+                    if (_type.param_type == null) {
+                        _type.param_type = try allocator.create(gi.Type);
+                        _type.param_type.?.* = subtype;
+                    } else unreachable;
                 } else if (std.mem.eql(u8, tag.name, "type")) {
-                    _ = try self.parseType(allocator);
+                    var subtype = try self.parseType(allocator);
+                    errdefer subtype.deinit(allocator);
+                    if (_type.param_type == null) {
+                        _type.param_type = try allocator.create(gi.Type);
+                        _type.param_type.?.* = subtype;
+                    } else unreachable;
                 } else return fail(token);
             },
             .comment => {},
@@ -454,9 +541,9 @@ fn parseAttribute(self: *Parser, allocator: Allocator) Error!void {
             .closing_tag => break,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name")) {
-                    // TODO
+                    // TODO: attribute
                 } else if (std.mem.eql(u8, attr.name, "value")) {
-                    // TODO
+                    // TODO: attribute
                 } else return fail(token);
             },
             else => return fail(token),
@@ -464,250 +551,61 @@ fn parseAttribute(self: *Parser, allocator: Allocator) Error!void {
     }
 }
 
-fn parseCallable(self: *Parser, allocator: Allocator) Error!void {
+fn parseCallable(self: *Parser, allocator: Allocator) Error!gi.Callable {
+    var callable: gi.Callable = try .init(allocator, "");
+    errdefer callable.deinit(allocator);
+    var deprecated_doc: []const u8 = &.{};
+    defer allocator.free(deprecated_doc);
+    var version: []const u8 = &.{};
+    defer allocator.free(version);
+    var deprecated_version: []const u8 = &.{};
+    defer allocator.free(deprecated_version);
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
             .opening_tag_end => break,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name")) {
-                    // TODO
+                    callable.base.name = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "deprecated")) {
-                    // TODO
+                    callable.base.deprecated = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
-                    // TODO
+                    deprecated_version = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "introspectable")) {
-                    // TODO
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "invoker")) {
-                    // TODO
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "moved-to")) {
-                    // TODO
+                    if (std.mem.indexOfScalar(u8, attr.value, '.')) |_| {
+                        // TODO
+                    } else {
+                        allocator.free(callable.base.name);
+                        callable.base.name = &.{};
+                        callable.base.name = try allocator.dupe(u8, attr.value);
+                    }
                 } else if (std.mem.eql(u8, attr.name, "shadowed-by")) {
-                    // TODO
+                    // TODO: move to
                 } else if (std.mem.eql(u8, attr.name, "shadows")) {
-                    // TODO
+                    // TODO: move to
                 } else if (std.mem.eql(u8, attr.name, "throws")) {
-                    // TODO
+                    callable.can_throw_gerror = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "version")) {
-                    // TODO
+                    version = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "c:identifier")) {
-                    // TODO
+                    callable.symbol = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "c:type")) {
-                    // TODO
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "glib:async-func")) {
-                    // TODO
+                    // TODO: async
                 } else if (std.mem.eql(u8, attr.name, "glib:finish-func")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "glib:get-property")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "glib:set-property")) {
-                    // TODO
+                    // TODO: async
+                    callable.flags.is_async = true;
                 } else if (std.mem.eql(u8, attr.name, "glib:sync-func")) {
-                    // TODO
-                } else return fail(token);
-            },
-            else => return fail(token),
-        }
-    }
-    while (true) {
-        const token = try self.scanner.next();
-        switch (token) {
-            .closing_tag => break,
-            .opening_tag => |tag| {
-                if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    _ = try self.parseDoc(allocator); // TODO
-                } else if (std.mem.eql(u8, tag.name, "attribute")) {
-                    try self.parseAttribute(allocator);
-                } else if (std.mem.eql(u8, tag.name, "doc-version")) {
-                    try self.discardTag(); // TODO
-                } else if (std.mem.eql(u8, tag.name, "return-value")) {
-                    try self.parseArg(allocator);
-                } else if (std.mem.eql(u8, tag.name, "parameters")) {
-                    try self.parseArgs(allocator);
-                } else if (std.mem.eql(u8, tag.name, "source-position")) {
-                    try self.discardTag();
-                } else return fail(token);
-            },
-            .comment => {},
-            else => return fail(token),
-        }
-    }
-}
-
-fn parseClass(self: *Parser, allocator: Allocator) Error!void {
-    while (true) {
-        const token = try self.scanner.next();
-        switch (token) {
-            .opening_tag_end => break,
-            .attribute => |attr| {
-                if (std.mem.eql(u8, attr.name, "name")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "abstract")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "deprecated")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "version")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "parent")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "glib:fundamental")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "glib:get-value-func")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "glib:get-type")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "glib:ref-func")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "glib:set-value-func")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "glib:type-struct")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "glib:unref-func")) {
-                    // TODO
-                } else if (std.mem.startsWith(u8, attr.name, "c:") or std.mem.eql(u8, attr.name, "glib:type-name")) {
-                    // no op
-                } else return fail(token);
-            },
-            else => return fail(token),
-        }
-    }
-    while (true) {
-        const token = try self.scanner.next();
-        switch (token) {
-            .closing_tag => break,
-            .opening_tag => |tag| {
-                if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    _ = try self.parseDoc(allocator); // TODO
-                } else if (std.mem.eql(u8, tag.name, "constructor") or std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method") or std.mem.eql(u8, tag.name, "virtual-method")) {
-                    try self.parseCallable(allocator);
-                } else if (std.mem.eql(u8, tag.name, "field")) {
-                    try self.parseField(allocator);
-                } else if (std.mem.eql(u8, tag.name, "implements")) {
-                    try self.discardTag(); // TODO
-                } else if (std.mem.eql(u8, tag.name, "property")) {
-                    try self.parseProperty(allocator);
-                } else if (std.mem.eql(u8, tag.name, "glib:signal")) {
-                    try self.parseSignal(allocator);
-                } else if (std.mem.eql(u8, tag.name, "source-position")) {
-                    try self.discardTag();
-                } else return fail(token);
-            },
-            .comment => {},
-            else => return fail(token),
-        }
-    }
-}
-
-fn parseConstant(self: *Parser, allocator: Allocator) Error!void {
-    while (true) {
-        const token = try self.scanner.next();
-        switch (token) {
-            .opening_tag_end => break,
-            .attribute => |attr| {
-                if (std.mem.eql(u8, attr.name, "name")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "deprecated")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "value")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "version")) {
-                    // TODO
-                } else if (std.mem.startsWith(u8, attr.name, "c:")) {
-                    // no op
-                } else return fail(token);
-            },
-            else => return fail(token),
-        }
-    }
-    while (true) {
-        const token = try self.scanner.next();
-        switch (token) {
-            .closing_tag => break,
-            .opening_tag => |tag| {
-                if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    _ = try self.parseDoc(allocator); // TODO
-                } else if (std.mem.eql(u8, tag.name, "type")) {
-                    _ = try self.parseType(allocator);
-                } else if (std.mem.eql(u8, tag.name, "source-position")) {
-                    try self.discardTag();
-                } else return fail(token);
-            },
-            .comment => {},
-            else => return fail(token),
-        }
-    }
-}
-
-fn parseEnum(self: *Parser, allocator: Allocator) Error!void {
-    while (true) {
-        const token = try self.scanner.next();
-        switch (token) {
-            .opening_tag_end => break,
-            .attribute => |attr| {
-                if (std.mem.eql(u8, attr.name, "name")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "deprecated")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "introspectable")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "version")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "glib:error-domain")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "glib:get-type")) {
-                    // TODO
-                } else if (std.mem.startsWith(u8, attr.name, "c:") or std.mem.eql(u8, attr.name, "glib:type-name")) {
-                    // no op
-                } else return fail(token);
-            },
-            else => return fail(token),
-        }
-    }
-    while (true) {
-        const token = try self.scanner.next();
-        switch (token) {
-            .closing_tag => break,
-            .opening_tag => |tag| {
-                if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    _ = try self.parseDoc(allocator); // TODO
-                } else if (std.mem.eql(u8, tag.name, "function")) {
-                    try self.parseCallable(allocator);
-                } else if (std.mem.eql(u8, tag.name, "member")) {
-                    try self.parseMember(allocator);
-                } else if (std.mem.eql(u8, tag.name, "source-position")) {
-                    try self.discardTag();
-                } else return fail(token);
-            },
-            .comment => {},
-            else => return fail(token),
-        }
-    }
-}
-
-fn parseField(self: *Parser, allocator: Allocator) Error!void {
-    while (true) {
-        const token = try self.scanner.next();
-        switch (token) {
-            .opening_tag_end => break,
-            .attribute => |attr| {
-                if (std.mem.eql(u8, attr.name, "name")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "bits")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "introspectable")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "private")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "readable")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "writable")) {
-                    // TODO
+                    // TODO: async
+                } else if (std.mem.eql(u8, attr.name, "glib:get-property")) {
+                    callable.flags.is_getter = true;
+                } else if (std.mem.eql(u8, attr.name, "glib:set-property")) {
+                    callable.flags.is_setter = true;
                 } else return fail(token);
             },
             else => return fail(token),
@@ -719,63 +617,20 @@ fn parseField(self: *Parser, allocator: Allocator) Error!void {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "doc")) {
-                    _ = try self.parseDoc(allocator); // TODO
-                } else if (std.mem.eql(u8, tag.name, "type")) {
-                    _ = try self.parseType(allocator);
-                } else if (std.mem.eql(u8, tag.name, "array")) {
-                    _ = try self.parseArray(allocator);
-                } else if (std.mem.eql(u8, tag.name, "callback")) {
-                    try self.parseCallable(allocator);
-                } else return fail(token);
-            },
-            .comment => {},
-            else => return fail(token),
-        }
-    }
-}
-
-fn parseInterface(self: *Parser, allocator: Allocator) Error!void {
-    while (true) {
-        const token = try self.scanner.next();
-        switch (token) {
-            .opening_tag_end => break,
-            .attribute => |attr| {
-                if (std.mem.eql(u8, attr.name, "name")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "deprecated")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "version")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "glib:get-type")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "glib:type-struct")) {
-                    // TODO
-                } else if (std.mem.startsWith(u8, attr.name, "c:") or std.mem.eql(u8, attr.name, "glib:type-name")) {
-                    // no op
-                } else return fail(token);
-            },
-            else => return fail(token),
-        }
-    }
-    while (true) {
-        const token = try self.scanner.next();
-        switch (token) {
-            .closing_tag => break,
-            .opening_tag => |tag| {
-                if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    _ = try self.parseDoc(allocator); // TODO
-                } else if (std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method") or std.mem.eql(u8, tag.name, "virtual-method")) {
-                    try self.parseCallable(allocator);
-                } else if (std.mem.eql(u8, tag.name, "field")) {
-                    try self.parseField(allocator);
-                } else if (std.mem.eql(u8, tag.name, "prerequisite")) {
-                    try self.discardTag(); // TODO
-                } else if (std.mem.eql(u8, tag.name, "property")) {
-                    try self.parseProperty(allocator);
-                } else if (std.mem.eql(u8, tag.name, "glib:signal")) {
-                    try self.parseSignal(allocator);
+                    callable.base.doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "doc-deprecated") or std.mem.eql(u8, tag.name, "doc-version")) {
+                    deprecated_doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "attribute")) {
+                    try self.parseAttribute(allocator);
+                } else if (std.mem.eql(u8, tag.name, "return-value")) {
+                    var arg, const skip = try self.parseArg(allocator);
+                    defer arg.deinit(allocator);
+                    callable.return_type = arg.type_info;
+                    arg.type_info = null;
+                    callable.may_return_null = arg.may_be_null;
+                    callable.skip_return = skip;
+                } else if (std.mem.eql(u8, tag.name, "parameters")) {
+                    try self.parseArgs(allocator, &callable);
                 } else if (std.mem.eql(u8, tag.name, "source-position")) {
                     try self.discardTag();
                 } else return fail(token);
@@ -784,27 +639,60 @@ fn parseInterface(self: *Parser, allocator: Allocator) Error!void {
             else => return fail(token),
         }
     }
+    try generateFullDoc(&callable.base, allocator, .{
+        .version = version,
+        .deprecated_version = deprecated_version,
+        .deprecated_doc = deprecated_doc,
+    });
+    return callable;
 }
 
-fn parseMember(self: *Parser, allocator: Allocator) Error!void {
+fn parseClass(self: *Parser, allocator: Allocator) Error!gi.Object {
+    var object: gi.Object = try .init(allocator, "");
+    errdefer object.deinit(allocator);
+    var deprecated_doc: []const u8 = &.{};
+    defer allocator.free(deprecated_doc);
+    var version: []const u8 = &.{};
+    defer allocator.free(version);
+    var deprecated_version: []const u8 = &.{};
+    defer allocator.free(deprecated_version);
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
             .opening_tag_end => break,
-            .closing_tag => return,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name")) {
-                    // TODO
+                    object.base.base.name = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "abstract")) {
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "deprecated")) {
-                    // TODO
+                    object.base.base.deprecated = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "value")) {
-                    // TODO
+                    deprecated_version = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "version")) {
-                    // TODO
-                } else if (std.mem.startsWith(u8, attr.name, "c:") or std.mem.eql(u8, attr.name, "glib:nick") or std.mem.eql(u8, attr.name, "glib:name")) {
-                    // no op
+                    version = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "parent")) {
+                    var parent: gi.Base = try .init(allocator, attr.value);
+                    errdefer parent.deinit(allocator);
+                    object.parent = try allocator.create(gi.Base);
+                    object.parent.?.* = parent;
+                } else if (std.mem.eql(u8, attr.name, "glib:fundamental")) {
+                    discardAttr(attr);
+                } else if (std.mem.eql(u8, attr.name, "glib:get-value-func") or std.mem.eql(u8, attr.name, "glib:set-value-func")) {
+                    discardAttr(attr);
+                } else if (std.mem.eql(u8, attr.name, "glib:get-type")) {
+                    object.base.type_init = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "glib:ref-func") or std.mem.eql(u8, attr.name, "glib:unref-func")) {
+                    discardAttr(attr);
+                } else if (std.mem.eql(u8, attr.name, "glib:type-name")) {
+                    discardAttr(attr);
+                } else if (std.mem.eql(u8, attr.name, "glib:type-struct")) {
+                    var class: gi.Base = try .init(allocator, attr.value);
+                    errdefer class.deinit(allocator);
+                    object.class_struct = try allocator.create(gi.Base);
+                    object.class_struct.?.* = class;
+                } else if (std.mem.startsWith(u8, attr.name, "c:")) {
+                    discardAttr(attr);
                 } else return fail(token);
             },
             else => return fail(token),
@@ -815,48 +703,81 @@ fn parseMember(self: *Parser, allocator: Allocator) Error!void {
         switch (token) {
             .closing_tag => break,
             .opening_tag => |tag| {
-                if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    _ = try self.parseDoc(allocator); // TODO
+                if (std.mem.eql(u8, tag.name, "doc")) {
+                    object.base.base.doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "doc-deprecated")) {
+                    deprecated_doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "constructor") or std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method") or std.mem.eql(u8, tag.name, "virtual-method")) {
+                    const is_constructor = std.mem.eql(u8, tag.name, "constructor");
+                    const is_method = std.mem.eql(u8, tag.name, "method");
+                    const is_virtual = std.mem.eql(u8, tag.name, "virtual-method");
+                    var callable = try self.parseCallable(allocator);
+                    errdefer callable.deinit(allocator);
+                    if (is_constructor) callable.flags.is_constructor = true;
+                    if (is_method) callable.flags.is_method = true;
+                    if (is_virtual) {
+                        try object.vfuncs.append(allocator, .{ .callable = callable });
+                    } else {
+                        try object.methods.append(allocator, .{ .callable = callable });
+                    }
+                } else if (std.mem.eql(u8, tag.name, "field")) {
+                    var field = try self.parseField(allocator);
+                    errdefer field.deinit(allocator);
+                    try object.fields.append(allocator, field);
+                } else if (std.mem.eql(u8, tag.name, "implements")) {
+                    try self.discardTag(); // TODO: implements
+                } else if (std.mem.eql(u8, tag.name, "property")) {
+                    var property = try self.parseProperty(allocator);
+                    errdefer property.deinit(allocator);
+                    try object.properties.append(allocator, property);
+                } else if (std.mem.eql(u8, tag.name, "glib:signal")) {
+                    var signal = try self.parseSignal(allocator);
+                    errdefer signal.deinit(allocator);
+                    try object.signals.append(allocator, signal);
+                } else if (std.mem.eql(u8, tag.name, "source-position")) {
+                    try self.discardTag();
                 } else return fail(token);
             },
             .comment => {},
             else => return fail(token),
         }
     }
+    try generateFullDoc(&object.base.base, allocator, .{
+        .version = version,
+        .deprecated_version = deprecated_version,
+        .deprecated_doc = deprecated_doc,
+    });
+    return object;
 }
 
-fn parseProperty(self: *Parser, allocator: Allocator) Error!void {
+fn parseConstant(self: *Parser, allocator: Allocator) Error!gi.Constant {
+    var constant: gi.Constant = try .init(allocator, "");
+    errdefer constant.deinit(allocator);
+    var deprecated_doc: []const u8 = &.{};
+    defer allocator.free(deprecated_doc);
+    var version: []const u8 = &.{};
+    defer allocator.free(version);
+    var deprecated_version: []const u8 = &.{};
+    defer allocator.free(deprecated_version);
+    var value_raw_str: []const u8 = &.{};
+    defer allocator.free(value_raw_str);
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
             .opening_tag_end => break,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "construct")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "construct-only")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "default-value")) {
-                    // TODO
+                    constant.base.name = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "deprecated")) {
-                    // TODO
+                    constant.base.deprecated = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "introspectable")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "getter")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "readable")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "setter")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "transfer-ownership")) {
-                    // TODO
+                    deprecated_version = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "value")) {
+                    value_raw_str = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "version")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "writable")) {
-                    // TODO
+                    version = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.startsWith(u8, attr.name, "c:")) {
+                    discardAttr(attr);
                 } else return fail(token);
             },
             else => return fail(token),
@@ -867,57 +788,454 @@ fn parseProperty(self: *Parser, allocator: Allocator) Error!void {
         switch (token) {
             .closing_tag => break,
             .opening_tag => |tag| {
-                if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    _ = try self.parseDoc(allocator); // TODO
+                if (std.mem.eql(u8, tag.name, "doc")) {
+                    constant.base.doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "doc-deprecated")) {
+                    deprecated_doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "type")) {
+                    var _type = try self.parseType(allocator);
+                    defer _type.deinit(allocator);
+                    switch (_type.tag) {
+                        .boolean => {
+                            constant.type_tag = .boolean;
+                            if (std.ascii.eqlIgnoreCase(value_raw_str, "true")) {
+                                constant.value = .{ .v_boolean = true };
+                            } else if (std.ascii.eqlIgnoreCase(value_raw_str, "false")) {
+                                constant.value = .{ .v_boolean = false };
+                            } else return fail(token);
+                        },
+                        .int8, .int16, .int32, .int64 => {
+                            constant.type_tag = .int64;
+                            constant.value = .{ .v_int64 = std.fmt.parseInt(i64, value_raw_str, 10) catch unreachable };
+                        },
+                        .uint8, .uint16, .uint32, .uint64 => {
+                            constant.type_tag = .uint64;
+                            constant.value = .{ .v_uint64 = std.fmt.parseInt(u64, value_raw_str, 10) catch unreachable };
+                        },
+                        .float, .double => {
+                            constant.type_tag = .double;
+                            constant.value = .{ .v_double = std.fmt.parseFloat(f64, value_raw_str) catch unreachable };
+                        },
+                        .utf8 => {
+                            constant.type_tag = .utf8;
+                            constant.value = .{ .v_string = try allocator.dupeZ(u8, value_raw_str) };
+                        },
+                        .interface => {
+                            constant.type_tag = .interface;
+                            if (std.fmt.parseInt(i64, value_raw_str, 10)) |v| {
+                                constant.type_tag = .int64;
+                                constant.value = .{ .v_int64 = v };
+                            } else |_| if (std.ascii.eqlIgnoreCase(value_raw_str, "null")) {
+                                constant.value = .{ .v_pointer = null };
+                            } else return fail(token);
+                        },
+                        else => unreachable,
+                    }
+                } else if (std.mem.eql(u8, tag.name, "source-position")) {
+                    try self.discardTag();
+                } else return fail(token);
+            },
+            .comment => {},
+            else => return fail(token),
+        }
+    }
+    try generateFullDoc(&constant.base, allocator, .{
+        .version = version,
+        .deprecated_version = deprecated_version,
+        .deprecated_doc = deprecated_doc,
+    });
+    return constant;
+}
+
+fn parseEnum(self: *Parser, allocator: Allocator) Error!gi.Enum {
+    var _enum: gi.Enum = try .init(allocator, "");
+    errdefer _enum.deinit(allocator);
+    _enum.storage_type = .int32;
+    var deprecated_doc: []const u8 = &.{};
+    defer allocator.free(deprecated_doc);
+    var version: []const u8 = &.{};
+    defer allocator.free(version);
+    var deprecated_version: []const u8 = &.{};
+    defer allocator.free(deprecated_version);
+    while (true) {
+        const token = try self.scanner.next();
+        switch (token) {
+            .opening_tag_end => break,
+            .attribute => |attr| {
+                if (std.mem.eql(u8, attr.name, "name")) {
+                    _enum.base.base.name = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "deprecated")) {
+                    _enum.base.base.deprecated = parseAttrBool(attr.value);
+                } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
+                    deprecated_version = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "introspectable")) {
+                    discardAttr(attr);
+                } else if (std.mem.eql(u8, attr.name, "version")) {
+                    version = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "glib:error-domain")) {
+                    discardAttr(attr);
+                } else if (std.mem.eql(u8, attr.name, "glib:get-type")) {
+                    _enum.base.type_init = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "glib:type-name")) {
+                    discardAttr(attr);
+                } else if (std.mem.startsWith(u8, attr.name, "c:")) {
+                    discardAttr(attr);
+                } else return fail(token);
+            },
+            else => return fail(token),
+        }
+    }
+    while (true) {
+        const token = try self.scanner.next();
+        switch (token) {
+            .closing_tag => break,
+            .opening_tag => |tag| {
+                if (std.mem.eql(u8, tag.name, "doc")) {
+                    _enum.base.base.doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "doc-deprecated")) {
+                    deprecated_doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "function")) {
+                    var callable = try self.parseCallable(allocator);
+                    errdefer callable.deinit(allocator);
+                    try _enum.methods.append(allocator, .{ .callable = callable });
+                } else if (std.mem.eql(u8, tag.name, "member")) {
+                    var value = try self.parseMember(allocator);
+                    errdefer value.deinit(allocator);
+                    try _enum.values.append(allocator, value);
+                } else if (std.mem.eql(u8, tag.name, "source-position")) {
+                    try self.discardTag();
+                } else return fail(token);
+            },
+            .comment => {},
+            else => return fail(token),
+        }
+    }
+    try generateFullDoc(&_enum.base.base, allocator, .{
+        .version = version,
+        .deprecated_version = deprecated_version,
+        .deprecated_doc = deprecated_doc,
+    });
+    return _enum;
+}
+
+fn parseField(self: *Parser, allocator: Allocator) Error!gi.Field {
+    var field: gi.Field = try .init(allocator, "");
+    errdefer field.deinit(allocator);
+    while (true) {
+        const token = try self.scanner.next();
+        switch (token) {
+            .opening_tag_end => break,
+            .attribute => |attr| {
+                if (std.mem.eql(u8, attr.name, "name")) {
+                    field.base.name = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "bits")) {
+                    field.size = parseAttrInt(attr.value);
+                } else if (std.mem.eql(u8, attr.name, "introspectable")) {
+                    discardAttr(attr);
+                } else if (std.mem.eql(u8, attr.name, "private") or std.mem.eql(u8, attr.name, "readable") or std.mem.eql(u8, attr.name, "writable")) {
+                    discardAttr(attr);
+                } else return fail(token);
+            },
+            else => return fail(token),
+        }
+    }
+    while (true) {
+        const token = try self.scanner.next();
+        switch (token) {
+            .closing_tag => break,
+            .opening_tag => |tag| {
+                if (std.mem.eql(u8, tag.name, "doc")) {
+                    field.base.doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "type")) {
+                    var _type = try self.parseType(allocator);
+                    errdefer _type.deinit(allocator);
+                    field.type_info = try allocator.create(gi.Type);
+                    field.type_info.?.* = _type;
                 } else if (std.mem.eql(u8, tag.name, "array")) {
-                    _ = try self.parseArray(allocator);
+                    var _type = try self.parseArray(allocator);
+                    errdefer _type.deinit(allocator);
+                    field.type_info = try allocator.create(gi.Type);
+                    field.type_info.?.* = _type;
+                } else if (std.mem.eql(u8, tag.name, "callback")) {
+                    var callable = try self.parseCallable(allocator);
+                    defer callable.deinit(allocator);
+                    var callback: gi.Callback = .{ .callable = callable };
+                    var aw: Writer.Allocating = .init(allocator);
+                    defer aw.deinit();
+                    aw.writer.print("{f}", .{CallbackFormatter{ .callback = &callback }}) catch return error.OutOfMemory;
+                    const name = try aw.toOwnedSlice();
+                    var _type: gi.Type = try .init(allocator, "type");
+                    errdefer _type.deinit(allocator);
+                    var _interface: gi.Base = try .init(allocator, name);
+                    errdefer _interface.deinit(allocator);
+                    _type.tag = .interface;
+                    _type.interface = try allocator.create(gi.Base);
+                    _type.interface.?.* = _interface;
+                    _type.interface_is_callback = true;
+                    field.type_info = try allocator.create(gi.Type);
+                    field.type_info.?.* = _type;
+                } else return fail(token);
+            },
+            .comment => {},
+            else => return fail(token),
+        }
+    }
+    return field;
+}
+
+fn parseInterface(self: *Parser, allocator: Allocator) Error!gi.Interface {
+    var interface: gi.Interface = try .init(allocator, "");
+    errdefer interface.deinit(allocator);
+    var deprecated_doc: []const u8 = &.{};
+    defer allocator.free(deprecated_doc);
+    var version: []const u8 = &.{};
+    defer allocator.free(version);
+    var deprecated_version: []const u8 = &.{};
+    defer allocator.free(deprecated_version);
+    while (true) {
+        const token = try self.scanner.next();
+        switch (token) {
+            .opening_tag_end => break,
+            .attribute => |attr| {
+                if (std.mem.eql(u8, attr.name, "name")) {
+                    interface.base.base.name = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "deprecated")) {
+                    interface.base.base.deprecated = parseAttrBool(attr.value);
+                } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
+                    deprecated_version = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "version")) {
+                    version = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "glib:get-type")) {
+                    interface.base.type_init = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "glib:type-struct")) {
+                    var iface: gi.Base = try .init(allocator, attr.value);
+                    errdefer iface.deinit(allocator);
+                    interface.iface = try allocator.create(gi.Base);
+                    interface.iface.?.* = iface;
+                } else if (std.mem.eql(u8, attr.name, "glib:type-name")) {
+                    discardAttr(attr);
+                } else if (std.mem.startsWith(u8, attr.name, "c:")) {
+                    discardAttr(attr);
+                } else return fail(token);
+            },
+            else => return fail(token),
+        }
+    }
+    while (true) {
+        const token = try self.scanner.next();
+        switch (token) {
+            .closing_tag => break,
+            .opening_tag => |tag| {
+                if (std.mem.eql(u8, tag.name, "doc")) {
+                    interface.base.base.doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "doc-deprecated")) {
+                    deprecated_doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method") or std.mem.eql(u8, tag.name, "virtual-method")) {
+                    const is_method = std.mem.eql(u8, tag.name, "method");
+                    const is_virtual = std.mem.eql(u8, tag.name, "virtual-method");
+                    var callable = try self.parseCallable(allocator);
+                    errdefer callable.deinit(allocator);
+                    if (is_method) callable.flags.is_method = true;
+                    if (is_virtual) {
+                        try interface.vfuncs.append(allocator, .{ .callable = callable });
+                    } else {
+                        try interface.methods.append(allocator, .{ .callable = callable });
+                    }
+                } else if (std.mem.eql(u8, tag.name, "field")) {
+                    try self.discardTag(); // TODO
+                } else if (std.mem.eql(u8, tag.name, "prerequisite")) {
+                    try self.discardTag(); // TODO: implements
+                } else if (std.mem.eql(u8, tag.name, "property")) {
+                    var property = try self.parseProperty(allocator);
+                    errdefer property.deinit(allocator);
+                    try interface.properties.append(allocator, property);
+                } else if (std.mem.eql(u8, tag.name, "glib:signal")) {
+                    var signal = try self.parseSignal(allocator);
+                    errdefer signal.deinit(allocator);
+                    try interface.signals.append(allocator, signal);
+                } else if (std.mem.eql(u8, tag.name, "source-position")) {
+                    try self.discardTag();
+                } else return fail(token);
+            },
+            .comment => {},
+            else => return fail(token),
+        }
+    }
+    try generateFullDoc(&interface.base.base, allocator, .{
+        .version = version,
+        .deprecated_version = deprecated_version,
+        .deprecated_doc = deprecated_doc,
+    });
+    return interface;
+}
+
+fn parseMember(self: *Parser, allocator: Allocator) Error!gi.Value {
+    var value: gi.Value = try .init(allocator, "");
+    errdefer value.deinit(allocator);
+    var deprecated_doc: []const u8 = &.{};
+    defer allocator.free(deprecated_doc);
+    var version: []const u8 = &.{};
+    defer allocator.free(version);
+    var deprecated_version: []const u8 = &.{};
+    defer allocator.free(deprecated_version);
+    while (true) {
+        const token = try self.scanner.next();
+        switch (token) {
+            .opening_tag_end => break,
+            .closing_tag => return value,
+            .attribute => |attr| {
+                if (std.mem.eql(u8, attr.name, "name")) {
+                    value.base.name = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "deprecated")) {
+                    value.base.deprecated = parseAttrBool(attr.value);
+                } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
+                    deprecated_version = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "value")) {
+                    value.value = std.fmt.parseInt(i64, attr.value, 10) catch unreachable;
+                } else if (std.mem.eql(u8, attr.name, "version")) {
+                    version = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "glib:nick") or std.mem.eql(u8, attr.name, "glib:name")) {
+                    discardAttr(attr);
+                } else if (std.mem.startsWith(u8, attr.name, "c:")) {
+                    discardAttr(attr);
+                } else return fail(token);
+            },
+            else => return fail(token),
+        }
+    }
+    while (true) {
+        const token = try self.scanner.next();
+        switch (token) {
+            .closing_tag => break,
+            .opening_tag => |tag| {
+                if (std.mem.eql(u8, tag.name, "doc")) {
+                    value.base.doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "doc-deprecated")) {
+                    deprecated_doc = try self.parseDoc(allocator);
+                } else return fail(token);
+            },
+            .comment => {},
+            else => return fail(token),
+        }
+    }
+    return value;
+}
+
+fn parseProperty(self: *Parser, allocator: Allocator) Error!gi.Property {
+    var property: gi.Property = try .init(allocator, "");
+    errdefer property.deinit(allocator);
+    var deprecated_doc: []const u8 = &.{};
+    defer allocator.free(deprecated_doc);
+    var version: []const u8 = &.{};
+    defer allocator.free(version);
+    var deprecated_version: []const u8 = &.{};
+    defer allocator.free(deprecated_version);
+    while (true) {
+        const token = try self.scanner.next();
+        switch (token) {
+            .opening_tag_end => break,
+            .attribute => |attr| {
+                if (std.mem.eql(u8, attr.name, "name")) {
+                    property.base.name = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "construct") or std.mem.eql(u8, attr.name, "construct-only") or std.mem.eql(u8, attr.name, "readable") or std.mem.eql(u8, attr.name, "writable")) {
+                    discardAttr(attr);
+                } else if (std.mem.eql(u8, attr.name, "default-value")) {
+                    discardAttr(attr);
+                } else if (std.mem.eql(u8, attr.name, "deprecated")) {
+                    property.base.deprecated = parseAttrBool(attr.value);
+                } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
+                    deprecated_version = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "introspectable")) {
+                    discardAttr(attr);
+                } else if (std.mem.eql(u8, attr.name, "getter") or std.mem.eql(u8, attr.name, "setter")) {
+                    discardAttr(attr);
+                } else if (std.mem.eql(u8, attr.name, "transfer-ownership")) {
+                    discardAttr(attr);
+                } else if (std.mem.eql(u8, attr.name, "version")) {
+                    version = try allocator.dupe(u8, attr.value);
+                } else return fail(token);
+            },
+            else => return fail(token),
+        }
+    }
+    while (true) {
+        const token = try self.scanner.next();
+        switch (token) {
+            .closing_tag => break,
+            .opening_tag => |tag| {
+                if (std.mem.eql(u8, tag.name, "doc")) {
+                    property.base.doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "doc-deprecated")) {
+                    deprecated_doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "array")) {
+                    var _type = try self.parseArray(allocator);
+                    errdefer _type.deinit(allocator);
+                    property.type_info = try allocator.create(gi.Type);
+                    property.type_info.?.* = _type;
                 } else if (std.mem.eql(u8, tag.name, "attribute")) {
                     try self.parseAttribute(allocator);
                 } else if (std.mem.eql(u8, tag.name, "type")) {
-                    _ = try self.parseType(allocator);
+                    var _type = try self.parseType(allocator);
+                    errdefer _type.deinit(allocator);
+                    property.type_info = try allocator.create(gi.Type);
+                    property.type_info.?.* = _type;
                 } else return fail(token);
             },
             .comment => {},
             else => return fail(token),
         }
     }
+    try generateFullDoc(&property.base, allocator, .{
+        .version = version,
+        .deprecated_version = deprecated_version,
+        .deprecated_doc = deprecated_doc,
+    });
+    return property;
 }
 
-fn parseRecord(self: *Parser, allocator: Allocator) Error!void {
+fn parseRecord(self: *Parser, allocator: Allocator) Error!gi.Struct {
+    var _struct: gi.Struct = try .init(allocator, "");
+    errdefer _struct.deinit(allocator);
+    var deprecated_doc: []const u8 = &.{};
+    defer allocator.free(deprecated_doc);
+    var version: []const u8 = &.{};
+    defer allocator.free(version);
+    var deprecated_version: []const u8 = &.{};
+    defer allocator.free(deprecated_version);
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
             .opening_tag_end => break,
-            .closing_tag => return,
+            .closing_tag => return _struct,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name") or std.mem.eql(u8, attr.name, "glib:name")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "copy-function")) {
-                    // TODO
+                    _struct.base.base.name = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "copy-function") or std.mem.eql(u8, attr.name, "free-function")) {
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "deprecated")) {
-                    // TODO
+                    _struct.base.base.deprecated = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
-                    // TODO
+                    deprecated_version = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "introspectable")) {
-                    // TODO
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "foreign")) {
-                    // TODO
-                } else if (std.mem.eql(u8, attr.name, "free-function")) {
-                    // TODO
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "disguised")) {
-                    // TODO
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "opaque")) {
-                    // TODO
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "pointer")) {
-                    // TODO
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "version")) {
-                    // TODO
+                    version = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "glib:is-gtype-struct-for")) {
-                    // TODO
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "glib:get-type")) {
-                    // TODO
-                } else if (std.mem.startsWith(u8, attr.name, "c:") or std.mem.eql(u8, attr.name, "glib:type-name")) {
-                    // no op
+                    _struct.base.type_init = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "glib:type-name")) {
+                    discardAttr(attr);
+                } else if (std.mem.startsWith(u8, attr.name, "c:")) {
+                    discardAttr(attr);
                 } else return fail(token);
             },
             else => return fail(token),
@@ -928,14 +1246,24 @@ fn parseRecord(self: *Parser, allocator: Allocator) Error!void {
         switch (token) {
             .closing_tag => break,
             .opening_tag => |tag| {
-                if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    _ = try self.parseDoc(allocator); // TODO
+                if (std.mem.eql(u8, tag.name, "doc")) {
+                    _struct.base.base.doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "doc-deprecated")) {
+                    deprecated_doc = try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "field")) {
-                    try self.parseField(allocator);
+                    var field = try self.parseField(allocator);
+                    errdefer field.deinit(allocator);
+                    try _struct.fields.append(allocator, field);
                 } else if (std.mem.eql(u8, tag.name, "constructor") or std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method")) {
-                    try self.parseCallable(allocator);
+                    const is_constructor = std.mem.eql(u8, tag.name, "constructor");
+                    const is_method = std.mem.eql(u8, tag.name, "method");
+                    var callable = try self.parseCallable(allocator);
+                    errdefer callable.deinit(allocator);
+                    if (is_constructor) callable.flags.is_constructor = true;
+                    if (is_method) callable.flags.is_method = true;
+                    try _struct.methods.append(allocator, .{ .callable = callable });
                 } else if (std.mem.eql(u8, tag.name, "union")) {
-                    try self.parseUnion(allocator);
+                    try self.discardTag(); // TODO: unnamed type
                 } else if (std.mem.eql(u8, tag.name, "method-inline") or std.mem.eql(u8, tag.name, "source-position")) {
                     try self.discardTag();
                 } else return fail(token);
@@ -944,34 +1272,49 @@ fn parseRecord(self: *Parser, allocator: Allocator) Error!void {
             else => return fail(token),
         }
     }
+    _struct.size = _struct.fields.items.len * @sizeOf(usize); // FIXME
+    try generateFullDoc(&_struct.base.base, allocator, .{
+        .version = version,
+        .deprecated_version = deprecated_version,
+        .deprecated_doc = deprecated_doc,
+    });
+    return _struct;
 }
 
-fn parseSignal(self: *Parser, allocator: Allocator) Error!void {
+fn parseSignal(self: *Parser, allocator: Allocator) Error!gi.Signal {
+    var signal: gi.Signal = try .init(allocator, "");
+    errdefer signal.deinit(allocator);
+    var deprecated_doc: []const u8 = &.{};
+    defer allocator.free(deprecated_doc);
+    var version: []const u8 = &.{};
+    defer allocator.free(version);
+    var deprecated_version: []const u8 = &.{};
+    defer allocator.free(deprecated_version);
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
             .opening_tag_end => break,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name")) {
-                    // TODO
+                    signal.callable.base.name = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "action")) {
-                    // TODO
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "deprecated")) {
-                    // TODO
+                    signal.callable.base.deprecated = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
-                    // TODO
+                    deprecated_version = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "detailed")) {
-                    // TODO
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "introspectable")) {
-                    // TODO
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "no-hooks")) {
-                    // TODO
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "no-recurse")) {
-                    // TODO
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "version")) {
-                    // TODO
+                    version = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "when")) {
-                    // TODO
+                    discardAttr(attr);
                 } else return fail(token);
             },
             else => return fail(token),
@@ -982,12 +1325,27 @@ fn parseSignal(self: *Parser, allocator: Allocator) Error!void {
         switch (token) {
             .closing_tag => break,
             .opening_tag => |tag| {
-                if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    _ = try self.parseDoc(allocator); // TODO
+                if (std.mem.eql(u8, tag.name, "doc")) {
+                    signal.callable.base.doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "doc-deprecated")) {
+                    deprecated_doc = try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "return-value")) {
-                    try self.parseArg(allocator);
+                    var arg, const skip = try self.parseArg(allocator);
+                    defer arg.deinit(allocator);
+                    signal.callable.return_type = arg.type_info;
+                    arg.type_info = null;
+                    signal.callable.may_return_null = arg.may_be_null;
+                    signal.callable.skip_return = skip;
+                    // patch for signal
+                    signal.callable.is_method = true;
                 } else if (std.mem.eql(u8, tag.name, "parameters")) {
-                    try self.parseArgs(allocator);
+                    try self.parseArgs(allocator, &signal.callable);
+                    // FIXME: enum will be wrongly mark as pointer
+                    // patch for signal
+                    for (signal.callable.args.items) |*arg| {
+                        var _type = arg.type_info.?;
+                        if (_type.tag == .interface) _type.pointer = true;
+                    }
                 } else if (std.mem.eql(u8, tag.name, "source-position")) {
                     try self.discardTag();
                 } else return fail(token);
@@ -996,6 +1354,12 @@ fn parseSignal(self: *Parser, allocator: Allocator) Error!void {
             else => return fail(token),
         }
     }
+    try generateFullDoc(&signal.callable.base, allocator, .{
+        .version = version,
+        .deprecated_version = deprecated_version,
+        .deprecated_doc = deprecated_doc,
+    });
+    return signal;
 }
 
 fn parseType(self: *Parser, allocator: Allocator) Error!gi.Type {
@@ -1080,22 +1444,20 @@ fn parseType(self: *Parser, allocator: Allocator) Error!gi.Type {
                             8 => .uint64,
                             else => unreachable,
                         };
-                    } else if (std.mem.eql(u8, name, "time_t")) {
-                        _type.tag = switch (@sizeOf(std.c.time_t)) {
-                            4 => .int32,
-                            8 => .int64,
-                            else => unreachable,
-                        };
                     } else if (std.mem.eql(u8, name, "gfloat")) {
                         _type.tag = .float;
                     } else if (std.mem.eql(u8, name, "gdouble")) {
                         _type.tag = .double;
                     } else if (std.mem.eql(u8, name, "long double")) {
                         _type.tag = .long_double;
+                    } else if (std.mem.eql(u8, name, "GType")) {
+                        _type.tag = .gtype;
                     } else if (std.mem.eql(u8, name, "utf8")) {
                         _type.tag = .utf8;
+                        _type.pointer = true;
                     } else if (std.mem.eql(u8, name, "filename")) {
                         _type.tag = .filename;
+                        _type.pointer = true;
                     } else if (std.mem.eql(u8, name, "GLib.List")) {
                         _type.tag = .glist;
                     } else if (std.mem.eql(u8, name, "GLib.SList")) {
@@ -1108,19 +1470,26 @@ fn parseType(self: *Parser, allocator: Allocator) Error!gi.Type {
                         _type.tag = .unichar;
                     } else if (std.mem.eql(u8, name, "va_list")) {
                         _type.tag = .va_list;
+                    } else if (std.mem.eql(u8, name, "time_t")) {
+                        _type.tag = .time_t;
+                    } else if (std.mem.eql(u8, name, "pid_t")) {
+                        _type.tag = .pid_t;
+                    } else if (std.mem.eql(u8, name, "uid_t")) {
+                        _type.tag = .uid_t;
                     } else {
                         var type_name = name;
                         if (std.mem.indexOfScalar(u8, type_name, '.')) |pos| type_name = type_name[pos + 1 ..];
                         if (std.ascii.isLower(type_name[0]) and !std.mem.endsWith(u8, type_name, "_t")) std.log.warn("unknown type name {s}", .{name});
+                        var _interface: gi.Base = try .init(allocator, name);
+                        errdefer _interface.deinit(allocator);
                         _type.tag = .interface;
                         _type.interface = try allocator.create(gi.Base);
-                        _type.interface.?.* = try .init(allocator, name);
+                        _type.interface.?.* = _interface;
                     }
                 } else if (std.mem.eql(u8, attr.name, "c:type")) {
                     const c_type = attr.value;
-                    if (std.mem.endsWith(u8, c_type, "*")) {
-                        _type.pointer = true;
-                    }
+                    if (std.mem.endsWith(u8, c_type, "*")) _type.pointer = true;
+                    if (std.mem.eql(u8, c_type, "gpointer")) _type.pointer = true;
                 } else return fail(token);
             },
             else => return fail(token),
@@ -1132,20 +1501,24 @@ fn parseType(self: *Parser, allocator: Allocator) Error!gi.Type {
             .closing_tag => break,
             .opening_tag => |tag| {
                 if (std.mem.eql(u8, tag.name, "array")) {
+                    var subtype = try self.parseArray(allocator);
+                    errdefer subtype.deinit(allocator);
                     if (_type.param_type == null) {
                         _type.param_type = try allocator.create(gi.Type);
-                        _type.param_type.?.* = try self.parseArray(allocator);
+                        _type.param_type.?.* = subtype;
                     } else if (_type.param_type_2 == null) {
                         _type.param_type_2 = try allocator.create(gi.Type);
-                        _type.param_type_2.?.* = try self.parseArray(allocator);
+                        _type.param_type_2.?.* = subtype;
                     } else unreachable;
                 } else if (std.mem.eql(u8, tag.name, "type")) {
+                    var subtype = try self.parseType(allocator);
+                    errdefer subtype.deinit(allocator);
                     if (_type.param_type == null) {
                         _type.param_type = try allocator.create(gi.Type);
-                        _type.param_type.?.* = try self.parseType(allocator);
+                        _type.param_type.?.* = subtype;
                     } else if (_type.param_type_2 == null) {
                         _type.param_type_2 = try allocator.create(gi.Type);
-                        _type.param_type_2.?.* = try self.parseType(allocator);
+                        _type.param_type_2.?.* = subtype;
                     } else unreachable;
                 } else return fail(token);
             },
@@ -1156,20 +1529,26 @@ fn parseType(self: *Parser, allocator: Allocator) Error!gi.Type {
     return _type;
 }
 
-fn parseUnion(self: *Parser, allocator: Allocator) Error!void {
+fn parseUnion(self: *Parser, allocator: Allocator) Error!gi.Union {
+    var _union: gi.Union = try .init(allocator, "");
+    errdefer _union.deinit(allocator);
+    var deprecated_doc: []const u8 = &.{};
+    defer allocator.free(deprecated_doc);
+    var deprecated_version: []const u8 = &.{};
+    defer allocator.free(deprecated_version);
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
             .opening_tag_end => break,
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "name")) {
-                    // TODO
+                    _union.base.base.name = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "deprecated")) {
-                    // TODO
+                    _union.base.base.deprecated = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
-                    // TODO
+                    deprecated_version = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.startsWith(u8, attr.name, "c:")) {
-                    // no op
+                    discardAttr(attr);
                 } else return fail(token);
             },
             else => return fail(token),
@@ -1180,14 +1559,24 @@ fn parseUnion(self: *Parser, allocator: Allocator) Error!void {
         switch (token) {
             .closing_tag => break,
             .opening_tag => |tag| {
-                if (std.mem.eql(u8, tag.name, "doc") or std.mem.eql(u8, tag.name, "doc-deprecated")) {
-                    _ = try self.parseDoc(allocator); // TODO
+                if (std.mem.eql(u8, tag.name, "doc")) {
+                    _union.base.base.doc = try self.parseDoc(allocator);
+                } else if (std.mem.eql(u8, tag.name, "doc-deprecated")) {
+                    deprecated_doc = try self.parseDoc(allocator);
                 } else if (std.mem.eql(u8, tag.name, "field")) {
-                    try self.parseField(allocator);
+                    var field = try self.parseField(allocator);
+                    errdefer field.deinit(allocator);
+                    try _union.fields.append(allocator, field);
                 } else if (std.mem.eql(u8, tag.name, "constructor") or std.mem.eql(u8, tag.name, "function") or std.mem.eql(u8, tag.name, "method")) {
-                    try self.parseCallable(allocator);
+                    const is_constructor = std.mem.eql(u8, tag.name, "constructor");
+                    const is_method = std.mem.eql(u8, tag.name, "method");
+                    var callable = try self.parseCallable(allocator);
+                    errdefer callable.deinit(allocator);
+                    if (is_constructor) callable.flags.is_constructor = true;
+                    if (is_method) callable.flags.is_method = true;
+                    try _union.methods.append(allocator, .{ .callable = callable });
                 } else if (std.mem.eql(u8, tag.name, "record")) {
-                    try self.parseRecord(allocator);
+                    try self.discardTag(); // TODO: unnamed type
                 } else if (std.mem.eql(u8, tag.name, "source-position")) {
                     try self.discardTag();
                 } else return fail(token);
@@ -1196,4 +1585,10 @@ fn parseUnion(self: *Parser, allocator: Allocator) Error!void {
             else => return fail(token),
         }
     }
+    try generateFullDoc(&_union.base.base, allocator, .{
+        .version = "",
+        .deprecated_version = deprecated_version,
+        .deprecated_doc = deprecated_doc,
+    });
+    return _union;
 }

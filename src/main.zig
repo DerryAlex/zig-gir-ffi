@@ -62,6 +62,7 @@ pub fn main() !void {
         defer file.close();
         std.log.info("[Start] {s}", .{file_name});
         var writer = file.writer(&buffer);
+        try writer.interface.writeAll("const std = @import(\"std\");\n");
         try writer.interface.writeAll("const core = @import(\"core.zig\");\n");
         for (ns.dependencies.items) |dep| try writer.interface.print("const {s} = @import(\"{s}.zig\");\n", .{ dep, dep });
         try writer.interface.print("const {s} = @This();\n", .{ns.name});

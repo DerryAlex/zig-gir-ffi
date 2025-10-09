@@ -103,8 +103,8 @@ fn parseCallback(allocator: Allocator, info: *libgi.CallbackInfo) Allocator.Erro
 fn parseFunction(allocator: Allocator, info: *libgi.FunctionInfo) Allocator.Error!gi.Function {
     var function: gi.Function = .{ .callable = try parseCallable(allocator, info.into(libgi.CallableInfo)) };
     errdefer function.deinit(allocator);
-    function.symbol = try allocator.dupe(u8, std.mem.span(info.getSymbol()));
-    function.flags = info.getFlags();
+    function.callable.symbol = try allocator.dupe(u8, std.mem.span(info.getSymbol()));
+    function.callable.flags = info.getFlags();
     return function;
 }
 
