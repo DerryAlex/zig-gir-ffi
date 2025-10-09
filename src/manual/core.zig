@@ -94,14 +94,6 @@ pub fn List(comptime T: type) type {
         next: ?*Node,
 
         const Node = @This();
-
-        pub fn from(list: *GLib.List) *Node {
-            return @ptrCast(list);
-        }
-
-        pub fn into(self: *Node) *GLib.List {
-            return @ptrCast(self);
-        }
     };
 }
 
@@ -111,14 +103,6 @@ pub fn SList(comptime T: type) type {
         next: ?*Node,
 
         const Node = @This();
-
-        pub fn from(list: *GLib.SList) *Node {
-            return @ptrCast(list);
-        }
-
-        pub fn into(self: *Node) *GLib.SList {
-            return @ptrCast(self);
-        }
     };
 }
 
@@ -126,14 +110,6 @@ pub fn Array(comptime T: type) type {
     return extern struct {
         data: [*]T,
         len: UInt,
-
-        pub fn from(array: *GLib.Array) *Slice {
-            return @ptrCast(array);
-        }
-
-        pub fn into(self: *Slice) *GLib.Array {
-            return @ptrCast(self);
-        }
 
         pub fn slice(self: *Slice) []T {
             return self.data[0..self.len];
@@ -149,35 +125,31 @@ pub fn PtrArray(comptime T: type) type {
 
 pub fn HashTable(comptime K: type, comptime V: type) type {
     return opaque {
-        pub fn from(map: *GLib.HashTable) *Map {
-            return @ptrCast(map);
-        }
-
-        pub fn into(self: *Map) *GLib.HashTable {
+        fn raw(self: *Map) *GLib.HashTable {
             return @ptrCast(self);
         }
 
         const Map = @This();
 
         pub fn get(self: *Map, key: K) ?V {
-            const value_ptr = self.into.lookup(&key);
+            const value_ptr = self.raw().lookup(&key);
             return if (value_ptr) |v| v.* else null;
         }
 
         pub fn set(self: *Map, key: K, value: V) void {
-            _ = self.into().insert(&key, &value);
+            _ = self.raw().insert(&key, &value);
         }
 
         pub fn clear(self: *Map) void {
-            self.into().removeAll();
+            self.raw().removeAll();
         }
 
         pub fn contains(self: *Map, key: K) bool {
-            return self.into().contains(&key);
+            return self.raw().contains(&key);
         }
 
         pub fn remove(self: *Map, key: K) void {
-            _ = self.into().remove(&key);
+            _ = self.raw().remove(&key);
         }
 
         pub fn iterator(self: *Map) Iterator {
@@ -189,7 +161,7 @@ pub fn HashTable(comptime K: type, comptime V: type) type {
 
             pub fn init(map: *Map) Iterator {
                 var iter: GLib.HashTableIter = undefined;
-                iter.init(map.into());
+                iter.init(map.raw());
                 return .{ .iter = iter };
             }
 
