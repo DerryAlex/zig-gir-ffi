@@ -119,7 +119,11 @@ pub const TypeFormatter = struct {
     pub fn format(self: TypeFormatter, writer: *Writer) Writer.Error!void {
         if (self.out) {
             if (self.optional) try writer.writeAll("?");
-            try writer.writeAll("*");
+            if (self.type.tag == .uint8) {
+                try writer.writeAll("[*]");
+            } else {
+                try writer.writeAll("*");
+            }
         }
         switch (self.type.tag) {
             .void => {
@@ -127,6 +131,13 @@ pub const TypeFormatter = struct {
                     if (!self.out) {
                         if (self.nullable) try writer.writeAll("?");
                         try writer.writeAll("*");
+                    }
+                    if (self.type.pointer_level) |l| {
+                        switch (l) {
+                            1 => {},
+                            2 => try writer.writeAll("*?"),
+                            else => unreachable,
+                        }
                     }
                     try writer.writeAll("anyopaque");
                 } else {
@@ -138,6 +149,16 @@ pub const TypeFormatter = struct {
                     if (self.nullable) try writer.writeAll("?");
                     try writer.writeAll("*");
                 }
+                if (self.type.pointer_level) |l| {
+                    switch (l) {
+                        1 => {},
+                        2 => {
+                            assert(self.type.tag == .@"error");
+                            try writer.writeAll("?*");
+                        },
+                        else => unreachable,
+                    }
+                }
                 const tag = formatTypeTag(self.type.tag);
                 try writer.writeAll(tag);
             },
@@ -145,6 +166,13 @@ pub const TypeFormatter = struct {
                 if (self.type.pointer) {
                     if (self.nullable) try writer.writeAll("?");
                     try writer.writeAll("*");
+                }
+                if (self.type.pointer_level) |l| {
+                    switch (l) {
+                        1 => {},
+                        2 => try writer.writeAll("?*"),
+                        else => unreachable,
+                    }
                 }
 
                 const p = self.type.param_type.?;
@@ -185,6 +213,14 @@ pub const TypeFormatter = struct {
             .utf8, .filename => {
                 assert(self.type.pointer);
                 if (self.nullable) try writer.writeAll("?");
+                if (self.type.pointer_level) |l| {
+                    switch (l) {
+                        1 => {},
+                        2 => try writer.writeAll("[*:null]?"),
+                        3 => try writer.writeAll("*?[*:null]?"),
+                        else => unreachable,
+                    }
+                }
                 try writer.writeAll("[*:0]");
                 if (!self.mutable) try writer.writeAll("const ");
                 try writer.writeAll("u8");
@@ -260,6 +296,13 @@ pub const TypeFormatter = struct {
                 } else if (self.type.pointer) {
                     if (self.nullable) try writer.writeAll("?");
                     try writer.writeAll("*");
+                    if (self.type.pointer_level) |l| {
+                        switch (l) {
+                            1 => {},
+                            2 => try writer.writeAll("[*]"),
+                            else => unreachable,
+                        }
+                    }
                 }
                 try writer.print("{f}", .{child_type});
             },

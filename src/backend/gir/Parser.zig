@@ -423,6 +423,17 @@ fn parseArg(self: *Parser, allocator: Allocator) Error!struct { gi.Arg, bool } {
                     var _type = try self.parseType(allocator);
                     errdefer _type.deinit(allocator);
                     arg.type_info = try allocator.create(gi.Type);
+                    if (arg.direction == .out) {
+                        if (_type.pointer_level) |l| {
+                            if (l > 1) {
+                                _type.pointer_level = l - 1;
+                            } else {
+                                _type.pointer = false;
+                                _type.pointer_level = null;
+                                if (_type.tag == .utf8) _type.tag = .uint8;
+                            }
+                        }
+                    }
                     arg.type_info.?.* = _type;
                 } else if (std.mem.eql(u8, tag.name, "array")) {
                     var _type = try self.parseArray(allocator);
@@ -479,6 +490,7 @@ fn parseArray(self: *Parser, allocator: Allocator) Error!gi.Type {
     var _type: gi.Type = try .init(allocator, "type");
     errdefer _type.deinit(allocator);
     _type.tag = .array;
+    var length_inited = false;
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -495,10 +507,13 @@ fn parseArray(self: *Parser, allocator: Allocator) Error!gi.Type {
                     } else unreachable;
                 } else if (std.mem.eql(u8, attr.name, "fixed-size")) {
                     _type.array_fixed_size = parseAttrInt(attr.value);
+                    length_inited = true;
                 } else if (std.mem.eql(u8, attr.name, "length")) {
                     _type.array_length_index = parseAttrInt(attr.value);
+                    length_inited = true;
                 } else if (std.mem.eql(u8, attr.name, "zero-terminated")) {
                     _type.zero_terminated = parseAttrBool(attr.value);
+                    length_inited = true;
                 } else if (std.mem.eql(u8, attr.name, "c:type")) {
                     discardAttr(attr);
                 } else return fail(token);
@@ -507,6 +522,7 @@ fn parseArray(self: *Parser, allocator: Allocator) Error!gi.Type {
         }
     }
     if (_type.array_fixed_size == null) _type.pointer = true;
+    if (!length_inited) _type.zero_terminated = true;
     while (true) {
         const token = try self.scanner.next();
         switch (token) {
@@ -1534,8 +1550,12 @@ fn parseType(self: *Parser, allocator: Allocator) Error!gi.Type {
                     }
                 } else if (std.mem.eql(u8, attr.name, "c:type")) {
                     const c_type = attr.value;
-                    if (std.mem.endsWith(u8, c_type, "*")) _type.pointer = true;
-                    if (std.mem.eql(u8, c_type, "gpointer")) _type.pointer = true;
+                    var pointer_level = std.mem.count(u8, c_type, "*");
+                    if (std.mem.containsAtLeast(u8, c_type, 1, "pointer")) pointer_level += 1;
+                    if (pointer_level > 0) {
+                        _type.pointer = true;
+                        _type.pointer_level = pointer_level;
+                    }
                 } else return fail(token);
             },
             else => return fail(token),

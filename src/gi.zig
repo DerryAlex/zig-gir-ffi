@@ -643,6 +643,8 @@ pub const Type = struct {
     // interface information
     interface: ?*Base = null,
     interface_is_callback: bool = false,
+    // c type information
+    pointer_level: ?usize = null,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Type {
         return .{ .base = try .init(allocator, name) };

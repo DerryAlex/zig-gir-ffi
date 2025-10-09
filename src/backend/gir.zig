@@ -43,6 +43,7 @@ pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repo
         const filename = try std.mem.concat(self.allocator, u8, &.{ namespace_, version_, ".gir" });
         defer self.allocator.free(filename);
         const file = dir.openFile(filename, .{}) catch continue;
+        std.log.debug("gir backend: loading {s}", .{namespace});
         var buffer: [4096]u8 = undefined;
         var reader = file.reader(&buffer);
         var scanner: Scanner = .init(&reader.interface);
@@ -55,6 +56,7 @@ pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repo
             },
         };
         try self.namespaces.put(self.allocator, namespace, loaded_namespace);
+        std.log.debug("gir backend: loaded {s}", .{namespace});
         for (loaded_namespace.dependencies.items) |dep| try self.load(dep, null);
         // transive dependency
         var dependencies: StringArrayHashMap(void) = try .init(self.allocator, loaded_namespace.dependencies.items, &.{});
