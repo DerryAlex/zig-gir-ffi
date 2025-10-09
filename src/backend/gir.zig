@@ -1,22 +1,25 @@
 const std = @import("std");
+const StringArrayHashMap = std.StringArrayHashMapUnmanaged;
 const options = @import("options");
 const gi = @import("../gi.zig");
 const Repository = gi.Repository;
-const loadGir = @import("gir/load.zig").loadGir;
+const Scanner = @import("gir/Scanner.zig");
+const Parser = @import("gir/Parser.zig");
 
 /// Load `namespace` if it isn't ready.
 pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repository.Error!void {
     if (!options.has_gir) return error.FileNotFound;
 
     const default_search_path = "/usr/share/gir-1.0/";
-    try self._search_paths.append(self.allocator, default_search_path);
-    defer _ = self._search_paths.pop();
+    var search_paths = try self.search_paths.clone(self.allocator);
+    defer search_paths.deinit(self.allocator);
+    try search_paths.append(self.allocator, default_search_path);
 
     const namespace_ = try std.mem.concat(self.allocator, u8, &.{ namespace, "-" });
     defer self.allocator.free(namespace_);
 
     const cwd = std.fs.cwd();
-    for (self._search_paths.items) |search_path| {
+    for (search_paths.items) |search_path| {
         var dir = cwd.openDir(search_path, .{ .iterate = true }) catch continue;
         defer dir.close();
         var version_buffer: [8]u8 = undefined;
@@ -40,8 +43,36 @@ pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repo
         const filename = try std.mem.concat(self.allocator, u8, &.{ namespace_, version_, ".gir" });
         defer self.allocator.free(filename);
         const file = dir.openFile(filename, .{}) catch continue;
-        loadGir(self, file) catch @panic("");
+        std.log.debug("gir backend: loading {s}", .{namespace});
+        var buffer: [4096]u8 = undefined;
+        var reader = file.reader(&buffer);
+        var scanner: Scanner = .init(&reader.interface);
+        var parser: Parser = .init(&scanner);
+        const loaded_namespace = parser.parse(self.allocator) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => {
+                std.log.debug("gir backend: fail to load {s}", .{namespace});
+                return error.FileNotFound;
+            },
+        };
+        try self.namespaces.put(self.allocator, namespace, loaded_namespace);
+        std.log.debug("gir backend: loaded {s}", .{namespace});
+        for (loaded_namespace.dependencies.items) |dep| try self.load(dep, null);
+        // transive dependency
+        var dependencies: StringArrayHashMap(void) = try .init(self.allocator, loaded_namespace.dependencies.items, &.{});
+        defer dependencies.deinit(self.allocator);
+        var idx: usize = 0;
+        while (idx < dependencies.count()) : (idx += 1) {
+            const dep = dependencies.keys()[idx];
+            const dep_ns = self.namespaces.get(dep).?;
+            for (dep_ns.dependencies.items) |d| {
+                if (!dependencies.contains(d)) try dependencies.put(self.allocator, d, {});
+            }
+        }
+        var namespace_ptr = self.namespaces.getPtr(namespace).?;
+        try namespace_ptr.dependencies.appendSlice(self.allocator, dependencies.keys()[namespace_ptr.dependencies.items.len..]);
         return;
     }
+    std.log.debug("gir backend: fail to load {s}", .{namespace});
     return error.FileNotFound;
 }

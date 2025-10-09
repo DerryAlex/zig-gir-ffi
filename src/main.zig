@@ -28,8 +28,12 @@ pub fn main() !void {
         try repository.appendSearchPath(dir);
     }
     for (cli_options.namespaces) |ns| {
-        try repository.load(ns.name, ns.version);
+        repository.load(ns.name, ns.version) catch |err| {
+            std.log.err("{t}", .{err});
+            if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace.*);
+        };
     }
+    if (repository.namespaces.count() == 0) fatal("no namespace loaded", .{});
 
     const cwd = std.fs.cwd();
     var output_dir = cwd.openDir(cli_options.output_dir, .{}) catch |err| switch (err) {
@@ -58,6 +62,7 @@ pub fn main() !void {
         defer file.close();
         std.log.info("[Start] {s}", .{file_name});
         var writer = file.writer(&buffer);
+        try writer.interface.writeAll("const std = @import(\"std\");\n");
         try writer.interface.writeAll("const core = @import(\"core.zig\");\n");
         for (ns.dependencies.items) |dep| try writer.interface.print("const {s} = @import(\"{s}.zig\");\n", .{ dep, dep });
         try writer.interface.print("const {s} = @This();\n", .{ns.name});

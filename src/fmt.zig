@@ -1,6 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const AutoHashMap = std.AutoHashMap;
+const Reader = std.Io.Reader;
 const StringHashMap = std.StringHashMap;
 const Writer = std.Io.Writer;
 const gi = @import("gi.zig");
@@ -24,6 +25,12 @@ fn formatTypeTag(tag: gi.TypeTag) []const u8 {
         .gtype => "core.Type",
         .@"error" => "GLib.Error",
         .unichar => "u32", // UTF-32 or UCS-4
+        .va_list => "std.builtin.VaList",
+        .va_args => "...",
+        .long_double => "c_longdouble",
+        .time_t => "std.posix.time_t",
+        .pid_t => "std.posix.pid_t",
+        .uid_t => "std.posix.uid_t",
         else => unreachable,
     };
 }
@@ -73,6 +80,34 @@ const CamelFormatter = struct {
     }
 };
 
+pub const DocFormatter = struct {
+    doc: []const u8,
+    top_level: bool = false,
+    custom_header: bool = false,
+
+    pub fn format(self: DocFormatter, writer: *Writer) Writer.Error!void {
+        if (self.doc.len == 0) return;
+        var reader: Reader = .fixed(self.doc);
+        var has_header: bool = self.custom_header;
+        while (true) {
+            if (!has_header) {
+                try writer.writeAll(if (self.top_level) "//! " else "/// ");
+            } else {
+                has_header = false;
+            }
+            _ = reader.streamDelimiterEnding(writer, '\n') catch |err| switch (err) {
+                error.ReadFailed => unreachable,
+                else => |e| return e,
+            };
+            try writer.writeAll("\n");
+            _ = reader.takeByte() catch |err| switch (err) {
+                error.ReadFailed => unreachable,
+                error.EndOfStream => break,
+            };
+        }
+    }
+};
+
 // --- Type ---
 pub const TypeFormatter = struct {
     type: *gi.Type,
@@ -84,7 +119,11 @@ pub const TypeFormatter = struct {
     pub fn format(self: TypeFormatter, writer: *Writer) Writer.Error!void {
         if (self.out) {
             if (self.optional) try writer.writeAll("?");
-            try writer.writeAll("*");
+            if (self.type.tag == .uint8) {
+                try writer.writeAll("[*]");
+            } else {
+                try writer.writeAll("*");
+            }
         }
         switch (self.type.tag) {
             .void => {
@@ -93,15 +132,32 @@ pub const TypeFormatter = struct {
                         if (self.nullable) try writer.writeAll("?");
                         try writer.writeAll("*");
                     }
+                    if (self.type.pointer_level) |l| {
+                        switch (l) {
+                            1 => {},
+                            2 => try writer.writeAll("*?"),
+                            else => unreachable,
+                        }
+                    }
                     try writer.writeAll("anyopaque");
                 } else {
                     try writer.writeAll("void");
                 }
             },
-            .boolean, .int8, .uint8, .int16, .uint16, .int32, .uint32, .int64, .uint64, .float, .double, .gtype, .@"error", .unichar => {
+            .boolean, .int8, .uint8, .int16, .uint16, .int32, .uint32, .int64, .uint64, .float, .double, .gtype, .@"error", .unichar, .va_list, .va_args, .long_double, .time_t, .pid_t, .uid_t => {
                 if (self.type.pointer) {
                     if (self.nullable) try writer.writeAll("?");
                     try writer.writeAll("*");
+                }
+                if (self.type.pointer_level) |l| {
+                    switch (l) {
+                        1 => {},
+                        2 => {
+                            assert(self.type.tag == .@"error");
+                            try writer.writeAll("?*");
+                        },
+                        else => unreachable,
+                    }
                 }
                 const tag = formatTypeTag(self.type.tag);
                 try writer.writeAll(tag);
@@ -110,6 +166,13 @@ pub const TypeFormatter = struct {
                 if (self.type.pointer) {
                     if (self.nullable) try writer.writeAll("?");
                     try writer.writeAll("*");
+                }
+                if (self.type.pointer_level) |l| {
+                    switch (l) {
+                        1 => {},
+                        2 => try writer.writeAll("?*"),
+                        else => unreachable,
+                    }
                 }
 
                 const p = self.type.param_type.?;
@@ -150,6 +213,14 @@ pub const TypeFormatter = struct {
             .utf8, .filename => {
                 assert(self.type.pointer);
                 if (self.nullable) try writer.writeAll("?");
+                if (self.type.pointer_level) |l| {
+                    switch (l) {
+                        1 => {},
+                        2 => try writer.writeAll("[*:null]?"),
+                        3 => try writer.writeAll("*?[*:null]?"),
+                        else => unreachable,
+                    }
+                }
                 try writer.writeAll("[*:0]");
                 if (!self.mutable) try writer.writeAll("const ");
                 try writer.writeAll("u8");
@@ -225,6 +296,13 @@ pub const TypeFormatter = struct {
                 } else if (self.type.pointer) {
                     if (self.nullable) try writer.writeAll("?");
                     try writer.writeAll("*");
+                    if (self.type.pointer_level) |l| {
+                        switch (l) {
+                            1 => {},
+                            2 => try writer.writeAll("[*]"),
+                            else => unreachable,
+                        }
+                    }
                 }
                 try writer.print("{f}", .{child_type});
             },
@@ -309,6 +387,25 @@ pub const CallableFormatter = struct {
     }
 };
 
+pub const CallableDocFormatter = struct {
+    callable: *gi.Callable,
+
+    pub fn format(self: CallableDocFormatter, writer: *Writer) Writer.Error!void {
+        try writer.print("{f}", .{DocFormatter{ .doc = self.callable.base.doc }});
+        for (self.callable.args.items) |*arg| {
+            if (arg.getBase().doc.len != 0) try writer.print("/// @param {s} {f}", .{ arg.getBase().name, DocFormatter{
+                .doc = arg.getBase().doc,
+                .custom_header = true,
+            } });
+        }
+        const r = self.callable.return_type.?;
+        if (r.getBase().doc.len != 0) try writer.print("/// @returns: {f}", .{DocFormatter{
+            .doc = r.getBase().doc,
+            .custom_header = true,
+        }});
+    }
+};
+
 pub const CallbackFormatter = struct {
     callback: *gi.Callback,
 
@@ -326,6 +423,7 @@ pub const ConstantFormatter = struct {
     constant: *gi.Constant,
 
     pub fn format(self: ConstantFormatter, writer: *Writer) Writer.Error!void {
+        try writer.print("{f}", .{DocFormatter{ .doc = self.constant.getBase().doc }});
         try writer.print("pub const {s} = ", .{self.constant.getBase().name});
         const value = self.constant.value;
         switch (self.constant.type_tag) {
@@ -366,12 +464,14 @@ pub const ValueFormatter = struct {
 // --- Field ---
 const BitField = struct {
     var remaining: ?usize = null;
+    var count: usize = 0;
 
-    pub fn consume(writer: *Writer, bits: usize, container_size: usize, container_offset: usize) Writer.Error!void {
+    pub fn consume(writer: *Writer, bits: usize, container_size: usize) Writer.Error!void {
         if ((remaining orelse 0) < bits) {
             try end(writer);
             remaining = container_size;
-            try writer.print("_{}: packed struct(u{}) {{\n", .{ container_offset, container_size });
+            count += 1;
+            try writer.print("_{}: packed struct(u{}) {{\n", .{ count, container_size });
         }
         remaining.? -= bits;
     }
@@ -382,6 +482,11 @@ const BitField = struct {
             try writer.writeAll("},\n");
         }
         remaining = null;
+    }
+
+    pub fn reset() void {
+        remaining = null;
+        count = 0;
     }
 };
 
@@ -395,16 +500,16 @@ pub const FieldFormatter = struct {
     pub fn format(self: FieldFormatter, writer: *Writer) Writer.Error!void {
         const field_type = self.field.type_info.?;
         const field_size = self.field.size;
-        const field_offset = self.field.offset;
         if (field_size != 0) {
             const container_size = switch (field_type.tag) {
                 .int32, .uint32 => 32,
                 else => unreachable,
             };
-            try BitField.consume(writer, field_size, container_size, field_offset);
+            try BitField.consume(writer, field_size, container_size);
         } else {
             try BitField.end(writer);
         }
+        try writer.print("{f}", .{DocFormatter{ .doc = self.field.getBase().doc }});
         const name = self.field.getBase().name;
         if (PreservedField.names.contains(name)) try writer.writeAll("_");
         try writer.print("{f}: ", .{IdFormatter{ .id = name }});
@@ -434,6 +539,7 @@ pub const PropertyFormatter = struct {
     pub fn format(self: PropertyFormatter, writer: *Writer) Writer.Error!void {
         const name = self.property.getBase().name;
         const type_info = self.property.type_info.?;
+        try writer.print("{f}", .{DocFormatter{ .doc = self.property.getBase().doc }});
         try writer.print("{f}: core.Property({f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, TypeFormatter{ .type = type_info }, name });
     }
 };
@@ -445,6 +551,7 @@ pub const SignalFormatter = struct {
     pub fn format(self: SignalFormatter, writer: *Writer) Writer.Error!void {
         const name = self.signal.getBase().name;
         const callable = &self.signal.callable;
+        try writer.print("{f}", .{CallableDocFormatter{ .callable = callable }});
         try writer.print("{f}: core.Signal(fn {f}, \"{s}\") = .{{}},\n", .{ IdFormatter{ .id = name }, CallableFormatter{
             .callable = callable,
             .container = self.container,
@@ -484,6 +591,7 @@ pub const EnumFormatter = struct {
 
     pub fn format(self: EnumFormatter, writer: *Writer) Writer.Error!void {
         const storage_type = self.context.storage_type;
+        try writer.print("{f}", .{DocFormatter{ .doc = self.context.getBase().doc }});
         try writer.print("pub const {s} = enum({s}) {{\n", .{ self.context.getBase().name, formatTypeTag(storage_type) });
 
         var arena: std.heap.ArenaAllocator = .init(std.heap.smp_allocator);
@@ -525,6 +633,7 @@ pub const FlagsFormatter = struct {
 
     pub fn format(self: FlagsFormatter, writer: *Writer) Writer.Error!void {
         const storage_type = self.context.base.storage_type;
+        try writer.print("{f}", .{DocFormatter{ .doc = self.context.getBase().doc }});
         try writer.print("pub const {s} = packed struct({s}) {{\n", .{ self.context.getBase().name, formatTypeTag(storage_type) });
 
         var arena: std.heap.ArenaAllocator = .init(std.heap.smp_allocator);
@@ -573,9 +682,11 @@ pub const StructFormatter = struct {
     context: *gi.Struct,
 
     pub fn format(self: StructFormatter, writer: *Writer) Writer.Error!void {
+        try writer.print("{f}", .{DocFormatter{ .doc = self.context.getBase().doc }});
         try writer.print("pub const {s} = {s}{{\n", .{ self.context.getBase().name, if (self.context.size != 0) "extern struct" else "opaque" });
         for (self.context.methods.items) |*method| PreservedField.names.put(method.getBase().name, {}) catch @panic("Out Of Memory");
         defer PreservedField.names.clearAndFree();
+        BitField.reset();
         for (self.context.fields.items) |*field| try writer.print("{f}", .{FieldFormatter{ .field = field }});
         try BitField.end(writer);
         for (self.context.methods.items) |*method| try writer.print("{f}", .{FunctionFormatter{
@@ -591,6 +702,7 @@ pub const UnionFormatter = struct {
     context: *gi.Union,
 
     pub fn format(self: UnionFormatter, writer: *Writer) Writer.Error!void {
+        try writer.print("{f}", .{DocFormatter{ .doc = self.context.getBase().doc }});
         try writer.print("pub const {s} = extern union{{\n", .{self.context.getBase().name});
         for (self.context.methods.items) |*method| PreservedField.names.put(method.getBase().name, {}) catch @panic("Out Of Memory");
         defer PreservedField.names.clearAndFree();
@@ -623,6 +735,7 @@ pub const InterfaceFormatter = struct {
     context: *gi.Interface,
 
     pub fn format(self: InterfaceFormatter, writer: *Writer) Writer.Error!void {
+        try writer.print("{f}", .{DocFormatter{ .doc = self.context.getBase().doc }});
         try writer.print("pub const {s} = struct{{\n", .{self.context.getBase().name});
         if (self.context.prerequisites.items.len > 0) {
             try writer.writeAll("pub const Prerequistes = [_]type{");
@@ -667,6 +780,7 @@ pub const ObjectFormatter = struct {
     context: *gi.Object,
 
     pub fn format(self: ObjectFormatter, writer: *Writer) Writer.Error!void {
+        try writer.print("{f}", .{DocFormatter{ .doc = self.context.getBase().doc }});
         try writer.print("pub const {s} = {s}{{\n", .{ self.context.getBase().name, if (self.context.fields.items.len != 0) "extern struct" else "struct" });
         if (self.context.interfaces.items.len > 0) {
             try writer.writeAll("pub const Interfaces = [_]type{");
@@ -694,6 +808,7 @@ pub const ObjectFormatter = struct {
         }
         for (self.context.methods.items) |*method| PreservedField.names.put(method.getBase().name, {}) catch @panic("Out Of Memory");
         defer PreservedField.names.clearAndFree();
+        BitField.reset();
         for (self.context.fields.items) |*field| try writer.print("{f}", .{FieldFormatter{ .field = field }});
         try BitField.end(writer);
         for (self.context.constants.items) |*constant| try writer.print("{f}", .{ConstantFormatter{ .constant = constant }});
@@ -738,14 +853,19 @@ pub const FunctionFormatter = struct {
     };
 
     pub fn format(self: FunctionFormatter, writer: *Writer) Writer.Error!void {
+        // TODO: support va args
+        const _args = self.function.callable.args.items;
+        if (_args.len > 0 and _args[_args.len - 1].type_info.?.tag == .va_args) return;
+
         var buffer: [4096]u8 = undefined;
         var fixed: std.heap.FixedBufferAllocator = .init(&buffer);
         const allocator = fixed.allocator();
 
+        const callable = &self.function.callable;
+        try writer.print("{f}", .{CallableDocFormatter{ .callable = callable }});
         const func_name = self.function.getBase().name;
         try writer.print("pub fn {f}", .{CamelFormatter{ .id = if (!std.mem.eql(u8, func_name, "self")) func_name else "_self" }});
 
-        const callable = &self.function.callable;
         const args = callable.args.items;
         // initialize slice info and closure info
         var slice_info = allocator.alloc(SliceInfo, args.len) catch @panic("Out of Memory");
@@ -755,7 +875,7 @@ pub const FunctionFormatter = struct {
 
         // analyse parameters
         const is_method = callable.is_method;
-        const is_constructor = self.function.flags.is_constructor;
+        const is_constructor = callable.flags.is_constructor;
         var n_out_param: usize = 0;
         for (args, 0..) |*arg, idx| {
             // collect slice info
@@ -870,7 +990,7 @@ pub const FunctionFormatter = struct {
                 if (n_out > 1) try writer.writeAll("ret: ");
                 if (return_bool) {
                     try writer.writeAll("bool");
-                } else if (self.function.flags.is_constructor) {
+                } else if (callable.flags.is_constructor) {
                     const container = self.container.?;
                     if (self.function.callable.may_return_null) try writer.writeAll("?");
                     try writer.print("*{s}", .{container.name});
@@ -976,7 +1096,7 @@ pub const FunctionFormatter = struct {
             .c_callconv = true,
             .constructor = is_constructor,
         }});
-        try writer.print(", .{{ .name = \"{s}\"}});\n", .{self.function.symbol.?});
+        try writer.print(", .{{ .name = \"{s}\"}});\n", .{callable.symbol.?});
         try writer.writeAll("const ret = cFn");
         try writer.print("{f}", .{CallableFormatter{
             .callable = &self.function.callable,

@@ -38,7 +38,7 @@ pub const Iface = extern struct {
     fn defaultGe(self: *PartialOrd, rhs: *PartialOrd) bool {
         return switch (self.cmp(rhs)) {
             .lt => false,
-            .eq, .gt => false,
+            .eq, .gt => true,
         };
     }
 };
