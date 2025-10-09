@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) !void {
     // Options
     const options = b.addOptions();
     options.addOption(std.SemanticVersion, "version", try getVersion());
-    const has_gir_backend = b.option(bool, "gir", "Gir backend") orelse false;
+    const has_gir_backend = b.option(bool, "gir", "Gir backend") orelse true;
     options.addOption(bool, "has_gir", has_gir_backend);
     const has_typelib_backend = b.option(bool, "typelib", "Typelib backend") orelse true;
     options.addOption(bool, "has_typelib", has_typelib_backend);
