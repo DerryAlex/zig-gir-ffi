@@ -81,6 +81,22 @@ fn parseXmlProlog(self: *Parser) Error!void {
     }
 }
 
+fn parseName(self: *Parser, allocator: Allocator) Error![]const u8 {
+    var name: []const u8 = &.{};
+    while (true) {
+        const token = try self.scanner.next();
+        switch (token) {
+            .closing_tag => return name,
+            .attribute => |attr| {
+                if (std.mem.eql(u8, attr.name, "name")) {
+                    name = try allocator.dupe(u8, attr.value);
+                } else return fail(token);
+            },
+            else => return fail(token),
+        }
+    }
+}
+
 fn parseDoc(self: *Parser, allocator: Allocator) Error![]const u8 {
     var aw: Writer.Allocating = .init(allocator);
     errdefer aw.deinit();
@@ -158,6 +174,8 @@ fn generateFullDoc(base: *gi.Base, allocator: Allocator, config: struct {
     }
     base.doc = try aw.toOwnedSlice();
 }
+
+// -----
 
 pub fn parse(self: *Parser, allocator: Allocator) Error!gi.Namespace {
     var namespace: gi.Namespace = .{ .name = &.{} };
@@ -746,7 +764,11 @@ fn parseClass(self: *Parser, allocator: Allocator) Error!gi.Object {
                     errdefer field.deinit(allocator);
                     try object.fields.append(allocator, field);
                 } else if (std.mem.eql(u8, tag.name, "implements")) {
-                    try self.discardTag(); // TODO: implements
+                    const name = try self.parseName(allocator);
+                    defer allocator.free(name);
+                    var interface: gi.Interface = try .init(allocator, name);
+                    errdefer interface.deinit(allocator);
+                    try object.interfaces.append(allocator, interface);
                 } else if (std.mem.eql(u8, tag.name, "property")) {
                     var property = try self.parseProperty(allocator);
                     errdefer property.deinit(allocator);
@@ -1067,7 +1089,11 @@ fn parseInterface(self: *Parser, allocator: Allocator) Error!gi.Interface {
                 } else if (std.mem.eql(u8, tag.name, "field")) {
                     try self.discardTag(); // TODO
                 } else if (std.mem.eql(u8, tag.name, "prerequisite")) {
-                    try self.discardTag(); // TODO: implements
+                    const name = try self.parseName(allocator);
+                    defer allocator.free(name);
+                    var preq: gi.Interface = try .init(allocator, name);
+                    errdefer preq.deinit(allocator);
+                    try interface.prerequisites.append(allocator, .{ .interface = preq });
                 } else if (std.mem.eql(u8, tag.name, "property")) {
                     var property = try self.parseProperty(allocator);
                     errdefer property.deinit(allocator);
