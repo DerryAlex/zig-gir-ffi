@@ -853,9 +853,10 @@ pub const FunctionFormatter = struct {
     };
 
     pub fn format(self: FunctionFormatter, writer: *Writer) Writer.Error!void {
-        // TODO: support va args
-        const _args = self.function.callable.args.items;
-        if (_args.len > 0 and _args[_args.len - 1].type_info.?.tag == .va_args) return;
+        const has_va_args = blk: {
+            const args = self.function.callable.args.items;
+            break :blk args.len > 0 and args[args.len - 1].type_info.?.tag == .va_args;
+        };
 
         var buffer: [4096]u8 = undefined;
         var fixed: std.heap.FixedBufferAllocator = .init(&buffer);
@@ -957,7 +958,9 @@ pub const FunctionFormatter = struct {
                 if (!first) try writer.writeAll(", ") else first = false;
 
                 const arg_name = arg.getBase().name;
-                if (slice_info[idx].is_slice_ptr) {
+                if (arg.type_info.?.tag == .va_args) {
+                    try writer.writeAll("args: anytype");
+                } else if (slice_info[idx].is_slice_ptr) {
                     // slice
                     try writer.print("argS_{s}: ", .{arg_name});
                     if (arg.optional) try writer.writeAll("?");
@@ -1097,11 +1100,31 @@ pub const FunctionFormatter = struct {
             .constructor = is_constructor,
         }});
         try writer.print(", .{{ .name = \"{s}\"}});\n", .{callable.symbol.?});
-        try writer.writeAll("const ret = cFn");
-        try writer.print("{f}", .{CallableFormatter{
-            .callable = &self.function.callable,
-            .constructor = is_constructor,
-        }});
+        if (!has_va_args) {
+            try writer.writeAll("const ret = cFn");
+            try writer.print("{f}", .{CallableFormatter{
+                .callable = &self.function.callable,
+                .constructor = is_constructor,
+            }});
+        } else {
+            @branchHint(.unlikely);
+            try writer.writeAll("const ret = @call(.auto, cFn, .{");
+            var first = true;
+            if (callable.is_method) {
+                try writer.writeAll("self");
+                first = false;
+            }
+            for (callable.args.items) |*arg| {
+                if (arg.type_info.?.tag == .va_args) continue;
+                if (!first) {
+                    try writer.writeAll(", ");
+                } else {
+                    first = false;
+                }
+                try writer.print("arg_{s}", .{arg.getBase().name});
+            }
+            try writer.writeAll("} ++ args)");
+        }
         try writer.writeAll(";\n");
         // return
         if (skip_return) try writer.writeAll("_ = ret;\n");
