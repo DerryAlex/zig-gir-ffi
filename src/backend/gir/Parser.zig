@@ -151,7 +151,9 @@ fn parseDoc(self: *Parser, allocator: Allocator) Error![]const u8 {
             aw.writer.printUnicodeCodepoint(unicode) catch return error.OutOfMemory;
         } else return fail(.{ .text = esc_seq });
     }
-    return try aw.toOwnedSlice();
+    const full_doc = try aw.toOwnedSlice();
+    std.mem.replaceScalar(u8, full_doc, '\t', ' ');
+    return full_doc;
 }
 
 fn generateFullDoc(base: *gi.Base, allocator: Allocator, config: struct {
@@ -159,9 +161,9 @@ fn generateFullDoc(base: *gi.Base, allocator: Allocator, config: struct {
     deprecated_version: []const u8,
     deprecated_doc: []const u8,
 }) Allocator.Error!void {
-    var aw: Writer.Allocating = .initOwnedSlice(allocator, @constCast(base.doc));
+    var aw: Writer.Allocating = .init(allocator);
     defer aw.deinit();
-    base.doc = &.{};
+    aw.writer.writeAll(base.doc) catch return error.OutOfMemory;
     if (config.version.len != 0) {
         if (aw.written().len != 0) aw.writer.writeAll("\n") catch return error.OutOfMemory;
         aw.writer.print("@since {s}", .{config.version}) catch return error.OutOfMemory;
@@ -172,7 +174,9 @@ fn generateFullDoc(base: *gi.Base, allocator: Allocator, config: struct {
         if (config.deprecated_version.len != 0) aw.writer.print("(since = {s})", .{config.deprecated_version}) catch return error.OutOfMemory;
         aw.writer.print(" {s}", .{config.deprecated_doc}) catch return error.OutOfMemory;
     }
+    const old_doc = base.doc;
     base.doc = try aw.toOwnedSlice();
+    allocator.free(old_doc);
 }
 
 // -----
