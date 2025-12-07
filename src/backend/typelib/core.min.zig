@@ -39,20 +39,20 @@ pub const Type = enum(usize) {
 /// Returns a function to check whether a type can be cast to T
 pub fn isA(comptime T: type) fn (type) bool {
     return struct {
-        pub fn trait(comptime Ty: type) bool {
-            if (Ty == T) return true;
-            if (@hasDecl(Ty, "Prerequisites")) {
-                for (Ty.Prerequisites) |Prerequisite| {
+        pub fn trait(comptime S: type) bool {
+            if (S == T) return true;
+            if (@hasDecl(S, "Prerequisites")) {
+                for (S.Prerequisites) |Prerequisite| {
                     if (trait(Prerequisite)) return true;
                 }
             }
-            if (@hasDecl(Ty, "Interfaces")) {
-                for (Ty.Interfaces) |Interface| {
+            if (@hasDecl(S, "Interfaces")) {
+                for (S.Interfaces) |Interface| {
                     if (trait(Interface)) return true;
                 }
             }
-            if (@hasDecl(Ty, "Parent")) {
-                if (trait(Ty.Parent)) return true;
+            if (@hasDecl(S, "Parent")) {
+                if (trait(S.Parent)) return true;
             }
             return false;
         }
@@ -61,23 +61,31 @@ pub fn isA(comptime T: type) fn (type) bool {
 
 /// Converts to base type T
 pub inline fn upCast(comptime T: type, object: anytype) *T {
-    comptime std.debug.assert(isA(T)(std.meta.Child(@TypeOf(object))));
+    const S = std.meta.Child(@TypeOf(object));
+    if (comptime !isA(T)(S)) {
+        @compileError(std.fmt.comptimePrint("{s} cannot be upcast to {s}", .{ @typeName(S), @typeName(T) }));
+    }
     return unsafeCast(T, object);
 }
 
 /// Converts to derived type T
 pub inline fn downCast(comptime T: type, object: anytype) ?*T {
-    comptime std.debug.assert(isA(std.meta.Child(@TypeOf(object)))(T));
+    const S = std.meta.Child(@TypeOf(object));
+    if (comptime !isA(S)(T)) {
+        @compileError(std.fmt.comptimePrint("{s} cannot be downcast to {s}", .{ @typeName(S), @typeName(T) }));
+    }
     return dynamicCast(T, object);
 }
 
 /// Converts to type T safely
 pub inline fn dynamicCast(comptime T: type, object: anytype) ?*T {
-    return if (typeCheckInstanceIsA(unsafeCast(TypeInstance, object), T.gType())) unsafeCast(T, object) else null;
+    const instance = unsafeCast(TypeInstance, object);
+    return if (typeCheckInstanceIsA(instance, T.gType())) unsafeCast(T, instance) else null;
 }
 
 /// Converts to type T.
-/// It is the caller's responsibility to ensure that the cast is legal.
+///
+/// Safety: It is the caller's responsibility to ensure that the cast is legal.
 pub inline fn unsafeCast(comptime T: type, object: anytype) *T {
     return @ptrCast(@alignCast(object));
 }
@@ -104,20 +112,15 @@ pub fn Extend(comptime Self: type) type {
 
 pub const Bytes = opaque {};
 
-pub const Data = opaque {};
-
 pub const Error = extern struct {
     domain: u32,
     code: i32,
     message: ?[*:0]const u8,
 };
 
-pub const SList = extern struct {
-    data: ?*anyopaque,
-    next: ?*SList,
-};
-
 pub const OptionGroup = opaque {};
+
+pub const Quark = u32;
 
 // GLib end
 // --------
@@ -125,28 +128,13 @@ pub const OptionGroup = opaque {};
 // -------------
 // GObject begin
 
-pub const Object = extern struct {
-    g_type_instance: TypeInstance,
-    ref_count: u32,
-    qdata: ?*Data,
-};
+pub const Closure = opaque {};
+
+pub const Object = opaque {};
 
 pub const ObjectClass = extern struct {
     g_type_class: TypeClass,
-    construct_properties: ?*SList,
-    constructor: ?*anyopaque,
-    set_property: ?*anyopaque,
-    get_property: ?*anyopaque,
-    dispose: ?*anyopaque,
-    finalize: ?*anyopaque,
-    dispatch_properties_changed: ?*anyopaque,
-    notify: ?*anyopaque,
-    constructed: ?*anyopaque,
-    flags: u64,
-    n_construct_properties: u64,
-    pspecs: ?*anyopaque,
-    n_pspecs: u64,
-    pdummy: [3]?*anyopaque,
+    _: [16]?*anyopaque,
 };
 
 pub const ParamFlags = packed struct(u32) {
@@ -185,6 +173,8 @@ pub const TypeClass = extern struct {
 pub const TypeInstance = extern struct {
     g_class: ?*TypeClass,
 };
+
+pub const Value = opaque {};
 
 pub fn typeCheckInstanceIsA(_instance: *TypeInstance, _iface_type: Type) bool {
     const cFn = @extern(*const fn (*TypeInstance, Type) callconv(.c) bool, .{ .name = "g_type_check_instance_is_a" });

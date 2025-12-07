@@ -1631,6 +1631,8 @@ fn parseUnion(self: *Parser, allocator: Allocator, namespace: *gi.Namespace, pre
     errdefer _union.deinit(allocator);
     var deprecated_doc: []const u8 = &.{};
     defer allocator.free(deprecated_doc);
+    var version: []const u8 = &.{};
+    defer allocator.free(version);
     var deprecated_version: []const u8 = &.{};
     defer allocator.free(deprecated_version);
     while (true) {
@@ -1650,6 +1652,8 @@ fn parseUnion(self: *Parser, allocator: Allocator, namespace: *gi.Namespace, pre
                     _union.base.base.deprecated = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
                     deprecated_version = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "version")) {
+                    version = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.startsWith(u8, attr.name, "c:")) {
                     discardAttr(attr);
                 } else return fail(token);
@@ -1720,7 +1724,7 @@ fn parseUnion(self: *Parser, allocator: Allocator, namespace: *gi.Namespace, pre
         }
     }
     try generateFullDoc(&_union.base.base, allocator, .{
-        .version = "",
+        .version = version,
         .deprecated_version = deprecated_version,
         .deprecated_doc = deprecated_doc,
     });

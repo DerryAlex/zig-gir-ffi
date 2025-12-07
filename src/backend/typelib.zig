@@ -37,10 +37,7 @@ pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repo
         return error.FileNotFound;
     };
 
-    const nss = blk: {
-        const tmp = repo.getLoadedNamespaces();
-        break :blk tmp.ret[0..tmp.n_namespaces_out];
-    };
+    const nss = repo.getLoadedNamespaces();
     for (nss) |c_ns_name| {
         const ns_name: []const u8 = std.mem.span(c_ns_name);
         _cur_ns = ns_name;
@@ -48,10 +45,7 @@ pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repo
         if (!self.namespaces.contains(ns_name)) {
             var ns: gi.Namespace = try .init(allocator, ns_name);
             errdefer ns.deinit(allocator);
-            const deps = blk: {
-                const tmp = repo.getDependencies(c_ns_name);
-                break :blk tmp.ret[0..tmp.n_dependencies_out];
-            };
+            const deps = repo.getDependencies(c_ns_name);
             for (deps) |c_dep_name| {
                 const dep_name: []const u8 = std.mem.sliceTo(std.mem.span(c_dep_name), '-');
                 try ns.dependencies.append(allocator, try allocator.dupe(u8, dep_name));
