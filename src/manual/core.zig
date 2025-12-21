@@ -7,6 +7,11 @@ const GObject = @import("GObject.zig");
 // ----------
 // type begin
 
+const Int = @Type(@typeInfo(c_int));
+const UInt = @Type(@typeInfo(c_uint));
+const Long = @Type(@typeInfo(c_long));
+const ULong = @Type(@typeInfo(c_ulong));
+
 /// A numerical value which represents the unique identifier of a registered type
 pub const Type = enum(usize) {
     invalid = 0,
@@ -37,13 +42,32 @@ pub const Type = enum(usize) {
 
     /// Resolves zig's type to `Type`.
     pub fn from(comptime T: type) Type {
-        switch (comptime comptimeType(T)) {
-            .invalid, .@"enum", .flags, .type => {
-                if (@hasDecl(T, "gType")) return T.gType();
-                @compileError(std.fmt.comptimePrint("Cannot obtain gType of {s}", .{@typeName(T)}));
-            },
-            else => |t| return t,
+        if (T == void) return .none;
+        if (T == i8) return .char;
+        if (T == u8) return .uchar;
+        if (T == bool) return .boolean;
+        if (T == c_int or T == Int) return .int;
+        if (T == c_uint or T == UInt) return .uint;
+        if (T == c_long or T == Long) return .long;
+        if (T == c_ulong or T == ULong) return .ulong;
+        if (T == i64) return .int64;
+        if (T == u64) return .uint64;
+        if (T == f32) return .float;
+        if (T == f64) return .double;
+        if (T == [*:0]const u8) return .string;
+        if (T == GObject.ParamSpec) return .param;
+        if (T == GObject.Object) return .object;
+        if (T == GLib.Variant) return .variant;
+        if (T == Type) return if (@inComptime()) .type else gType();
+        switch (@typeInfo(T)) {
+            .pointer => |p| if (p.size == .one) return .pointer,
+            .@"enum" => |e| if (e.is_exhaustive) return if (@inComptime()) .@"enum" else T.gType(),
+            .@"struct" => |s| if (s.layout == .@"packed") return if (@inComptime()) .flags else T.gType(),
+            else => {},
         }
+        if (@inComptime()) return .invalid;
+        if (@hasDecl(T, "gType")) return T.gType();
+        @compileError(std.fmt.comptimePrint("Cannot obtain gType of {s}", .{@typeName(T)}));
     }
 
     /// Returns `Type` of `Type`.
@@ -52,40 +76,6 @@ pub const Type = enum(usize) {
         return cFn();
     }
 };
-
-const Int = @Type(@typeInfo(c_int));
-const UInt = @Type(@typeInfo(c_uint));
-const Long = @Type(@typeInfo(c_long));
-const ULong = @Type(@typeInfo(c_ulong));
-
-/// Resolves zig's type to `Type` at comptime.
-/// Fallback to `.invalid` if impossible.
-fn comptimeType(comptime T: type) Type {
-    if (T == void) return .none;
-    if (T == i8) return .char;
-    if (T == u8) return .uchar;
-    if (T == bool) return .boolean;
-    if (T == c_int or T == Int) return .int;
-    if (T == c_uint or T == UInt) return .uint;
-    if (T == c_long or T == Long) return .long;
-    if (T == c_ulong or T == ULong) return .ulong;
-    if (T == i64) return .int64;
-    if (T == u64) return .uint64;
-    if (T == f32) return .float;
-    if (T == f64) return .double;
-    if (T == [*:0]const u8) return .string;
-    if (T == GObject.ParamSpec) return .param;
-    if (T == GObject.Object) return .object;
-    if (T == GLib.Variant) return .variant;
-    if (T == Type) return .type;
-    switch (@typeInfo(T)) {
-        .@"enum" => |e| if (e.is_exhaustive) return .@"enum",
-        .@"struct" => |s| if (s.layout == .@"packed") return .flags,
-        .pointer => |p| if (p.size == .one) return .pointer,
-        else => {},
-    }
-    return .invalid;
-}
 
 pub fn List(comptime T: type) type {
     return extern struct {
@@ -298,7 +288,7 @@ pub fn Extend(comptime Self: type) type {
 
 /// Is `T` a basic C type
 fn isBasicType(comptime T: type) bool {
-    return switch (comptime comptimeType(T)) {
+    return switch (comptime Type.from(T)) {
         .invalid, .param, .object, .variant => false,
         else => true,
     };
@@ -335,7 +325,7 @@ const ZigValue = extern struct {
     /// Get the contents of a `Value`.
     pub fn get(self: *Self, comptime T: type) Arg(T) {
         const v = &self.c_value;
-        return switch (comptime comptimeType(T)) {
+        return switch (comptime Type.from(T)) {
             .none => unreachable,
             .char => v.getSchar(),
             .uchar => v.getUchar(),
@@ -362,7 +352,7 @@ const ZigValue = extern struct {
     /// Set the contents of a `Value`.
     pub fn set(self: *Self, comptime T: type, value: Arg(T)) void {
         const v = &self.c_value;
-        switch (comptime comptimeType(T)) {
+        switch (comptime Type.from(T)) {
             .none => unreachable,
             .char => v.setSchar(value),
             .uchar => v.setUchar(value),
