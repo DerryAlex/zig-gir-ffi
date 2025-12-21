@@ -255,6 +255,16 @@ pub fn Extend(comptime Self: type) type {
             return downCast(T, self);
         }
 
+        /// Converted from derived type
+        pub fn from(object: anytype) *Self {
+            return object.into(Self);
+        }
+
+        /// Converted from base type
+        pub fn tryFrom(object: anytype) ?*Self {
+            return object.tryInto(Self);
+        }
+
         /// Returns the class of a given object
         pub fn getClass(self: *Self, comptime Object: type) *Object.Class {
             const instance = unsafeCast(GObject.TypeInstance, upCast(Object, self));

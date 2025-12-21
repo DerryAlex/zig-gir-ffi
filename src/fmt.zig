@@ -821,6 +821,8 @@ pub const ObjectFormatter = struct {
             \\const Ext = core.Extend(@This());
             \\pub const into = Ext.into;
             \\pub const tryInto = Ext.tryInto;
+            \\pub const from = Ext.from;
+            \\pub const tryFrom = Ext.tryFrom;
             \\
         );
         try writer.writeAll("};\n");
