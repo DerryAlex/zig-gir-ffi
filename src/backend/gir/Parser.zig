@@ -124,7 +124,7 @@ fn parseDoc(self: *Parser, allocator: Allocator) Error![]const u8 {
         }
     }
     const doc = try aw.toOwnedSlice();
-    errdefer allocator.free(doc);
+    defer allocator.free(doc);
     var reader: Reader = .fixed(doc);
     while (true) {
         _ = reader.streamDelimiterEnding(&aw.writer, '&') catch |err| switch (err) {
@@ -869,6 +869,7 @@ fn parseConstant(self: *Parser, allocator: Allocator) Error!gi.Constant {
                         .utf8 => {
                             constant.type_tag = .utf8;
                             constant.value = .{ .v_string = try allocator.dupeZ(u8, value_raw_str) };
+                            constant.value_owned = true;
                         },
                         .interface => {
                             constant.type_tag = .interface;
@@ -1014,6 +1015,7 @@ fn parseField(self: *Parser, allocator: Allocator) Error!gi.Field {
                     defer aw.deinit();
                     aw.writer.print("{f}", .{CallbackFormatter{ .callback = &callback }}) catch return error.OutOfMemory;
                     const name = try aw.toOwnedSlice();
+                    defer allocator.free(name);
                     var _type: gi.Type = try .init(allocator, "type");
                     errdefer _type.deinit(allocator);
                     var _interface: gi.Base = try .init(allocator, name);

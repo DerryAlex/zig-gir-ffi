@@ -65,7 +65,7 @@ pub const Repository = struct {
     pub fn deinit(self: *Repository) void {
         self.search_paths.deinit(self.allocator);
         for (self.namespaces.values()) |*ns| {
-            ns.deinit();
+            ns.deinit(self.allocator);
         }
         self.namespaces.deinit(self.allocator);
     }
@@ -252,9 +252,12 @@ pub const Callable = struct {
     pub fn deinit(self: *Callable, allocator: Allocator) void {
         for (self.args.items) |*a| a.deinit(allocator);
         self.args.deinit(allocator);
-        if (self.return_type) |r| r.deinit(allocator);
-        self.base.deinit(allocator);
+        if (self.return_type) |r| {
+            r.deinit(allocator);
+            allocator.destroy(r);
+        }
         if (self.symbol) |s| allocator.free(s);
+        self.base.deinit(allocator);
     }
 };
 
@@ -352,12 +355,20 @@ pub const Constant = struct {
     base: Base,
     type_tag: TypeTag = .void,
     value: Argument = .{ .v_pointer = null },
+    value_owned: bool = false,
 
     pub fn init(allocator: Allocator, name: []const u8) Allocator.Error!Constant {
         return .{ .base = try .init(allocator, name) };
     }
 
     pub fn deinit(self: *Constant, allocator: Allocator) void {
+        if (self.value_owned) {
+            if (self.type_tag == .utf8 and self.value.v_string != null) {
+                allocator.free(std.mem.span(self.value.v_string.?));
+            } else {
+                std.log.err("constant: expect owned value to be string", .{});
+            }
+        }
         self.base.deinit(allocator);
     }
 
@@ -505,6 +516,8 @@ pub const Object = struct {
         }
         for (self.constants.items) |*c| c.deinit(allocator);
         self.constants.deinit(allocator);
+        for (self.fields.items) |*f| f.deinit(allocator);
+        self.fields.deinit(allocator);
         for (self.interfaces.items) |*i| i.deinit(allocator);
         self.interfaces.deinit(allocator);
         for (self.methods.items) |*m| m.deinit(allocator);

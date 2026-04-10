@@ -7,8 +7,7 @@ const CliOptions = @import("CliOptions.zig");
 const gi = @import("gi.zig");
 
 pub fn main(init: std.process.Init) !void {
-    // const allocator = init.gpa;
-    const allocator = std.heap.smp_allocator;
+    const allocator = init.gpa;
     const arena = init.arena.allocator();
     const io = init.io;
 
@@ -26,6 +25,7 @@ pub fn main(init: std.process.Init) !void {
     if (cli_options.namespaces.len == 0) fatal("no namespace specified", .{});
 
     var repository: gi.Repository = .init(allocator, .chain(.debug(.gir), .debug(.typelib)));
+    defer repository.deinit();
     for (cli_options.include_dirs) |dir| {
         try repository.appendSearchPath(dir);
     }

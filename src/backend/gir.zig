@@ -71,7 +71,9 @@ pub fn load(self: *Repository, io: Io, namespace: []const u8, version: ?[]const 
             }
         }
         var namespace_ptr = self.namespaces.getPtr(namespace).?;
-        try namespace_ptr.dependencies.appendSlice(self.allocator, dependencies.keys()[namespace_ptr.dependencies.items.len..]);
+        for (dependencies.keys()[namespace_ptr.dependencies.items.len..]) |tran_dep| {
+            try namespace_ptr.dependencies.append(self.allocator, try self.allocator.dupe(u8, tran_dep));
+        }
         return;
     }
     std.log.debug("gir backend: fail to load {s}", .{namespace});
