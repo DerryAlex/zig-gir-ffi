@@ -243,6 +243,7 @@ fn parseBase(allocator: Allocator, info: *libgi.BaseInfo) Allocator.Error!gi.Bas
         const name = getName(info);
         if (!std.ascii.isUpper(name[0])) {
             var callback = try parseCallback(allocator, cb);
+            defer callback.deinit(allocator);
             var aw: Writer.Allocating = .init(allocator);
             errdefer aw.deinit();
             aw.writer.print("{f}", .{CallbackFormatter{ .callback = &callback }}) catch return error.OutOfMemory;
