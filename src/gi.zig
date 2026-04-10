@@ -32,6 +32,18 @@ pub const Repository = struct {
             return .{ .load = chained.load };
         }
 
+        pub fn debug(comptime vtable: VTable) VTable {
+            const debugged = struct {
+                fn load(self: *Repository, io: Io, namespace: []const u8, version: ?[]const u8) Error!void {
+                    vtable.load(self, io, namespace, version) catch |err| {
+                        if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace);
+                        return err;
+                    };
+                }
+            };
+            return .{ .load = debugged.load };
+        }
+
         /// Load namespace from .gir files
         pub const gir: VTable = .{
             .load = @import("backend/gir.zig").load,

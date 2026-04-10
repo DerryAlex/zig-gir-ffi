@@ -25,14 +25,13 @@ pub fn main(init: std.process.Init) !void {
     }
     if (cli_options.namespaces.len == 0) fatal("no namespace specified", .{});
 
-    var repository: gi.Repository = .init(allocator, .chain(.gir, .typelib));
+    var repository: gi.Repository = .init(allocator, .chain(.debug(.gir), .debug(.typelib)));
     for (cli_options.include_dirs) |dir| {
         try repository.appendSearchPath(dir);
     }
     for (cli_options.namespaces) |ns| {
         repository.load(io, ns.name, ns.version) catch |err| {
             std.log.err("{t}", .{err});
-            if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace);
         };
     }
     if (repository.namespaces.count() == 0) fatal("no namespace loaded", .{});
