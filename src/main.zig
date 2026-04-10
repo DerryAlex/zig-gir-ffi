@@ -2,23 +2,25 @@ const std = @import("std");
 pub const options = @import("options");
 const assert = std.debug.assert;
 const fatal = std.process.fatal;
+const Io = std.Io;
 const CliOptions = @import("CliOptions.zig");
 const gi = @import("gi.zig");
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    // const allocator = init.gpa;
     const allocator = std.heap.smp_allocator;
+    const arena = init.arena.allocator();
+    const io = init.io;
 
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
-    const cli_options: CliOptions = try .parse(allocator, args);
-    defer cli_options.deinit(allocator);
+    const args = try init.minimal.args.toSlice(arena);
+    const cli_options: CliOptions = try .parse(io, arena, args);
 
     if (cli_options.help) {
-        try CliOptions.printUsage(args[0]);
+        try CliOptions.printUsage(io, args[0]);
         return;
     }
     if (cli_options.version) {
-        try CliOptions.printVersion(options.version);
+        try CliOptions.printVersion(io, options.version);
         return;
     }
     if (cli_options.namespaces.len == 0) fatal("no namespace specified", .{});
@@ -28,40 +30,40 @@ pub fn main() !void {
         try repository.appendSearchPath(dir);
     }
     for (cli_options.namespaces) |ns| {
-        repository.load(ns.name, ns.version) catch |err| {
+        repository.load(io, ns.name, ns.version) catch |err| {
             std.log.err("{t}", .{err});
-            if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace.*);
+            if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace);
         };
     }
     if (repository.namespaces.count() == 0) fatal("no namespace loaded", .{});
 
-    const cwd = std.fs.cwd();
-    var output_dir = cwd.openDir(cli_options.output_dir, .{}) catch |err| switch (err) {
+    const cwd = Io.Dir.cwd();
+    var output_dir = cwd.openDir(io, cli_options.output_dir, .{}) catch |err| switch (err) {
         error.FileNotFound => blk: {
-            try cwd.makeDir(cli_options.output_dir);
-            break :blk try cwd.openDir(cli_options.output_dir, .{});
+            try cwd.createDir(io, cli_options.output_dir, .default_dir);
+            break :blk try cwd.openDir(io, cli_options.output_dir, .{});
         },
         else => return err,
     };
-    defer output_dir.close();
-    var binding_dir = output_dir.openDir("binding", .{}) catch |err| switch (err) {
+    defer output_dir.close(io);
+    var binding_dir = output_dir.openDir(io, "binding", .{}) catch |err| switch (err) {
         error.FileNotFound => blk: {
-            try output_dir.makeDir("binding");
-            break :blk try output_dir.openDir("binding", .{});
+            try output_dir.createDir(io, "binding", .default_dir);
+            break :blk try output_dir.openDir(io, "binding", .{});
         },
         else => return err,
     };
-    defer binding_dir.close();
+    defer binding_dir.close(io);
 
     var buffer: [4096]u8 = undefined;
     const namespaces = repository.namespaces.values();
     for (namespaces) |*ns| {
         const file_name = try std.mem.concat(allocator, u8, &.{ ns.name, ".zig" });
         defer allocator.free(file_name);
-        const file = try binding_dir.createFile(file_name, .{});
-        defer file.close();
+        const file = try binding_dir.createFile(io, file_name, .{});
+        defer file.close(io);
         std.log.info("[Start] {s}", .{file_name});
-        var writer = file.writer(&buffer);
+        var writer = file.writer(io, &buffer);
         try writer.interface.writeAll("const std = @import(\"std\");\n");
         try writer.interface.writeAll("const core = @import(\"core.zig\");\n");
         for (ns.dependencies.items) |dep| try writer.interface.print("const {s} = @import(\"{s}.zig\");\n", .{ dep, dep });
@@ -72,34 +74,34 @@ pub fn main() !void {
     }
     // core.zig
     {
-        const file = try binding_dir.createFile("core.zig", .{});
-        defer file.close();
-        var writer = file.writer(&buffer);
+        const file = try binding_dir.createFile(io, "core.zig", .{});
+        defer file.close(io);
+        var writer = file.writer(io, &buffer);
         try writer.interface.writeAll(@embedFile("manual/core.zig"));
         try writer.interface.flush();
     }
     // gi.zig
     {
-        const file = try output_dir.createFile("gi.zig", .{});
-        defer file.close();
-        var writer = file.writer(&buffer);
+        const file = try output_dir.createFile(io, "gi.zig", .{});
+        defer file.close(io);
+        var writer = file.writer(io, &buffer);
         try writer.interface.writeAll("pub const core = @import(\"binding/core.zig\");\n");
         for (namespaces) |ns| try writer.interface.print("pub const {s} = @import(\"binding/{s}.zig\");\n", .{ ns.name, ns.name });
         try writer.interface.flush();
     }
     // build.zig
     {
-        const file = try output_dir.createFile("build.zig", .{});
-        defer file.close();
-        var writer = file.writer(&buffer);
+        const file = try output_dir.createFile(io, "build.zig", .{});
+        defer file.close(io);
+        var writer = file.writer(io, &buffer);
         try writer.interface.writeAll(@embedFile("build/build.zig"));
         try writer.interface.flush();
     }
     // build.zig.zon
     {
-        const file = try output_dir.createFile("build.zig.zon", .{});
-        defer file.close();
-        var writer = file.writer(&buffer);
+        const file = try output_dir.createFile(io, "build.zig.zon", .{});
+        defer file.close(io);
+        var writer = file.writer(io, &buffer);
         try writer.interface.writeAll(@embedFile("build/build.zig.zon"));
         try writer.interface.flush();
     }
@@ -114,9 +116,11 @@ pub fn main() !void {
         const file_name = try std.mem.concat(allocator, u8, &.{ ns.name, ".zig" });
         try fmt_argv.append(allocator, file_name);
     }
-    var fmt_process: std.process.Child = .init(fmt_argv.items, allocator);
-    fmt_process.cwd_dir = binding_dir;
-    fmt_process.stdout_behavior = .Ignore;
-    const term = try fmt_process.spawnAndWait();
-    assert(term.Exited == 0);
+    var fmt_process = try std.process.spawn(io, .{
+        .argv = fmt_argv.items,
+        .cwd = .{ .dir = binding_dir },
+        .stdout = .ignore,
+    });
+    const term = try fmt_process.wait(io);
+    assert(term.exited == 0);
 }

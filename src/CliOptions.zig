@@ -2,6 +2,7 @@ const CliOptions = @This();
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const Io = std.Io;
 const fatal = std.process.fatal;
 
 help: bool = false,
@@ -25,29 +26,31 @@ const usage =
     \\
 ;
 
-pub fn printUsage(arg0: [:0]const u8) !void {
-    var writer = std.Progress.lockStderrWriter(&.{});
-    defer std.Progress.unlockStderrWriter();
+pub fn printUsage(io: Io, arg0: [:0]const u8) !void {
+    const stderr = try io.lockStderr(&.{}, null);
+    defer io.unlockStderr();
+    var writer = &stderr.file_writer.interface;
     try writer.print(usage, .{arg0});
 }
 
-pub fn printVersion(version: std.SemanticVersion) !void {
-    var writer = std.Progress.lockStderrWriter(&.{});
-    defer std.Progress.unlockStderrWriter();
+pub fn printVersion(io: Io, version: std.SemanticVersion) !void {
+    const stderr = try io.lockStderr(&.{}, null);
+    defer io.unlockStderr();
+    var writer = &stderr.file_writer.interface;
     try writer.print("{f}\n", .{version});
 }
 
-fn isValidDir(path: []const u8) bool {
-    const cwd = std.fs.cwd();
-    var dir = cwd.openDir(path, .{}) catch |err| {
+fn isValidDir(io: Io, path: []const u8) bool {
+    const cwd = Io.Dir.cwd();
+    var dir = cwd.openDir(io, path, .{}) catch |err| {
         std.log.warn("Invalid path `{s}`: {t}", .{ path, err });
         return false;
     };
-    defer dir.close();
+    defer dir.close(io);
     return true;
 }
 
-pub fn parse(allocator: Allocator, args: []const [:0]const u8) !CliOptions {
+pub fn parse(io: Io, allocator: Allocator, args: []const [:0]const u8) !CliOptions {
     var options: CliOptions = .{};
     var namespaces: std.ArrayList(Namespace) = .empty;
     errdefer namespaces.deinit(allocator);
@@ -70,7 +73,7 @@ pub fn parse(allocator: Allocator, args: []const [:0]const u8) !CliOptions {
                 if (i + 1 >= args.len) fatal("expected argument after '{s}'", .{arg});
                 i += 1;
                 const dir = args[i];
-                if (isValidDir(dir)) try include_dirs.append(allocator, dir);
+                if (isValidDir(io, dir)) try include_dirs.append(allocator, dir);
             } else {
                 fatal("unknown option: '{s}'", .{arg});
             }

@@ -2,7 +2,8 @@ const std = @import("std");
 const options = @import("options");
 const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
-const Writer = std.Io.Writer;
+const Io = std.Io;
+const Writer = Io.Writer;
 const gi = @import("../gi.zig");
 const Repository = gi.Repository;
 const fmt = @import("../fmt.zig");
@@ -13,7 +14,8 @@ var _repo: ?*libgi.Repository = null;
 var _cur_ns: ?[]const u8 = null;
 
 /// Load `namespace` if it isn't ready.
-pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Repository.Error!void {
+pub fn load(self: *Repository, io: Io, namespace: []const u8, version: ?[]const u8) Repository.Error!void {
+    _ = io;
     if (!options.has_typelib) return error.FileNotFound;
 
     if (_repo == null) _repo = libgi.Repository.new();

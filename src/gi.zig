@@ -3,8 +3,9 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
+const Io = std.Io;
 const StringArrayHashMap = std.StringArrayHashMapUnmanaged;
-const Writer = std.Io.Writer;
+const Writer = Io.Writer;
 const fmt = @import("fmt.zig");
 
 /// `Repository` is used to manage namespaces.
@@ -18,13 +19,13 @@ pub const Repository = struct {
     pub const Error = Allocator.Error || error{FileNotFound};
 
     pub const VTable = struct {
-        load: *const fn (self: *Repository, namespace: []const u8, version: ?[]const u8) Error!void,
+        load: *const fn (self: *Repository, io: Io, namespace: []const u8, version: ?[]const u8) Error!void,
 
         pub fn chain(comptime first: VTable, comptime second: VTable) VTable {
             const chained = struct {
-                fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Error!void {
-                    first.load(self, namespace, version) catch {
-                        try second.load(self, namespace, version);
+                fn load(self: *Repository, io: Io, namespace: []const u8, version: ?[]const u8) Error!void {
+                    first.load(self, io, namespace, version) catch {
+                        try second.load(self, io, namespace, version);
                     };
                 }
             };
@@ -63,9 +64,9 @@ pub const Repository = struct {
     }
 
     /// Load `namespace` if it isn't ready.
-    pub fn load(self: *Repository, namespace: []const u8, version: ?[]const u8) Error!void {
+    pub fn load(self: *Repository, io: Io, namespace: []const u8, version: ?[]const u8) Error!void {
         if (self.namespaces.contains(namespace)) return;
-        try self.vtable.load(self, namespace, version);
+        try self.vtable.load(self, io, namespace, version);
     }
 };
 

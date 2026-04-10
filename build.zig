@@ -39,8 +39,8 @@ pub fn build(b: *std.Build) !void {
     });
     exe.root_module.addOptions("options", options);
     if (has_typelib_backend) {
-        exe.linkLibC();
-        exe.linkSystemLibrary("girepository-2.0");
+        exe.root_module.link_libc = true;
+        exe.root_module.linkSystemLibrary("girepository-2.0", .{});
     }
 
     b.installArtifact(exe);
