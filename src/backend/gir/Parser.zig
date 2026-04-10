@@ -711,6 +711,8 @@ fn parseClass(self: *Parser, allocator: Allocator) Error!gi.Object {
                     object.base.base.deprecated = parseAttrBool(attr.value);
                 } else if (std.mem.eql(u8, attr.name, "deprecated-version")) {
                     deprecated_version = try allocator.dupe(u8, attr.value);
+                } else if (std.mem.eql(u8, attr.name, "final")) {
+                    discardAttr(attr);
                 } else if (std.mem.eql(u8, attr.name, "version")) {
                     version = try allocator.dupe(u8, attr.value);
                 } else if (std.mem.eql(u8, attr.name, "parent")) {
@@ -1480,7 +1482,7 @@ fn parseType(self: *Parser, allocator: Allocator) Error!gi.Type {
                         _type.tag = .int16;
                     } else if (std.mem.eql(u8, name, "guint16")) {
                         _type.tag = .uint16;
-                    } else if (std.mem.eql(u8, name, "gint32")) {
+                    } else if (std.mem.eql(u8, name, "gint32") or std.mem.eql(u8, name, "int32")) {
                         _type.tag = .int32;
                     } else if (std.mem.eql(u8, name, "guint32")) {
                         _type.tag = .uint32;
