@@ -748,12 +748,12 @@ pub const InterfaceFormatter = struct {
         }
         if (self.context.iface) |iface| try writer.print("pub const Class = {f};\n", .{iface});
         if (self.context.properties.items.len > 0) {
-            try writer.writeAll("_props: struct {\n");
+            try writer.writeAll("_props: extern struct {\n");
             for (self.context.properties.items) |*prop| try writer.print("{f}", .{PropertyFormatter{ .property = prop }});
             try writer.writeAll("},\n");
         }
         if (self.context.signals.items.len > 0) {
-            try writer.writeAll("_signals: struct {\n");
+            try writer.writeAll("_signals: extern struct {\n");
             for (self.context.signals.items) |*signal| try writer.print("{f}", .{SignalFormatter{
                 .signal = signal,
                 .container = self.context.getBase(),
@@ -794,12 +794,12 @@ pub const ObjectFormatter = struct {
         if (self.context.parent) |parent| try writer.print("pub const Parent = {f};\n", .{parent});
         if (self.context.class_struct) |class| try writer.print("pub const Class = {f};\n", .{class});
         if (self.context.properties.items.len > 0) {
-            try writer.writeAll("_props: struct {\n");
+            try writer.writeAll("_props: extern struct {\n");
             for (self.context.properties.items) |*prop| try writer.print("{f}", .{PropertyFormatter{ .property = prop }});
             try writer.writeAll("},\n");
         }
         if (self.context.signals.items.len > 0) {
-            try writer.writeAll("_signals: struct {\n");
+            try writer.writeAll("_signals: extern struct {\n");
             for (self.context.signals.items) |*signal| try writer.print("{f}", .{SignalFormatter{
                 .signal = signal,
                 .container = self.context.getBase(),
@@ -1055,9 +1055,13 @@ pub const FunctionFormatter = struct {
                     arg_type.pointer = false;
                     try writer.print("var argO_{s}: {f} = ", .{ arg_name, TypeFormatter{ .type = &arg_type } });
                 }
-                try writer.print("@intCast((argS_{s}", .{ptr_arg_name});
-                if (ptr_arg.optional) try writer.writeAll(" orelse &.{}");
-                try writer.writeAll(").len);\n");
+                try writer.writeAll("@intCast(");
+                if (ptr_arg.optional) {
+                    try writer.print("if (argS_{s} != null) argS_{s}.?.len else 0", .{ ptr_arg_name, ptr_arg_name });
+                } else {
+                    try writer.print("argS_{s}.len", .{ptr_arg_name});
+                }
+                try writer.writeAll(");\n");
                 if (arg.direction != .in) {
                     try writer.print("const {f} = &argO_{s};\n", .{ ArgFormatter{ .arg = arg }, arg_name });
                 }

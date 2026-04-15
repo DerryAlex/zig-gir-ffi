@@ -5,9 +5,10 @@ const TypedInt = @import("int.zig").TypedInt;
 const PartialEq = @import("eq.zig").PartialEq;
 const PartialOrd = @import("ord.zig").PartialOrd;
 
-pub fn main() void {
-    var rand_backend: std.Random.DefaultPrng = .init(@intCast(@mod(std.time.nanoTimestamp(), std.time.ns_per_ms)));
-    const rand: std.Random = .init(&rand_backend, @TypeOf(rand_backend).fill);
+pub fn main(init: std.process.Init) void {
+    const seed: u64 = @intCast(@divTrunc(std.Io.Timestamp.now(init.io, .real).nanoseconds, std.time.ns_per_s));
+    var rand_source: std.Random.DefaultPrng = .init(seed);
+    const rand: std.Random = rand_source.random();
     const v1 = rand.int(i8);
     const v2 = rand.int(i8);
     const ti1: *TypedInt = .new(v1);

@@ -30,7 +30,7 @@ pub fn build(b: *std.Build) !void {
         .name = "application",
         .root_module = root_module,
     });
-    exe.addCSourceFile(.{
+    exe.root_module.addCSourceFile(.{
         .file = b.path("resources.c"),
         .flags = &[_][]const u8{},
     });

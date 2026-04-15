@@ -4,7 +4,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const Io = std.Io;
-const StringArrayHashMap = std.StringArrayHashMapUnmanaged;
+const StringMap = std.array_hash_map.String;
 const Writer = Io.Writer;
 const fmt = @import("fmt.zig");
 
@@ -13,7 +13,7 @@ pub const Repository = struct {
     allocator: Allocator,
     vtable: VTable,
     search_paths: ArrayList([]const u8) = .empty,
-    namespaces: StringArrayHashMap(Namespace) = .empty,
+    namespaces: StringMap(Namespace) = .empty,
     _search_paths_used: usize = 0, // typelib backend only
 
     pub const Error = Allocator.Error || error{FileNotFound};

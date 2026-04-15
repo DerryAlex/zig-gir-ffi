@@ -1,16 +1,18 @@
 const std = @import("std");
+const Io = std.Io;
 const gi = @import("gi");
 const GLib = gi.GLib;
 const GObject = gi.GObject;
 const Gio = gi.Gio;
 const Gtk = gi.Gtk;
 
-pub fn main() u8 {
+pub fn main(init: std.process.Init) u8 {
+    const args = init.minimal.args.vector;
     const _app: *Gtk.Application = .new("org.example.clock", .{});
     const app = _app.into(Gio.Application);
     defer app.into(GObject.Object).unref();
     _ = app._signals.activate.connect(.init(buildUi, .{}), .{});
-    return @intCast(app.run(@ptrCast(std.os.argv)));
+    return @intCast(app.run(@constCast(args)));
 }
 
 pub fn buildUi(arg_app: *Gio.Application) void {
@@ -27,7 +29,7 @@ pub fn buildUi(arg_app: *Gio.Application) void {
 }
 
 pub fn tick(label: *Gtk.Label) bool {
-    var time = std.time.timestamp();
+    var time = @divTrunc(GLib.getRealTime(), std.time.us_per_s);
     const s: u6 = @intCast(@mod(time, std.time.s_per_min));
     time = @divFloor(time, std.time.s_per_min);
     const min: u6 = @intCast(@mod(time, 60));

@@ -7,10 +7,10 @@ const GObject = @import("GObject.zig");
 // ----------
 // type begin
 
-const Int = @Type(@typeInfo(c_int));
-const UInt = @Type(@typeInfo(c_uint));
-const Long = @Type(@typeInfo(c_long));
-const ULong = @Type(@typeInfo(c_ulong));
+const Int = @Int(@typeInfo(c_int).int.signedness, @typeInfo(c_int).int.bits);
+const UInt = @Int(@typeInfo(c_uint).int.signedness, @typeInfo(c_uint).int.bits);
+const Long = @Int(@typeInfo(c_long).int.signedness, @typeInfo(c_long).int.bits);
+const ULong = @Int(@typeInfo(c_ulong).int.signedness, @typeInfo(c_ulong).int.bits);
 
 /// A numerical value which represents the unique identifier of a registered type
 pub const Type = enum(usize) {
@@ -505,7 +505,12 @@ pub fn Closure(comptime FnOrPtr: type) type {
                 const n_param = params.len;
                 if (n_param > 0 and params[n_param - 1].type.? == ?*anyopaque) fn_info.params = params[0 .. n_param - 1];
             }
-            break :blk @Type(.{ .@"fn" = fn_info });
+            // compiler pushes `param_types` to be const, which might be a bug
+            const param_types: [fn_info.params.len]type = @splat(@TypeOf(null));
+            for (fn_info.params, param_types) |param, *param_ty| {
+                param_ty.* = param.type.?;
+            }
+            break :blk @Fn(&param_types, &@splat(.{}), fn_info.return_type.?, .{});
         };
 
         pub fn init(callback_func: anytype, user_data: anytype) Self {
@@ -791,7 +796,7 @@ pub fn SimpleSignal(comptime Fn: type) type {
 
 /// Type-safe wrapper for signal.
 pub fn Signal(comptime Fn: type, comptime name: [:0]const u8) type {
-    return struct {
+    return extern struct {
         const Self = @This();
 
         /// Connects a closure to a signal for a particular object.
@@ -815,7 +820,7 @@ pub fn Signal(comptime Fn: type, comptime name: [:0]const u8) type {
 ///
 /// Safety: property should be at offset 0 of an object.
 pub fn Property(comptime T: type, comptime name: [:0]const u8) type {
-    return struct {
+    return extern struct {
         const Self = @This();
 
         pub fn get(self: *Self) Arg(T) {

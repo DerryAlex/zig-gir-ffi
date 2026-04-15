@@ -30,10 +30,11 @@ pub fn activate(app: *Gio.Application) void {
     window.present();
 }
 
-pub fn main() u8 {
+pub fn main(init: std.process.Init) !u8 {
+    const args = init.minimal.args.vector;
     const _app: *Application = .new("org.gtk.example", .{});
     const app = _app.into(Gio.Application);
     defer app.into(Object).unref();
     _ = app._signals.activate.connect(.init(activate, .{}), .{});
-    return @intCast(app.run(@ptrCast(std.os.argv)));
+    return @intCast(app.run(@constCast(args)));
 }

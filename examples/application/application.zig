@@ -5,9 +5,10 @@ const GLib = gi.GLib;
 const Gio = gi.Gio;
 const ExampleApp = @import("example_app.zig").ExampleApp;
 
-pub fn main() u8 {
+pub fn main(init: std.process.Init) u8 {
+    const args = init.minimal.args.vector;
     _ = GLib.setenv("GSETTINGS_SCHEMA_DIR", ".", false);
     const _app: *ExampleApp = .new();
     const app = _app.into(Gio.Application);
-    return @intCast(app.run(@ptrCast(std.os.argv)));
+    return @intCast(app.run(@constCast(args)));
 }
