@@ -36,7 +36,7 @@ pub const Repository = struct {
             const debugged = struct {
                 fn load(self: *Repository, io: Io, namespace: []const u8, version: ?[]const u8) Error!void {
                     vtable.load(self, io, namespace, version) catch |err| {
-                        if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace);
+                        std.debug.dumpCurrentStackTrace(.{});
                         return err;
                     };
                 }
