@@ -246,8 +246,17 @@ pub fn Extend(comptime Self: type) type {
         }
 
         /// Converted from derived type
+        ///
+        /// Safety: It is the caller's responsibility to ensure that the cast is legal.
         pub fn from(object: anytype) *Self {
-            return object.into(Self);
+            const O = std.meta.Child(@TypeOf(object));
+            if (comptime isA(Self)(O)) {
+                return upCast(Self, object);
+            } else if (comptime isA(O)(Self)) {
+                return downCast(Self, object).?;
+            } else {
+                @compileError(std.fmt.comptimePrint("{s} cannot be cast to {s}", .{ @typeName(O), @typeName(Self) }));
+            }
         }
 
         /// Converted from base type

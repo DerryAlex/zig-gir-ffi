@@ -37,21 +37,9 @@ pub fn main(init: std.process.Init) !void {
     if (repository.namespaces.count() == 0) fatal("no namespace loaded", .{});
 
     const cwd = Io.Dir.cwd();
-    var output_dir = cwd.openDir(io, cli_options.output_dir, .{}) catch |err| switch (err) {
-        error.FileNotFound => blk: {
-            try cwd.createDir(io, cli_options.output_dir, .default_dir);
-            break :blk try cwd.openDir(io, cli_options.output_dir, .{});
-        },
-        else => return err,
-    };
+    const output_dir = try openDirCreate(cwd, io, cli_options.output_dir, .{});
     defer output_dir.close(io);
-    var binding_dir = output_dir.openDir(io, "binding", .{}) catch |err| switch (err) {
-        error.FileNotFound => blk: {
-            try output_dir.createDir(io, "binding", .default_dir);
-            break :blk try output_dir.openDir(io, "binding", .{});
-        },
-        else => return err,
-    };
+    const binding_dir = try openDirCreate(output_dir, io, "binding", .{ .iterate = true });
     defer binding_dir.close(io);
 
     var buffer: [4096]u8 = undefined;
@@ -71,37 +59,28 @@ pub fn main(init: std.process.Init) !void {
         try writer.interface.flush();
         std.log.info("[Done] {s}", .{file_name});
     }
-    // core.zig
-    {
-        const file = try binding_dir.createFile(io, "core.zig", .{});
-        defer file.close(io);
-        var writer = file.writer(io, &buffer);
-        try writer.interface.writeAll(@embedFile("manual/core.zig"));
-        try writer.interface.flush();
-    }
+
+    // copy manual files
+    const manual_dir = try cwd.openDir(io, cli_options.manual_dir, .{ .iterate = true });
+    defer manual_dir.close(io);
+    try copyDir(manual_dir, output_dir, io);
+
     // gi.zig
     {
         const file = try output_dir.createFile(io, "gi.zig", .{});
         defer file.close(io);
         var writer = file.writer(io, &buffer);
-        try writer.interface.writeAll("pub const core = @import(\"binding/core.zig\");\n");
-        for (namespaces) |ns| try writer.interface.print("pub const {s} = @import(\"binding/{s}.zig\");\n", .{ ns.name, ns.name });
-        try writer.interface.flush();
-    }
-    // build.zig
-    {
-        const file = try output_dir.createFile(io, "build.zig", .{});
-        defer file.close(io);
-        var writer = file.writer(io, &buffer);
-        try writer.interface.writeAll(@embedFile("build/build.zig"));
-        try writer.interface.flush();
-    }
-    // build.zig.zon
-    {
-        const file = try output_dir.createFile(io, "build.zig.zon", .{});
-        defer file.close(io);
-        var writer = file.writer(io, &buffer);
-        try writer.interface.writeAll(@embedFile("build/build.zig.zon"));
+        var binding_iter = binding_dir.iterate();
+        while (binding_iter.next(io)) |_entry| {
+            if (_entry == null) break;
+            const entry = _entry.?;
+            if (entry.kind == .file and std.mem.endsWith(u8, entry.name, ".zig")) {
+                const name = entry.name[0 .. entry.name.len - 4];
+                try writer.interface.print("pub const {s} = @import(\"binding/{s}.zig\");\n", .{ name, name });
+            }
+        } else |err| {
+            return err;
+        }
         try writer.interface.flush();
     }
 
@@ -122,4 +101,38 @@ pub fn main(init: std.process.Init) !void {
     });
     const term = try fmt_process.wait(io);
     assert(term.exited == 0);
+}
+
+fn openDirCreate(dir: Io.Dir, io: Io, sub_path: []const u8, open_options: Io.Dir.OpenOptions) !Io.Dir {
+    return dir.openDir(io, sub_path, open_options) catch |err| switch (err) {
+        error.FileNotFound => blk: {
+            try dir.createDir(io, sub_path, .default_dir);
+            break :blk try dir.openDir(io, sub_path, open_options);
+        },
+        else => return err,
+    };
+}
+
+fn copyDir(source_dir: Io.Dir, dest_dir: Io.Dir, io: Io) !void {
+    var iter = source_dir.iterate();
+    while (iter.next(io)) |_entry| {
+        if (_entry == null) break;
+        const entry = _entry.?;
+        switch (entry.kind) {
+            .file => {
+                try source_dir.copyFile(entry.name, dest_dir, entry.name, io, .{});
+            },
+            .directory => {
+                dest_dir.createDir(io, entry.name, .default_dir) catch {};
+                const sub_dest_dir = try dest_dir.openDir(io, entry.name, .{});
+                const sub_source_dir = try source_dir.openDir(io, entry.name, .{ .iterate = true });
+                try copyDir(sub_source_dir, sub_dest_dir, io);
+            },
+            else => {
+                std.log.debug("copyDir: unhandled file {s} of type {}", .{ entry.name, entry.kind });
+            },
+        }
+    } else |err| {
+        return err;
+    }
 }

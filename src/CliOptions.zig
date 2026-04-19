@@ -10,6 +10,7 @@ version: bool = false,
 namespaces: []const Namespace = &.{},
 output_dir: []const u8 = "gi",
 include_dirs: []const []const u8 = &.{},
+manual_dir: []const u8 = "src/manual",
 
 pub const Namespace = struct {
     name: []const u8,
@@ -23,6 +24,7 @@ const usage =
     \\  --version             Display version information.
     \\  -o, --output <dir>    Place output into <dir>.
     \\  -I, --include <dir>   Add <dir> to search path.
+    \\  -m, --manual <dir>    Add manual files from <dir>.
     \\
 ;
 
@@ -74,6 +76,10 @@ pub fn parse(io: Io, allocator: Allocator, args: []const [:0]const u8) !CliOptio
                 i += 1;
                 const dir = args[i];
                 if (isValidDir(io, dir)) try include_dirs.append(allocator, dir);
+            } else if (std.mem.eql(u8, arg, "-m") or std.mem.eql(u8, arg, "--manual")) {
+                if (i + 1 >= args.len) fatal("expected argument after '{s}'", .{arg});
+                i += 1;
+                options.manual_dir = args[i];
             } else {
                 fatal("unknown option: '{s}'", .{arg});
             }
