@@ -1,6 +1,6 @@
 .{
     .name = .gi,
-    .version = "0.12.0",
+    .version = "0.13.0",
     .minimum_zig_version = "0.16.0",
     .fingerprint = 0x5f0b3663d8832352,
     .dependencies = .{},
