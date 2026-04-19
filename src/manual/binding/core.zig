@@ -62,11 +62,6 @@ pub fn Extend(comptime Self: type) type {
             }
         }
 
-        /// Converted from base type
-        pub fn tryFrom(object: anytype) ?*Self {
-            return object.tryInto(Self);
-        }
-
         /// Returns the class of a given object
         pub fn getClass(self: *Self, comptime Object: type) *Object.Class {
             const instance = unsafeCast(GObject.TypeInstance, upCast(Object, self));
