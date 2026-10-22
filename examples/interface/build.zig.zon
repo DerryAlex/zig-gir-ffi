@@ -1,6 +1,7 @@
 .{
     .name = .custom_interface,
     .version = "1.0.0",
+    .minimum_zig_version = "0.17.0",
     .fingerprint = 0x7ece9b7b5f0b3663,
     .paths = .{
         "build.zig",

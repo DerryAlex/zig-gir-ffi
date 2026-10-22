@@ -51,7 +51,7 @@ pub const CustomButton = extern struct {
         }
         self.private.number = number;
         var buffer: [11]u8 = undefined;
-        const label = std.fmt.bufPrintZ(&buffer, "{}", .{number}) catch unreachable;
+        const label = std.mem.printSentinel(&buffer, "{}", .{number}, 0) catch unreachable;
         self.into(Button).setLabel(label);
         if (number == 0) {
             self.zero_reached.emit(.{self});

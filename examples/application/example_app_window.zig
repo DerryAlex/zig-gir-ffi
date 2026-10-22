@@ -239,7 +239,7 @@ pub const ExampleAppWindow = extern struct {
         var buffer = view.getBuffer();
         const count = buffer.getLineCount();
         var buf: [22]u8 = undefined;
-        _ = std.fmt.bufPrintZ(&buf, "{d}", .{count}) catch unreachable;
+        _ = std.mem.printSentinel(&buf, "{d}", .{count}, 0) catch unreachable;
         self.lines.setText(@ptrCast(&buf));
     }
 

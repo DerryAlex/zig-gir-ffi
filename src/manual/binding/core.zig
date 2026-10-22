@@ -186,8 +186,8 @@ pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: GObject.T
 fn overrideClass(comptime Object: type, comptime Override: type, class: *Object.Class) void {
     const Class = Object.Class;
     inline for (comptime std.meta.declarations(Override)) |decl| {
-        if (@hasField(Class, decl.name)) {
-            @field(class, decl.name) = @field(Override, decl.name);
+        if (@hasField(Class, decl)) {
+            @field(class, decl) = @field(Override, decl);
         }
     }
     if (@hasDecl(Object, "Parent")) {
@@ -200,8 +200,8 @@ fn overrideInterface(comptime Interface: type, comptime Override: type, type_id:
     const interface_init = struct {
         pub fn trampoline(interface: *Class) callconv(.c) void {
             inline for (comptime std.meta.declarations(Override)) |decl| {
-                if (@hasField(Class, decl.name)) {
-                    @field(interface, decl.name) = @field(Override, decl.name);
+                if (@hasField(Class, decl)) {
+                    @field(interface, decl) = @field(Override, decl);
                 }
             }
         }
@@ -222,7 +222,7 @@ fn checkOverride(comptime Object: type, comptime Override: type) void {
             for (Object.Interfaces) |Interface| {
                 const Class = Interface.Class;
                 for (decls, 0..) |decl, idx| {
-                    if (@hasField(Class, decl.name)) {
+                    if (@hasField(Class, decl)) {
                         overriden_count[idx] += 1;
                     }
                 }
@@ -233,7 +233,7 @@ fn checkOverride(comptime Object: type, comptime Override: type) void {
             if (@hasDecl(T, "Class")) {
                 const Class: type = T.Class;
                 for (decls, 0..) |decl, idx| {
-                    if (@hasField(Class, decl.name)) {
+                    if (@hasField(Class, decl)) {
                         overriden_count[idx] += 1;
                     }
                 }

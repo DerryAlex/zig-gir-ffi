@@ -1,6 +1,7 @@
 .{
     .name = .custom_button,
     .version = "1.0.0",
+    .minimum_zig_version = "0.17.0",
     .fingerprint = 0xeab78395f0b3663,
     .paths = .{
         "build.zig",

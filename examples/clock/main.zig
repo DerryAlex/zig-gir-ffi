@@ -36,7 +36,7 @@ pub fn tick(label: *Gtk.Label) bool {
     time = @divFloor(time, 60);
     const hour: u5 = @intCast(@mod(time, 24));
     var buf: [13]u8 = undefined;
-    const str = std.fmt.bufPrintZ(buf[0..], "{d:0>2}:{d:0>2}:{d:0>2}UTC", .{ hour, min, s }) catch unreachable;
+    const str = std.mem.printSentinel(&buf, "{d:0>2}:{d:0>2}:{d:0>2}UTC", .{ hour, min, s }, 0) catch unreachable;
     label.setLabel(str);
     return true; // true to continue, false to stop
 }

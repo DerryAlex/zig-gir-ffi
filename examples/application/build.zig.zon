@@ -1,6 +1,7 @@
 .{
     .name = .application,
     .version = "1.0.0",
+    .minimum_zig_version = "0.17.0",
     .fingerprint = 0xa45bddc15f0b3663,
     .paths = .{
         "build.zig",
