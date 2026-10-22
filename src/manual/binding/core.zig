@@ -117,10 +117,9 @@ pub fn typeTag(comptime Object: type) *TypeTag {
 /// Initializes all fields of the struct with their default value.
 fn initStruct(comptime T: type, value: *T) void {
     const info = @typeInfo(T).@"struct";
-    inline for (info.fields) |field| {
-        if (field.default_value_ptr) |default_value_ptr| {
-            const default_value = @as(*align(1) const field.type, @ptrCast(default_value_ptr)).*;
-            @field(value, field.name) = default_value;
+    inline for (info.field_names, info.field_types, info.field_attrs) |field_name, Field, attrs| {
+        if (attrs.defaultValue(Field)) |default_value| {
+            @field(value, field_name) = default_value;
         }
     }
 }
@@ -179,7 +178,7 @@ pub fn registerType(comptime Object: type, name: [*:0]const u8, flags: GObject.T
                 overrideInterface(Interface, Object.Override, type_id);
             }
         }
-        GLib.Once.initLeave(&typeTag(Object).type_id, @intFromEnum(type_id));
+        GLib.Once.initLeave(&typeTag(Object).type_id, @backingInt(type_id));
     }
     return typeTag(Object).type_id;
 }
@@ -218,7 +217,7 @@ fn overrideInterface(comptime Interface: type, comptime Override: type, type_id:
 fn checkOverride(comptime Object: type, comptime Override: type) void {
     comptime {
         const decls = std.meta.declarations(Override);
-        var overriden_count = [_]usize{0} ** decls.len;
+        var overriden_count: [decls.len]usize = @splat(0);
         if (@hasDecl(Object, "Interfaces")) {
             for (Object.Interfaces) |Interface| {
                 const Class = Interface.Class;
@@ -286,7 +285,7 @@ pub fn registerInterface(comptime Interface: type, name: [*:0]const u8) Type {
                 GObject.TypeInterface.addPrerequisite(type_id, .from(Prerequisite));
             }
         }
-        GLib.Once.initLeave(&typeTag(Interface).type_id, @intFromEnum(type_id));
+        GLib.Once.initLeave(&typeTag(Interface).type_id, @backingInt(type_id));
     }
     return typeTag(Interface).type_id;
 }

@@ -96,8 +96,8 @@ pub const ZigClosure = extern struct {
             const callback_info = @typeInfo(Callback).@"fn";
             const contract_info = @typeInfo(Fn).@"fn";
             assert(callback_info.return_type == contract_info.return_type);
-            for (0..callback_info.params.len - user_data.len) |idx| {
-                assert(callback_info.params[idx].type == contract_info.params[idx].type);
+            for (0..callback_info.param_types.len - user_data.len) |idx| {
+                assert(callback_info.param_types[idx] == contract_info.param_types[idx]);
             }
         };
         return create(callback_func, user_data);
@@ -119,19 +119,19 @@ pub fn Closure(comptime FnOrPtr: type) type {
 
         const Fn: type = blk: {
             if (@typeInfo(FnOrPtr) != .pointer or @typeInfo(std.meta.Child(FnOrPtr)) != .@"fn") break :blk FnOrPtr;
-            var fn_info = @typeInfo(std.meta.Child(FnOrPtr)).@"fn";
+            const fn_info = @typeInfo(std.meta.Child(FnOrPtr)).@"fn";
             // remove `data: void *` in c callback
-            if (fn_info.calling_convention.eql(.c)) {
-                const params = fn_info.params;
-                const n_param = params.len;
-                if (n_param > 0 and params[n_param - 1].type.? == ?*anyopaque) fn_info.params = params[0 .. n_param - 1];
+            const c_params = fn_info.param_types;
+            const param_types = if (fn_info.attrs.@"callconv".eql(.c) and
+                c_params.len > 0 and c_params[c_params.len - 1].? == ?*anyopaque)
+                c_params[0 .. c_params.len - 1]
+            else
+                c_params;
+            const concrete_param_types: [param_types.len]type = @splat(@TypeOf(null));
+            for (param_types, concrete_param_types) |param_ty, *concrete_param_ty| {
+                concrete_param_ty.* = param_ty.?;
             }
-            // compiler pushes `param_types` to be const, which might be a bug
-            const param_types: [fn_info.params.len]type = @splat(@TypeOf(null));
-            for (fn_info.params, param_types) |param, *param_ty| {
-                param_ty.* = param.type.?;
-            }
-            break :blk @Fn(&param_types, &@splat(.{}), fn_info.return_type.?, .{});
+            break :blk @Fn(&concrete_param_types, &@splat(.{}), fn_info.return_type.?, .{});
         };
 
         pub fn init(callback_func: anytype, user_data: anytype) Self {

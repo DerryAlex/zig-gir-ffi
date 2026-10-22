@@ -48,16 +48,9 @@ pub fn build(b: *std.Build) !void {
     // Run step
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    } else {
-        run_cmd.addArgs(&.{ "-I", "data/gir" });
-        run_cmd.addArgs(&.{ "-I", "data/typelib" });
-        run_cmd.addArgs(&.{"Gtk"});
-        // run_cmd.addArgs(&.{ "GLib", "GLibUnix", "GLibWin32" });
-        // run_cmd.addArgs(&.{ "Gio", "GioUnix", "GioWin32" });
-        // run_cmd.addArgs(&.{ "Gdk", "GdkWayland", "GdkX11", "GdkWin32", "GdkMacos" });
-    }
+    run_cmd.addArgs(&.{ "-I", "data/gir" });
+    run_cmd.addArgs(&.{ "-I", "data/typelib" });
+    run_cmd.addPassthruArgs();
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);

@@ -60,7 +60,7 @@ pub fn Signal(comptime Fn: type, comptime name: [:0]const u8) type {
 
         /// Connects a closure to a signal for a particular object.
         pub fn connect(self: *Self, closure: Closure(Fn), flags: GObject.ConnectFlags) HandlerId {
-            const Object = std.meta.Child(@typeInfo(Fn).@"fn".params[0].type.?);
+            const Object = std.meta.Child(@typeInfo(Fn).@"fn".param_types[0].?);
             const _signals: *@FieldType(Object, "_signals") = @fieldParentPtr(name, self);
             const object: *Object = @alignCast(@fieldParentPtr("_signals", _signals));
             if (flags.swapped) std.log.warn("Signal.connect: unsupported flag 'swapped'", .{});

@@ -23,15 +23,15 @@ pub fn load(self: *Repository, io: Io, namespace: []const u8, version: ?[]const 
 
     const allocator = self.allocator;
     for (self.search_paths.items[self._search_paths_used..]) |path| {
-        const c_path = try allocator.dupeZ(u8, path);
+        const c_path = try allocator.dupeSentinel(u8, path, 0);
         defer allocator.free(c_path);
         repo.prependSearchPath(c_path);
     }
     self._search_paths_used = self.search_paths.items.len;
 
-    const c_namespace = try allocator.dupeZ(u8, namespace);
+    const c_namespace = try allocator.dupeSentinel(u8, namespace, 0);
     defer allocator.free(c_namespace);
-    const c_version = if (version) |v| try allocator.dupeZ(u8, v) else null;
+    const c_version = if (version) |v| try allocator.dupeSentinel(u8, v, 0) else null;
     defer if (c_version) |v| allocator.free(v);
     var err: ?*libgi.core.Error = null;
     _ = repo.require(c_namespace, c_version orelse null, .{}, &err) catch {

@@ -22,14 +22,17 @@ pub fn main(init: std.process.Init) !void {
         try CliOptions.printVersion(io, options.version);
         return;
     }
-    if (cli_options.namespaces.len == 0) fatal("no namespace specified", .{});
+    const load_namespaces: []const CliOptions.Namespace = if (cli_options.namespaces.len == 0)
+        &.{.{ .name = "Gtk" }}
+    else
+        cli_options.namespaces;
 
     var repository: gi.Repository = .init(allocator, .chain(.debug(.gir), .debug(.typelib)));
     defer repository.deinit();
     for (cli_options.include_dirs) |dir| {
         try repository.appendSearchPath(dir);
     }
-    for (cli_options.namespaces) |ns| {
+    for (load_namespaces) |ns| {
         repository.load(io, ns.name, ns.version) catch |err| {
             std.log.err("{t}", .{err});
         };

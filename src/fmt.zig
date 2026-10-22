@@ -25,7 +25,7 @@ fn formatTypeTag(tag: gi.TypeTag) []const u8 {
         .gtype => "core.Type",
         .@"error" => "GLib.Error",
         .unichar => "u32", // UTF-32 or UCS-4
-        .va_list => "std.builtin.VaList",
+        .va_list => "std.lang.VaList",
         .va_args => "...",
         .long_double => "c_longdouble",
         .time_t => "std.posix.time_t",
@@ -613,7 +613,7 @@ pub const EnumFormatter = struct {
             try writer.print("pub const {f};\n", .{ValueFormatter{
                 .value = value,
                 .storage = storage_type,
-                .convert = "@enumFromInt",
+                .convert = "@fromBackingInt",
             }});
         }
 

@@ -74,6 +74,8 @@ fn parseXmlProlog(self: *Parser) Error!void {
             .attribute => |attr| {
                 if (std.mem.eql(u8, attr.name, "version")) {
                     discardAttr(attr);
+                } else if (std.mem.eql(u8, attr.name, "encoding")) {
+                    discardAttr(attr);
                 } else return fail(token);
             },
             else => return fail(token),
@@ -868,7 +870,7 @@ fn parseConstant(self: *Parser, allocator: Allocator) Error!gi.Constant {
                         },
                         .utf8 => {
                             constant.type_tag = .utf8;
-                            constant.value = .{ .v_string = try allocator.dupeZ(u8, value_raw_str) };
+                            constant.value = .{ .v_string = try allocator.dupeSentinel(u8, value_raw_str, 0) };
                             constant.value_owned = true;
                         },
                         .interface => {
@@ -1271,7 +1273,7 @@ fn parseRecord(self: *Parser, allocator: Allocator, namespace: *gi.Namespace, pr
                         @branchHint(.likely);
                         _struct.base.base.name = try allocator.dupe(u8, attr.value);
                     } else {
-                        _struct.base.base.name = try std.fmt.allocPrint(allocator, "{s}__{s}", .{ prefix, attr.value });
+                        _struct.base.base.name = try allocator.print("{s}__{s}", .{ prefix, attr.value });
                     }
                 } else if (std.mem.eql(u8, attr.name, "copy-function") or std.mem.eql(u8, attr.name, "free-function")) {
                     discardAttr(attr);
@@ -1307,7 +1309,7 @@ fn parseRecord(self: *Parser, allocator: Allocator, namespace: *gi.Namespace, pr
     if (_struct.base.base.name.len == 0) {
         @branchHint(.unlikely);
         if (prefix.len != 0) {
-            _struct.base.base.name = try std.fmt.allocPrint(allocator, "{s}__{s}", .{ prefix, "s" });
+            _struct.base.base.name = try allocator.print("{s}__{s}", .{ prefix, "s" });
         } else {
             _struct.base.base.name = try allocator.dupe(u8, "s");
         }
@@ -1650,7 +1652,7 @@ fn parseUnion(self: *Parser, allocator: Allocator, namespace: *gi.Namespace, pre
                         @branchHint(.likely);
                         _union.base.base.name = try allocator.dupe(u8, attr.value);
                     } else {
-                        _union.base.base.name = try std.fmt.allocPrint(allocator, "{s}__{s}", .{ prefix, attr.value });
+                        _union.base.base.name = try allocator.print("{s}__{s}", .{ prefix, attr.value });
                     }
                 } else if (std.mem.eql(u8, attr.name, "deprecated")) {
                     _union.base.base.deprecated = parseAttrBool(attr.value);
@@ -1668,7 +1670,7 @@ fn parseUnion(self: *Parser, allocator: Allocator, namespace: *gi.Namespace, pre
     if (_union.base.base.name.len == 0) {
         @branchHint(.unlikely);
         if (prefix.len != 0) {
-            _union.base.base.name = try std.fmt.allocPrint(allocator, "{s}__{s}", .{ prefix, "u" });
+            _union.base.base.name = try allocator.print("{s}__{s}", .{ prefix, "u" });
         } else {
             _union.base.base.name = try allocator.dupe(u8, "u");
         }
